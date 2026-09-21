@@ -29,7 +29,11 @@ import { getStatusMeta } from '@/constants/domain/user-status'
  *
  * Le nom est un `Link` vers la fiche : les specs e2e s'appuient sur
  * `a[href^="/commerciaux/"]`.
- *
+ */
+
+function initialsOf(person) {
+  const first = (person?.prenom || '').charAt(0)
+  const last = (person?.nom || '').charAt(0)
   return `${first}${last}`.toUpperCase() || '?'
 }
 
