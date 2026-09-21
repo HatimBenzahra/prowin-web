@@ -5,6 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { CoachingStatus, StatutPorte } from '@prisma/client';
+import { CRM_SOURCE, CRM_TENANT } from './shared/crm-scope';
 import { PrismaService } from '../prisma.service';
 import { SalesPlanService } from './referentiels/sales-plan.service';
 import { LlmService } from './shared/llm.service';
@@ -87,7 +88,9 @@ export class CoachingService {
 
       const existing = await this.prisma.coachingAnalysis.findUnique({
         where: {
-          s3KeyOriginal_salesPlanVersionId: {
+          source_tenantId_s3KeyOriginal_salesPlanVersionId: {
+            source: CRM_SOURCE,
+            tenantId: CRM_TENANT,
             s3KeyOriginal: input.s3Key,
             salesPlanVersionId: version.id,
           },
@@ -210,7 +213,9 @@ export class CoachingService {
 
     const existing = await this.prisma.coachingAnalysis.findUnique({
       where: {
-        s3KeyOriginal_salesPlanVersionId: {
+        source_tenantId_s3KeyOriginal_salesPlanVersionId: {
+          source: CRM_SOURCE,
+          tenantId: CRM_TENANT,
           s3KeyOriginal: analysis.s3KeyOriginal,
           salesPlanVersionId: version.id,
         },

@@ -141,23 +141,29 @@ function AdminLayout() {
           <AppSidebar />
           <SidebarInset className="overflow-x-hidden">
             <header className="flex h-16 shrink-0 items-center justify-between gap-2 border-b">
-              <div className="flex items-center gap-2 px-4">
-                <SidebarTrigger className="-ml-1" />
-                <Separator orientation="vertical" className="mr-2 h-4" />
-                <nav className="flex items-center gap-1 text-sm text-muted-foreground">
+              {/* `min-w-0` sur le bloc gauche et sur le fil : sans lui le fil garde sa
+                  largeur min-content, pousse la recherche et le thème au-delà du bord, et
+                  `overflow-x-hidden` sur le SidebarInset les coupe au lieu de les scroller.
+                  Quand la place manque, c'est le fil qui tronque, pas les actions. */}
+              <div className="flex min-w-0 flex-1 items-center gap-2 px-4">
+                <SidebarTrigger className="-ml-1 shrink-0" />
+                <Separator orientation="vertical" className="mr-2 h-4 shrink-0" />
+                <nav className="flex min-w-0 items-center gap-1 text-sm text-muted-foreground">
                   {breadcrumbs.map((crumb, index) => (
                     <React.Fragment
                       key={`${crumb.href}-${crumb.label}-${crumb.isCurrent ? 'current' : 'link'}`}
                     >
                       {index > 0 && (
-                        <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/40" />
+                        <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground/40" />
                       )}
                       {crumb.isCurrent ? (
-                        <span className="font-semibold text-foreground">{crumb.label}</span>
+                        <span className="truncate font-semibold text-foreground">
+                          {crumb.label}
+                        </span>
                       ) : (
                         <Link
                           to={crumb.href}
-                          className="hover:text-foreground transition-colors rounded-md px-1.5 py-0.5 hover:bg-muted"
+                          className="truncate rounded-md px-1.5 py-0.5 transition-colors hover:bg-muted hover:text-foreground"
                         >
                           {crumb.label}
                         </Link>
@@ -166,7 +172,7 @@ function AdminLayout() {
                   ))}
                 </nav>
               </div>
-              <div className="flex items-center gap-3 px-4">
+              <div className="flex shrink-0 items-center gap-3 px-4">
                 <button
                   type="button"
                   onClick={() => document.dispatchEvent(new CustomEvent('open-global-search'))}

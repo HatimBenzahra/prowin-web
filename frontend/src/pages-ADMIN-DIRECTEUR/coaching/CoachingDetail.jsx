@@ -77,7 +77,7 @@ export default function CoachingDetail({ analysis, onBack, onClose, backLabel = 
   return (
     <>
       <div className="border-b p-5">
-        <div className="flex items-start justify-between gap-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
           <div className="min-w-0">
             {onBack && (
               <div className="mb-1 flex items-center gap-2 text-sm">
@@ -95,15 +95,9 @@ export default function CoachingDetail({ analysis, onBack, onClose, backLabel = 
               </div>
             )}
             <DialogTitle className="truncate text-lg">{title}</DialogTitle>
-            <DialogDescription className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
+            <DialogDescription className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 [&>*+*]:before:mr-2 [&>*+*]:before:content-['·']">
               {meta.address && meta.address !== title && <span>{meta.address}</span>}
-              {meta.date && (
-                <>
-                  <span>·</span>
-                  <span>{formatDateTime(meta.date)}</span>
-                </>
-              )}
-              <span>·</span>
+              {meta.date && <span>{formatDateTime(meta.date)}</span>}
               <span className="inline-flex items-center gap-1">
                 <Clock className="h-3.5 w-3.5" />
                 {formatDuration(a.transcriptDurationSec)}
@@ -116,7 +110,7 @@ export default function CoachingDetail({ analysis, onBack, onClose, backLabel = 
             )}
           </div>
 
-          <div className="flex flex-col items-end gap-2">
+          <div className="flex flex-col items-start gap-2 sm:items-end">
             <div className="flex items-center gap-2">
               <Button
                 variant="outline"

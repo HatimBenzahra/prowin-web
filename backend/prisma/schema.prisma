@@ -606,10 +606,17 @@ model RecordingAnalysis {
 // source → déduplication / versioning automatique au boot.
 model SalesPlanVersion {
   id          Int      @id @default(autoincrement())
+  // Organisation proprietaire de la ligne. "" = aucun tenant : c'est le CRM v1, qui
+  // n'en a qu'un seul et implicite. Chaine vide et non NULL, parce qu'un NULL rendrait
+  // les contraintes d'unicite ci-dessous inoperantes sur ces lignes-la : en SQL, NULL
+  // n'est jamais egal a NULL, donc deux doublons a tenant NULL passeraient tous les deux.
+  tenantId    String   @default("")
   slug        String
   title       String
   version     Int
-  contentHash String   @unique
+  // Le hash ne vaut plus comme identite globale : deux organisations peuvent importer
+  // le meme plan sans que l'une herite des versions de l'autre.
+  contentHash String
   criteria    Json // barème structuré parsé (steps → criteria, poids, points)
   rawMarkdown String
   isActive    Boolean  @default(false)
@@ -617,8 +624,9 @@ model SalesPlanVersion {
 
   analyses CoachingAnalysis[]
 
-  @@unique([slug, version])
-  @@index([slug, isActive])
+  @@unique([tenantId, contentHash])
+  @@unique([tenantId, slug, version])
+  @@index([tenantId, slug, isActive])
 }
 
 // Fiche produit versionnée (clé = sha256 du markdown), même contrat que
@@ -626,11 +634,16 @@ model SalesPlanVersion {
 // plan de vente vient de SalesPlanVersion.criteria (steps[].pitchText).
 model ProductSheetVersion {
   id          Int      @id @default(autoincrement())
+  // Organisation proprietaire de la ligne. "" = aucun tenant : c'est le CRM v1, qui
+  // n'en a qu'un seul et implicite. Chaine vide et non NULL, parce qu'un NULL rendrait
+  // les contraintes d'unicite ci-dessous inoperantes sur ces lignes-la : en SQL, NULL
+  // n'est jamais egal a NULL, donc deux doublons a tenant NULL passeraient tous les deux.
+  tenantId    String   @default("")
   slug        String
   label       String
   productKey  String // slug produit, ex. "depanssur" — jointure avec detectedProducts
   version     Int
-  contentHash String   @unique
+  contentHash String
   facts       Json // affirmations autorisées
   identifiers Json     @default("[]") // signaux de reconnaissance de l'offre (passe 0, mapping)
   sttTerms    Json     @default("[]") // termes à orthographier juste (initial_prompt Whisper)
@@ -640,9 +653,10 @@ model ProductSheetVersion {
   isActive    Boolean  @default(false)
   createdAt   DateTime @default(now())
 
-  @@unique([slug, version])
-  @@index([slug, isActive])
-  @@index([productKey, isActive])
+  @@unique([tenantId, contentHash])
+  @@unique([tenantId, slug, version])
+  @@index([tenantId, slug, isActive])
+  @@index([tenantId, productKey, isActive])
 }
 
 // Analyse coaching d'un enregistrement : 1 audio = 1 porte = 1 analyse.
@@ -652,11 +666,22 @@ model CoachingAnalysis {
   id                    Int              @id @default(autoincrement())
   // Appelant : renseigne depuis la CLÉ D'API, jamais depuis la requête.
   source                String   @default("prowin")
+  // Organisation proprietaire de la ligne. "" = aucun tenant : c'est le CRM v1, qui
+  // n'en a qu'un seul et implicite. Chaine vide et non NULL, parce qu'un NULL rendrait
+  // les contraintes d'unicite ci-dessous inoperantes sur ces lignes-la : en SQL, NULL
+  // n'est jamais egal a NULL, donc deux doublons a tenant NULL passeraient tous les deux.
+  tenantId              String   @default("")
   // Optionnels : une app tierce n'a ni enregistrement ni porte au sens du CRM.
   recordingId           Int?
   porteId               Int?
   userId                Int?
   managerId             Int?
+  // Les memes references, telles que l'appelant les nomme. Une app qui identifie ses
+  // commerciaux par UUID ne peut pas remplir les colonnes entieres ci-dessus, qui sont
+  // des cles etrangeres du CRM : elle depose ses propres references ici, opaques pour
+  // le moteur, qui les rend telles quelles.
+  externalUserRef       String?
+  externalPorteRef      String?
   s3KeyOriginal         String
   statutPorte           StatutPorte? // snapshot du statut porte au moment de l'échange
   salesPlanVersionId    Int
@@ -691,9 +716,15 @@ model CoachingAnalysis {
   porte            Porte?           @relation(fields: [porteId], references: [id], onDelete: SetNull)
   salesPlanVersion SalesPlanVersion @relation(fields: [salesPlanVersionId], references: [id])
 
-  @@unique([s3KeyOriginal, salesPlanVersionId]) // idempotence : 1 analyse par audio × version de plan
+  // Idempotence : 1 analyse par audio × version de plan, POUR UN APPELANT DONNE. Deux
+  // organisations qui analysent le meme audio contre leur propre plan sont deux
+  // jugements distincts, pas un doublon.
+  // Nom explicite : le nom derive par defaut depasse les 63 caracteres que Postgres
+  // accepte, et se ferait tronquer differemment ici et dans la migration.
+  @@unique([source, tenantId, s3KeyOriginal, salesPlanVersionId], map: "CoachingAnalysis_appelant_audio_plan_key")
   @@index([status])
-  @@index([source]) // toutes les lectures du CRM filtrent dessus
+  @@index([source, tenantId]) // toutes les lectures filtrent sur le couple
+  @@index([externalUserRef])
   @@index([userId])
   @@index([managerId])
   @@index([porteId])

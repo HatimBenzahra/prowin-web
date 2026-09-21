@@ -49,7 +49,7 @@ function TabSkeleton() {
   return (
     <div className="space-y-6">
       <Skeleton className="h-[220px] w-full rounded-xl" />
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid gap-6 grid-cols-[minmax(0,1fr)] lg:grid-cols-2">
         <Skeleton className="h-[260px] w-full rounded-xl" />
         <Skeleton className="h-[260px] w-full rounded-xl" />
       </div>
@@ -65,13 +65,13 @@ function PageSkeleton() {
         <Skeleton className="h-4 w-72" />
       </div>
       <Skeleton className="h-10 w-full max-w-2xl" />
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+      <div className="grid gap-4 grid-cols-[minmax(0,1fr)] sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
         {[0, 1, 2, 3, 4].map(tile => (
           <Skeleton key={tile} className="h-28 w-full rounded-xl" />
         ))}
       </div>
       <Skeleton className="h-10 w-96" />
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid gap-6 grid-cols-[minmax(0,1fr)] lg:grid-cols-2">
         <Skeleton className="h-[360px] w-full rounded-xl" />
         <Skeleton className="h-[360px] w-full rounded-xl" />
       </div>
@@ -175,7 +175,7 @@ export default function Statistiques() {
           ) : (
             <>
               <PipelineOverviewCard pipeline={pipeline} />
-              <div className="grid gap-6 xl:grid-cols-2">
+              <div className="grid gap-6 grid-cols-[minmax(0,1fr)] xl:grid-cols-2">
                 <PipelineRdvCard rdv={pipeline?.rdv} />
                 <PipelineRepassageCard
                   repassages={pipeline?.repassages}
@@ -194,7 +194,7 @@ export default function Statistiques() {
           ) : (
             <>
               <ActivityTrendCard timeline={timeline} periodLabel={periodLabel} />
-              <div className="grid gap-6 lg:grid-cols-2">
+              <div className="grid gap-6 grid-cols-[minmax(0,1fr)] lg:grid-cols-2">
                 <OutcomesCard current={current} />
                 <ConversionFunnelCard current={current} contratsValides={contratsValides} />
               </div>
@@ -226,7 +226,7 @@ export default function Statistiques() {
           ) : (
             <>
               <CoachingScoreboardCard scoreboard={scoreboard} loading={scoreboardLoading} />
-              <div className="grid gap-6 xl:grid-cols-2">
+              <div className="grid gap-6 grid-cols-[minmax(0,1fr)] xl:grid-cols-2">
                 <CoachingStepsCard scoreboard={scoreboard} loading={scoreboardLoading} />
                 <CoachingVsConversionCard scoreboard={scoreboard} ownerActivity={ownerActivity} />
               </div>

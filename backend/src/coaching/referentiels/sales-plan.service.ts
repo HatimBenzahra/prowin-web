@@ -4,6 +4,7 @@ import {
   ParsedSalesPlan,
   SalesPlanCriteriaPayload,
 } from './sales-plan.types';
+import { CRM_TENANT } from '../shared/crm-scope';
 
 type SalesPlanVersionRow = {
   id: number;
@@ -24,15 +25,16 @@ export class SalesPlanService {
 
   constructor(private readonly prisma: PrismaService) {}
 
-  /** Version active pour un slug donné, ou la plus récente si slug omis. */
+  /**
+   * Version active pour un slug donné, ou la plus récente si slug omis.
+   *
+   * Toujours restreinte au CRM : depuis que le moteur héberge le référentiel d'autres
+   * organisations, « le plan actif » sans autre précision désignerait aussi bien celui
+   * d'une autre, et le CRM noterait ses commerciaux contre un plan qui n'est pas le sien.
+   */
   async getActiveVersion(slug?: string) {
-    if (slug) {
-      return this.prisma.salesPlanVersion.findFirst({
-        where: { slug, isActive: true },
-      });
-    }
     return this.prisma.salesPlanVersion.findFirst({
-      where: { isActive: true },
+      where: { tenantId: CRM_TENANT, isActive: true, ...(slug ? { slug } : {}) },
       orderBy: { createdAt: 'desc' },
     });
   }

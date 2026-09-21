@@ -4,6 +4,8 @@ import MapboxMap, { Marker, NavigationControl, Popup, Source, Layer } from 'reac
 import mapboxgl from 'mapbox-gl'
 import 'mapbox-gl/dist/mapbox-gl.css'
 import { Button } from '@/components/ui/button'
+import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet'
+import { useIsMobile } from '@/hooks/ui/use-mobile'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import {
   MapPin,
@@ -18,6 +20,7 @@ import {
   Zap,
   Crosshair,
   X,
+  PanelLeftOpen,
 } from 'lucide-react'
 import MapToolbar from './MapToolbar'
 import {
@@ -265,6 +268,9 @@ export default function LocationTab({
 }) {
   const navigate = useNavigate()
   const [viewState, setViewState] = useState(null)
+  // Sous 1024 px le panneau latéral devient un tiroir : la carte a besoin de la largeur.
+  const isCompact = useIsMobile()
+  const [panelOpen, setPanelOpen] = useState(false)
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [is3DTerrain, setIs3DTerrain] = useState(false)
   const [is3DBuildings, setIs3DBuildings] = useState(false)
@@ -571,166 +577,534 @@ export default function LocationTab({
           : `${embedded ? 'h-[560px]' : 'h-[calc(100dvh-130px)]'} rounded-xl border border-border/40`
       }`}
     >
-      <aside className="w-[360px] shrink-0 min-h-0 border-r border-border/50 bg-card/95 backdrop-blur-sm flex flex-col">
-        <div className="p-3 border-b border-border/50 space-y-3">
-          {!embedded && (
-            <div className="flex items-center gap-1 rounded-full bg-muted/40 p-1">
-              <button
-                type="button"
-                onClick={() => setMode('live')}
-                className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
-                  mode === 'live'
-                    ? 'bg-background shadow-sm text-foreground'
-                    : 'text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                <span
-                  className={`h-1.5 w-1.5 rounded-full bg-chart-2 ${mode === 'live' ? 'animate-pulse' : ''}`}
-                />
-                Live
-              </button>
-              <button
-                type="button"
-                onClick={() => setMode('trajet')}
-                className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
-                  mode === 'trajet'
-                    ? 'bg-background shadow-sm text-foreground'
-                    : 'text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                <Route className="h-3.5 w-3.5" />
-                Trajet
-              </button>
-            </div>
-          )}
+      {/* Sous 1024 px, un panneau de 360 px ne laisse rien à la carte : à 375 px elle
+          sortait de 435 px du cadre, coupée par l'`overflow-hidden` du conteneur. Le
+          panneau passe donc en tiroir et la carte prend toute la largeur. Le seuil est
+          celui de `useIsMobile`, le même que la bascule de la sidebar : les deux
+          répondent à la même contrainte de place. */}
+      {isCompact ? (
+        <Sheet open={panelOpen} onOpenChange={setPanelOpen}>
+          <SheetContent side="left" className="w-[min(22.5rem,88vw)] gap-0 p-0">
+            <SheetTitle className="sr-only">Panneau de suivi</SheetTitle>
+            <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+              <div className="p-3 border-b border-border/50 space-y-3">
+                {!embedded && (
+                  <div className="flex items-center gap-1 rounded-full bg-muted/40 p-1">
+                    <button
+                      type="button"
+                      onClick={() => setMode('live')}
+                      className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
+                        mode === 'live'
+                          ? 'bg-background shadow-sm text-foreground'
+                          : 'text-muted-foreground hover:text-foreground'
+                      }`}
+                    >
+                      <span
+                        className={`h-1.5 w-1.5 rounded-full bg-chart-2 ${mode === 'live' ? 'animate-pulse' : ''}`}
+                      />
+                      Live
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setMode('trajet')}
+                      className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
+                        mode === 'trajet'
+                          ? 'bg-background shadow-sm text-foreground'
+                          : 'text-muted-foreground hover:text-foreground'
+                      }`}
+                    >
+                      <Route className="h-3.5 w-3.5" />
+                      Trajet
+                    </button>
+                  </div>
+                )}
 
-          {mode === 'live' ? (
-            <div className="space-y-2">
-              <div className="space-y-1">
-                <div className="flex items-center gap-1.5 px-1 text-[11px] font-medium text-muted-foreground">
-                  <Users className="h-3.5 w-3.5" />
-                  Commerciaux et tablettes
-                </div>
-                <div
-                  className="flex items-center gap-1.5 overflow-x-auto pb-1 -mx-1 px-1"
-                  style={{ scrollbarWidth: 'none' }}
-                >
-                  <button
-                    type="button"
-                    onClick={() => setSelectedActorKey(null)}
-                    className={`shrink-0 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
-                      !selectedActorKey
-                        ? 'border-primary/40 bg-primary/10 text-primary'
-                        : 'border-border/60 bg-background hover:bg-muted/40 text-muted-foreground hover:text-foreground'
-                    }`}
-                  >
-                    Tous
-                  </button>
-                  {liveActors.map(actor => {
-                    const active = selectedActorKey === actor.key
-                    return (
-                      <button
-                        key={actor.key}
-                        type="button"
-                        onClick={() => setSelectedActorKey(actor.key)}
-                        className={`shrink-0 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors max-w-[180px] truncate ${
-                          active
-                            ? 'border-primary/40 bg-primary/10 text-primary'
-                            : 'border-border/60 bg-background hover:bg-muted/40 text-muted-foreground hover:text-foreground'
-                        }`}
-                        title={actor.name}
+                {mode === 'live' ? (
+                  <div className="space-y-2">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-1.5 px-1 text-[11px] font-medium text-muted-foreground">
+                        <Users className="h-3.5 w-3.5" />
+                        Commerciaux et tablettes
+                      </div>
+                      <div
+                        className="flex items-center gap-1.5 overflow-x-auto pb-1 -mx-1 px-1"
+                        style={{ scrollbarWidth: 'none' }}
                       >
-                        {actor.name}
-                      </button>
-                    )
-                  })}
-                </div>
-              </div>
-              <div className="flex items-center justify-between text-xs rounded-lg border border-chart-2/20 bg-chart-2/10 px-2.5 py-1.5">
-                <span className="text-muted-foreground">Vue opérateur</span>
-                <span className="inline-flex items-center gap-1 font-semibold text-chart-2">
-                  <span className="h-1.5 w-1.5 rounded-full bg-chart-2 animate-pulse" />
-                  En direct
-                </span>
-              </div>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              <div className="rounded-xl border border-border/50 bg-muted/15 p-2.5 space-y-2.5">
-                <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                  <Clock className="h-3.5 w-3.5" />P{'\u00e9'}riode
-                </div>
-                <div className="flex items-center gap-1.5">
-                  {TRAJET_QUICK_FILTERS.map(opt => {
-                    const active = periodKey === opt.key
-                    return (
-                      <button
-                        key={opt.key}
-                        type="button"
-                        onClick={() => handlePeriodChange(opt.key)}
-                        className={`shrink-0 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
-                          active
-                            ? 'border-primary/40 bg-primary/10 text-primary'
-                            : 'border-border/60 bg-background hover:bg-muted/40 text-muted-foreground hover:text-foreground'
-                        }`}
-                      >
-                        {opt.label}
-                      </button>
-                    )
-                  })}
-                  <button
-                    type="button"
-                    onClick={() => handlePeriodChange('custom')}
-                    className={`shrink-0 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
-                      periodKey === 'custom'
-                        ? 'border-primary/40 bg-primary/10 text-primary'
-                        : 'border-border/60 bg-background hover:bg-muted/40 text-muted-foreground hover:text-foreground'
-                    }`}
-                  >
-                    Autre date
-                  </button>
-                </div>
-                {periodKey === 'custom' && (
-                  <div className="space-y-1.5 pt-1">
-                    <div className="grid grid-cols-[24px_1fr_92px] gap-2 items-center">
-                      <span className="text-[11px] font-medium text-muted-foreground">Du</span>
-                      <input
-                        type="date"
-                        value={customFrom}
-                        onChange={e => setCustomFrom(e.target.value)}
-                        className="h-8 rounded-md border border-input bg-background px-2 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
-                      />
-                      <input
-                        type="time"
-                        value={customFromTime}
-                        onChange={e => setCustomFromTime(e.target.value)}
-                        className="h-8 rounded-md border border-input bg-background px-2 text-xs text-foreground tabular-nums focus:outline-none focus:ring-2 focus:ring-primary/30"
-                      />
+                        <button
+                          type="button"
+                          onClick={() => setSelectedActorKey(null)}
+                          className={`shrink-0 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
+                            !selectedActorKey
+                              ? 'border-primary/40 bg-primary/10 text-primary'
+                              : 'border-border/60 bg-background hover:bg-muted/40 text-muted-foreground hover:text-foreground'
+                          }`}
+                        >
+                          Tous
+                        </button>
+                        {liveActors.map(actor => {
+                          const active = selectedActorKey === actor.key
+                          return (
+                            <button
+                              key={actor.key}
+                              type="button"
+                              onClick={() => setSelectedActorKey(actor.key)}
+                              className={`shrink-0 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors max-w-[180px] truncate ${
+                                active
+                                  ? 'border-primary/40 bg-primary/10 text-primary'
+                                  : 'border-border/60 bg-background hover:bg-muted/40 text-muted-foreground hover:text-foreground'
+                              }`}
+                              title={actor.name}
+                            >
+                              {actor.name}
+                            </button>
+                          )
+                        })}
+                      </div>
                     </div>
-                    <div className="grid grid-cols-[24px_1fr_92px] gap-2 items-center">
-                      <span className="text-[11px] font-medium text-muted-foreground">Au</span>
-                      <input
-                        type="date"
-                        value={customTo || customFrom}
-                        onChange={e => setCustomTo(e.target.value)}
-                        className="h-8 rounded-md border border-input bg-background px-2 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
-                      />
-                      <input
-                        type="time"
-                        value={customToTime}
-                        onChange={e => setCustomToTime(e.target.value)}
-                        className="h-8 rounded-md border border-input bg-background px-2 text-xs text-foreground tabular-nums focus:outline-none focus:ring-2 focus:ring-primary/30"
-                      />
+                    <div className="flex items-center justify-between text-xs rounded-lg border border-chart-2/20 bg-chart-2/10 px-2.5 py-1.5">
+                      <span className="text-muted-foreground">Vue opérateur</span>
+                      <span className="inline-flex items-center gap-1 font-semibold text-chart-2">
+                        <span className="h-1.5 w-1.5 rounded-full bg-chart-2 animate-pulse" />
+                        En direct
+                      </span>
                     </div>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <div className="rounded-xl border border-border/50 bg-muted/15 p-2.5 space-y-2.5">
+                      <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                        <Clock className="h-3.5 w-3.5" />P{'\u00e9'}riode
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        {TRAJET_QUICK_FILTERS.map(opt => {
+                          const active = periodKey === opt.key
+                          return (
+                            <button
+                              key={opt.key}
+                              type="button"
+                              onClick={() => handlePeriodChange(opt.key)}
+                              className={`shrink-0 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
+                                active
+                                  ? 'border-primary/40 bg-primary/10 text-primary'
+                                  : 'border-border/60 bg-background hover:bg-muted/40 text-muted-foreground hover:text-foreground'
+                              }`}
+                            >
+                              {opt.label}
+                            </button>
+                          )
+                        })}
+                        <button
+                          type="button"
+                          onClick={() => handlePeriodChange('custom')}
+                          className={`shrink-0 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
+                            periodKey === 'custom'
+                              ? 'border-primary/40 bg-primary/10 text-primary'
+                              : 'border-border/60 bg-background hover:bg-muted/40 text-muted-foreground hover:text-foreground'
+                          }`}
+                        >
+                          Autre date
+                        </button>
+                      </div>
+                      {periodKey === 'custom' && (
+                        <div className="space-y-1.5 pt-1">
+                          <div className="grid grid-cols-[24px_1fr_92px] gap-2 items-center">
+                            <span className="text-[11px] font-medium text-muted-foreground">
+                              Du
+                            </span>
+                            <input
+                              type="date"
+                              value={customFrom}
+                              onChange={e => setCustomFrom(e.target.value)}
+                              className="h-8 rounded-md border border-input bg-background px-2 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                            />
+                            <input
+                              type="time"
+                              value={customFromTime}
+                              onChange={e => setCustomFromTime(e.target.value)}
+                              className="h-8 rounded-md border border-input bg-background px-2 text-xs text-foreground tabular-nums focus:outline-none focus:ring-2 focus:ring-primary/30"
+                            />
+                          </div>
+                          <div className="grid grid-cols-[24px_1fr_92px] gap-2 items-center">
+                            <span className="text-[11px] font-medium text-muted-foreground">
+                              Au
+                            </span>
+                            <input
+                              type="date"
+                              value={customTo || customFrom}
+                              onChange={e => setCustomTo(e.target.value)}
+                              className="h-8 rounded-md border border-input bg-background px-2 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                            />
+                            <input
+                              type="time"
+                              value={customToTime}
+                              onChange={e => setCustomToTime(e.target.value)}
+                              className="h-8 rounded-md border border-input bg-background px-2 text-xs text-foreground tabular-nums focus:outline-none focus:ring-2 focus:ring-primary/30"
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {!embedded && (
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-1.5 px-1 text-[11px] font-medium text-muted-foreground">
+                          <Users className="h-3.5 w-3.5" />
+                          Filtre commerciaux
+                        </div>
+                        <div
+                          className="flex items-center gap-1.5 overflow-x-auto pb-1 -mx-1 px-1"
+                          style={{ scrollbarWidth: 'none' }}
+                        >
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedActorKey(null)
+                              setTrajetPopupPos(null)
+                              setSelectedStopIndex(null)
+                            }}
+                            className={`shrink-0 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
+                              !selectedActorKey
+                                ? 'border-primary/40 bg-primary/10 text-primary'
+                                : 'border-border/60 bg-background hover:bg-muted/40 text-muted-foreground hover:text-foreground'
+                            }`}
+                          >
+                            Tous
+                          </button>
+                          {(actors || []).map(actor => {
+                            const active = selectedActorKey === actor.key
+                            return (
+                              <button
+                                key={actor.key}
+                                type="button"
+                                onClick={() => {
+                                  setSelectedActorKey(actor.key)
+                                  setTrajetPopupPos(null)
+                                  setSelectedStopIndex(null)
+                                }}
+                                className={`shrink-0 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors max-w-[180px] truncate ${
+                                  active
+                                    ? 'border-primary/40 bg-primary/10 text-primary'
+                                    : 'border-border/60 bg-background hover:bg-muted/40 text-muted-foreground hover:text-foreground'
+                                }`}
+                                title={actor.name}
+                              >
+                                {actor.name}
+                              </button>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="flex items-center justify-between text-xs rounded-lg border border-border/50 bg-muted/20 px-2.5 py-1.5">
+                      <span className="text-muted-foreground">{periodLabel}</span>
+                      <span className="font-semibold text-foreground tabular-nums">
+                        {routeTotal} points
+                      </span>
+                    </div>
+                    {routeLoading && (
+                      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                        <div className="h-3.5 w-3.5 rounded-full border-2 border-primary/30 border-t-primary animate-spin" />
+                        Chargement des trajets...
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
 
-              {!embedded && (
+              <div
+                className="flex-1 min-h-0 overflow-y-auto overscroll-contain"
+                style={{ scrollbarWidth: 'thin' }}
+              >
+                {mode === 'live' ? (
+                  liveActors.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center h-full py-10 gap-3 text-muted-foreground">
+                      <div className="rounded-full bg-muted/40 p-4">
+                        <MapPin className="h-7 w-7 text-muted-foreground/30" />
+                      </div>
+                      <p className="text-sm">Aucune position disponible</p>
+                    </div>
+                  ) : (
+                    <div className="divide-y divide-border/40">
+                      {liveActors.map((actor, index) => {
+                        const isSelected = actor.key === selectedActorKey
+                        const BattIcon = getBatteryIcon(actor.batteryLevel)
+                        const battColor = getBatteryColor(actor.batteryLevel)
+                        return (
+                          <button
+                            key={actor.key}
+                            type="button"
+                            onClick={() => handleCardClick(actor)}
+                            className={`w-full p-3 text-left transition-colors ${
+                              isSelected
+                                ? 'bg-primary/6 ring-1 ring-primary/20'
+                                : 'hover:bg-muted/25'
+                            }`}
+                          >
+                            <div className="flex items-start gap-3">
+                              <div
+                                className={`h-8 w-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${getAvatarColor(actor.key, index)}`}
+                              >
+                                {getActorInitial(actor)}
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center justify-between gap-2">
+                                  <p className="text-sm font-semibold truncate">
+                                    {actor.name || 'Non assigné'}
+                                  </p>
+                                  <span
+                                    className={`h-2 w-2 rounded-full shrink-0 ${
+                                      actor.online ? 'bg-chart-2' : 'bg-muted-foreground/40'
+                                    }`}
+                                  />
+                                </div>
+                                <p className="text-[11px] text-muted-foreground truncate mt-0.5">
+                                  {getActorRoleLabel(actor)}
+                                </p>
+                                <div className="mt-2 flex items-center justify-between gap-2">
+                                  <div className="flex items-center gap-1.5">
+                                    <BattIcon className={`h-3 w-3 ${battColor}`} />
+                                    <span
+                                      className={`text-[11px] font-medium tabular-nums ${battColor}`}
+                                    >
+                                      {formatBattery(actor.batteryLevel)}
+                                    </span>
+                                  </div>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-auto px-0 py-0 text-[11px] text-primary/70 hover:text-primary hover:bg-transparent gap-0.5"
+                                    onClick={e => {
+                                      e.stopPropagation()
+                                      setSelectedActorKey(actor.key)
+                                      setMode('trajet')
+                                    }}
+                                  >
+                                    Voir trajet
+                                    <ChevronRight className="h-3 w-3" />
+                                  </Button>
+                                </div>
+                              </div>
+                            </div>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  )
+                ) : routeLoading ? (
+                  <div className="p-3 space-y-2">
+                    {[0, 1, 2, 3].map(i => (
+                      <div
+                        key={i}
+                        className="rounded-lg border border-border/40 bg-muted/15 p-3 animate-pulse space-y-2"
+                      >
+                        <div className="h-3 w-28 rounded-full bg-muted/50" />
+                        <div className="h-2.5 w-20 rounded-full bg-muted/40" />
+                        <div className="h-1.5 w-full rounded-full bg-muted/40" />
+                      </div>
+                    ))}
+                  </div>
+                ) : selectedActorKey ? (
+                  hasRoute ? (
+                    <>
+                      <div className="sticky top-0 z-20 bg-card/95 backdrop-blur-sm border-b border-border/40 p-3 space-y-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedActorKey(null)
+                            setTrajetPopupPos(null)
+                            setSelectedStopIndex(null)
+                          }}
+                          className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground bg-muted/40 hover:bg-muted/60 rounded-full px-3 py-1.5 transition-colors"
+                        >
+                          <ChevronLeft className="h-3.5 w-3.5" />
+                          Tous les commerciaux
+                        </button>
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="text-sm font-bold truncate">
+                              {selectedActor?.name || 'Non assigné'}
+                            </p>
+                            <p className="text-[11px] text-muted-foreground">{periodLabel}</p>
+                          </div>
+                          <div className="shrink-0 text-right">
+                            <p className="text-sm font-semibold tabular-nums">
+                              {formatDistanceKm(routeStats.totalDistance)}
+                            </p>
+                            <p className="text-[11px] text-muted-foreground">
+                              {routeStats.stops.length} arrêt
+                              {routeStats.stops.length !== 1 ? 's' : ''}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div ref={timelineRef} className="p-3 space-y-0.5">
+                        {selectedEnrichedEvents.map((event, idx) => {
+                          const isNotLast = idx < selectedEnrichedEvents.length - 1
+                          if (event.type === 'movement') {
+                            return (
+                              <div key={event._key} className="flex gap-3">
+                                <div className="w-5 shrink-0 flex justify-center">
+                                  <div
+                                    className="bg-muted-foreground/15 min-h-6"
+                                    style={{ width: 2 }}
+                                  />
+                                </div>
+                                <div className="flex items-center py-1 min-h-6">
+                                  <p className="text-[11px] text-muted-foreground/70 italic">
+                                    {`En déplacement${event.durationMs > 60000 ? ` · ${formatDurationMs(event.durationMs)}` : ''}${event.distanceMeters > 100 ? ` · ${formatDistanceKm(event.distanceMeters)}` : ''}`}
+                                  </p>
+                                </div>
+                              </div>
+                            )
+                          }
+
+                          const isDeparture = event.type === 'departure'
+                          const isArrival = event.type === 'arrival'
+                          const isStop = event.type === 'stop'
+
+                          return (
+                            <div key={event._key} className="flex gap-3">
+                              <div className="flex flex-col items-center w-5 shrink-0">
+                                <button
+                                  type="button"
+                                  onClick={() => handleEventClick(event)}
+                                  className={`h-5 w-5 rounded-full border-2 border-background shadow-sm flex items-center justify-center hover:scale-110 transition-transform ${
+                                    isDeparture
+                                      ? 'bg-chart-2'
+                                      : isArrival
+                                        ? 'bg-muted-foreground'
+                                        : 'bg-destructive'
+                                  }`}
+                                >
+                                  {isArrival && <Flag className="h-2.5 w-2.5 text-white" />}
+                                  {isDeparture && (
+                                    <Navigation2 className="h-2.5 w-2.5 text-white" />
+                                  )}
+                                  {isStop && <MapPin className="h-2.5 w-2.5 text-white" />}
+                                </button>
+                                {isNotLast && (
+                                  <div
+                                    className="flex-1 bg-border/50 min-h-2"
+                                    style={{ width: 2 }}
+                                  />
+                                )}
+                              </div>
+
+                              <button
+                                type="button"
+                                onClick={() => handleEventClick(event)}
+                                className="flex-1 pb-2 pt-0.5 text-left hover:opacity-75 transition-opacity"
+                              >
+                                {isDeparture && (
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-xs font-semibold text-chart-2 tabular-nums">
+                                      {formatTime(event.time)}
+                                    </span>
+                                    <span className="text-xs text-muted-foreground">Départ</span>
+                                  </div>
+                                )}
+                                {isArrival && (
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-xs font-semibold text-foreground tabular-nums">
+                                      {formatTime(event.time)}
+                                    </span>
+                                    <span className="text-xs text-muted-foreground">Arrivée</span>
+                                  </div>
+                                )}
+                                {isStop && (
+                                  <div>
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                      <span className="text-xs font-semibold text-destructive tabular-nums">
+                                        {formatTime(event.startTime)}
+                                      </span>
+                                      <span className="text-xs text-muted-foreground">Arrêt</span>
+                                      <span className="inline-flex items-center rounded-full bg-destructive/10 text-destructive px-1.5 py-0.5 text-[10px] font-bold">
+                                        {formatDurationMs(event.duration)}
+                                      </span>
+                                    </div>
+                                    <p className="text-[10px] text-muted-foreground/65 mt-0.5">
+                                      jusqu'à {formatTime(event.endTime)}
+                                    </p>
+                                  </div>
+                                )}
+                              </button>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </>
+                  ) : (
+                    <div className="flex flex-col items-center justify-center py-12 gap-4 text-center">
+                      <div className="h-16 w-16 rounded-full border-2 border-dashed border-muted-foreground/20 flex items-center justify-center">
+                        <Route className="h-7 w-7 text-muted-foreground/30" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-muted-foreground">
+                          Aucun déplacement enregistré
+                        </p>
+                        <p className="text-xs text-muted-foreground/60 mt-1">{periodLabel}</p>
+                      </div>
+                    </div>
+                  )
+                ) : (
+                  <div className="flex flex-col items-center justify-center py-12 gap-4 text-center">
+                    <div className="h-16 w-16 rounded-full border-2 border-dashed border-muted-foreground/20 flex items-center justify-center">
+                      <Route className="h-7 w-7 text-muted-foreground/30" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-muted-foreground">
+                        Aucun trajet disponible
+                      </p>
+                      <p className="text-xs text-muted-foreground/60 mt-1">{periodLabel}</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </SheetContent>
+        </Sheet>
+      ) : (
+        <aside className="flex min-h-0 w-[360px] shrink-0 flex-col border-r border-border/50 bg-card/95 backdrop-blur-sm">
+          <div className="p-3 border-b border-border/50 space-y-3">
+            {!embedded && (
+              <div className="flex items-center gap-1 rounded-full bg-muted/40 p-1">
+                <button
+                  type="button"
+                  onClick={() => setMode('live')}
+                  className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
+                    mode === 'live'
+                      ? 'bg-background shadow-sm text-foreground'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  <span
+                    className={`h-1.5 w-1.5 rounded-full bg-chart-2 ${mode === 'live' ? 'animate-pulse' : ''}`}
+                  />
+                  Live
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMode('trajet')}
+                  className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
+                    mode === 'trajet'
+                      ? 'bg-background shadow-sm text-foreground'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  <Route className="h-3.5 w-3.5" />
+                  Trajet
+                </button>
+              </div>
+            )}
+
+            {mode === 'live' ? (
+              <div className="space-y-2">
                 <div className="space-y-1">
                   <div className="flex items-center gap-1.5 px-1 text-[11px] font-medium text-muted-foreground">
                     <Users className="h-3.5 w-3.5" />
-                    Filtre commerciaux
+                    Commerciaux et tablettes
                   </div>
                   <div
                     className="flex items-center gap-1.5 overflow-x-auto pb-1 -mx-1 px-1"
@@ -738,11 +1112,7 @@ export default function LocationTab({
                   >
                     <button
                       type="button"
-                      onClick={() => {
-                        setSelectedActorKey(null)
-                        setTrajetPopupPos(null)
-                        setSelectedStopIndex(null)
-                      }}
+                      onClick={() => setSelectedActorKey(null)}
                       className={`shrink-0 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
                         !selectedActorKey
                           ? 'border-primary/40 bg-primary/10 text-primary'
@@ -751,17 +1121,13 @@ export default function LocationTab({
                     >
                       Tous
                     </button>
-                    {(actors || []).map(actor => {
+                    {liveActors.map(actor => {
                       const active = selectedActorKey === actor.key
                       return (
                         <button
                           key={actor.key}
                           type="button"
-                          onClick={() => {
-                            setSelectedActorKey(actor.key)
-                            setTrajetPopupPos(null)
-                            setSelectedStopIndex(null)
-                          }}
+                          onClick={() => setSelectedActorKey(actor.key)}
                           className={`shrink-0 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors max-w-[180px] truncate ${
                             active
                               ? 'border-primary/40 bg-primary/10 text-primary'
@@ -775,235 +1141,382 @@ export default function LocationTab({
                     })}
                   </div>
                 </div>
-              )}
-
-              <div className="flex items-center justify-between text-xs rounded-lg border border-border/50 bg-muted/20 px-2.5 py-1.5">
-                <span className="text-muted-foreground">{periodLabel}</span>
-                <span className="font-semibold text-foreground tabular-nums">
-                  {routeTotal} points
-                </span>
-              </div>
-              {routeLoading && (
-                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <div className="h-3.5 w-3.5 rounded-full border-2 border-primary/30 border-t-primary animate-spin" />
-                  Chargement des trajets...
+                <div className="flex items-center justify-between text-xs rounded-lg border border-chart-2/20 bg-chart-2/10 px-2.5 py-1.5">
+                  <span className="text-muted-foreground">Vue opérateur</span>
+                  <span className="inline-flex items-center gap-1 font-semibold text-chart-2">
+                    <span className="h-1.5 w-1.5 rounded-full bg-chart-2 animate-pulse" />
+                    En direct
+                  </span>
                 </div>
-              )}
-            </div>
-          )}
-        </div>
-
-        <div
-          className="flex-1 min-h-0 overflow-y-auto overscroll-contain"
-          style={{ scrollbarWidth: 'thin' }}
-        >
-          {mode === 'live' ? (
-            liveActors.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-full py-10 gap-3 text-muted-foreground">
-                <div className="rounded-full bg-muted/40 p-4">
-                  <MapPin className="h-7 w-7 text-muted-foreground/30" />
-                </div>
-                <p className="text-sm">Aucune position disponible</p>
               </div>
             ) : (
-              <div className="divide-y divide-border/40">
-                {liveActors.map((actor, index) => {
-                  const isSelected = actor.key === selectedActorKey
-                  const BattIcon = getBatteryIcon(actor.batteryLevel)
-                  const battColor = getBatteryColor(actor.batteryLevel)
-                  return (
+              <div className="space-y-2">
+                <div className="rounded-xl border border-border/50 bg-muted/15 p-2.5 space-y-2.5">
+                  <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    <Clock className="h-3.5 w-3.5" />P{'\u00e9'}riode
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    {TRAJET_QUICK_FILTERS.map(opt => {
+                      const active = periodKey === opt.key
+                      return (
+                        <button
+                          key={opt.key}
+                          type="button"
+                          onClick={() => handlePeriodChange(opt.key)}
+                          className={`shrink-0 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
+                            active
+                              ? 'border-primary/40 bg-primary/10 text-primary'
+                              : 'border-border/60 bg-background hover:bg-muted/40 text-muted-foreground hover:text-foreground'
+                          }`}
+                        >
+                          {opt.label}
+                        </button>
+                      )
+                    })}
                     <button
-                      key={actor.key}
                       type="button"
-                      onClick={() => handleCardClick(actor)}
-                      className={`w-full p-3 text-left transition-colors ${
-                        isSelected ? 'bg-primary/6 ring-1 ring-primary/20' : 'hover:bg-muted/25'
+                      onClick={() => handlePeriodChange('custom')}
+                      className={`shrink-0 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
+                        periodKey === 'custom'
+                          ? 'border-primary/40 bg-primary/10 text-primary'
+                          : 'border-border/60 bg-background hover:bg-muted/40 text-muted-foreground hover:text-foreground'
                       }`}
                     >
-                      <div className="flex items-start gap-3">
-                        <div
-                          className={`h-8 w-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${getAvatarColor(actor.key, index)}`}
-                        >
-                          {getActorInitial(actor)}
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center justify-between gap-2">
-                            <p className="text-sm font-semibold truncate">
-                              {actor.name || 'Non assigné'}
-                            </p>
-                            <span
-                              className={`h-2 w-2 rounded-full shrink-0 ${
-                                actor.online ? 'bg-chart-2' : 'bg-muted-foreground/40'
-                              }`}
-                            />
-                          </div>
-                          <p className="text-[11px] text-muted-foreground truncate mt-0.5">
-                            {getActorRoleLabel(actor)}
-                          </p>
-                          <div className="mt-2 flex items-center justify-between gap-2">
-                            <div className="flex items-center gap-1.5">
-                              <BattIcon className={`h-3 w-3 ${battColor}`} />
-                              <span className={`text-[11px] font-medium tabular-nums ${battColor}`}>
-                                {formatBattery(actor.batteryLevel)}
-                              </span>
-                            </div>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-auto px-0 py-0 text-[11px] text-primary/70 hover:text-primary hover:bg-transparent gap-0.5"
-                              onClick={e => {
-                                e.stopPropagation()
-                                setSelectedActorKey(actor.key)
-                                setMode('trajet')
-                              }}
-                            >
-                              Voir trajet
-                              <ChevronRight className="h-3 w-3" />
-                            </Button>
-                          </div>
-                        </div>
-                      </div>
+                      Autre date
                     </button>
-                  )
-                })}
-              </div>
-            )
-          ) : routeLoading ? (
-            <div className="p-3 space-y-2">
-              {[0, 1, 2, 3].map(i => (
-                <div
-                  key={i}
-                  className="rounded-lg border border-border/40 bg-muted/15 p-3 animate-pulse space-y-2"
-                >
-                  <div className="h-3 w-28 rounded-full bg-muted/50" />
-                  <div className="h-2.5 w-20 rounded-full bg-muted/40" />
-                  <div className="h-1.5 w-full rounded-full bg-muted/40" />
-                </div>
-              ))}
-            </div>
-          ) : selectedActorKey ? (
-            hasRoute ? (
-              <>
-                <div className="sticky top-0 z-20 bg-card/95 backdrop-blur-sm border-b border-border/40 p-3 space-y-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSelectedActorKey(null)
-                      setTrajetPopupPos(null)
-                      setSelectedStopIndex(null)
-                    }}
-                    className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground bg-muted/40 hover:bg-muted/60 rounded-full px-3 py-1.5 transition-colors"
-                  >
-                    <ChevronLeft className="h-3.5 w-3.5" />
-                    Tous les commerciaux
-                  </button>
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="text-sm font-bold truncate">
-                        {selectedActor?.name || 'Non assigné'}
-                      </p>
-                      <p className="text-[11px] text-muted-foreground">{periodLabel}</p>
+                  </div>
+                  {periodKey === 'custom' && (
+                    <div className="space-y-1.5 pt-1">
+                      <div className="grid grid-cols-[24px_1fr_92px] gap-2 items-center">
+                        <span className="text-[11px] font-medium text-muted-foreground">Du</span>
+                        <input
+                          type="date"
+                          value={customFrom}
+                          onChange={e => setCustomFrom(e.target.value)}
+                          className="h-8 rounded-md border border-input bg-background px-2 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                        />
+                        <input
+                          type="time"
+                          value={customFromTime}
+                          onChange={e => setCustomFromTime(e.target.value)}
+                          className="h-8 rounded-md border border-input bg-background px-2 text-xs text-foreground tabular-nums focus:outline-none focus:ring-2 focus:ring-primary/30"
+                        />
+                      </div>
+                      <div className="grid grid-cols-[24px_1fr_92px] gap-2 items-center">
+                        <span className="text-[11px] font-medium text-muted-foreground">Au</span>
+                        <input
+                          type="date"
+                          value={customTo || customFrom}
+                          onChange={e => setCustomTo(e.target.value)}
+                          className="h-8 rounded-md border border-input bg-background px-2 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                        />
+                        <input
+                          type="time"
+                          value={customToTime}
+                          onChange={e => setCustomToTime(e.target.value)}
+                          className="h-8 rounded-md border border-input bg-background px-2 text-xs text-foreground tabular-nums focus:outline-none focus:ring-2 focus:ring-primary/30"
+                        />
+                      </div>
                     </div>
-                    <div className="shrink-0 text-right">
-                      <p className="text-sm font-semibold tabular-nums">
-                        {formatDistanceKm(routeStats.totalDistance)}
-                      </p>
-                      <p className="text-[11px] text-muted-foreground">
-                        {routeStats.stops.length} arrêt
-                        {routeStats.stops.length !== 1 ? 's' : ''}
-                      </p>
+                  )}
+                </div>
+
+                {!embedded && (
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-1.5 px-1 text-[11px] font-medium text-muted-foreground">
+                      <Users className="h-3.5 w-3.5" />
+                      Filtre commerciaux
+                    </div>
+                    <div
+                      className="flex items-center gap-1.5 overflow-x-auto pb-1 -mx-1 px-1"
+                      style={{ scrollbarWidth: 'none' }}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedActorKey(null)
+                          setTrajetPopupPos(null)
+                          setSelectedStopIndex(null)
+                        }}
+                        className={`shrink-0 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
+                          !selectedActorKey
+                            ? 'border-primary/40 bg-primary/10 text-primary'
+                            : 'border-border/60 bg-background hover:bg-muted/40 text-muted-foreground hover:text-foreground'
+                        }`}
+                      >
+                        Tous
+                      </button>
+                      {(actors || []).map(actor => {
+                        const active = selectedActorKey === actor.key
+                        return (
+                          <button
+                            key={actor.key}
+                            type="button"
+                            onClick={() => {
+                              setSelectedActorKey(actor.key)
+                              setTrajetPopupPos(null)
+                              setSelectedStopIndex(null)
+                            }}
+                            className={`shrink-0 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors max-w-[180px] truncate ${
+                              active
+                                ? 'border-primary/40 bg-primary/10 text-primary'
+                                : 'border-border/60 bg-background hover:bg-muted/40 text-muted-foreground hover:text-foreground'
+                            }`}
+                            title={actor.name}
+                          >
+                            {actor.name}
+                          </button>
+                        )
+                      })}
                     </div>
                   </div>
+                )}
+
+                <div className="flex items-center justify-between text-xs rounded-lg border border-border/50 bg-muted/20 px-2.5 py-1.5">
+                  <span className="text-muted-foreground">{periodLabel}</span>
+                  <span className="font-semibold text-foreground tabular-nums">
+                    {routeTotal} points
+                  </span>
                 </div>
+                {routeLoading && (
+                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <div className="h-3.5 w-3.5 rounded-full border-2 border-primary/30 border-t-primary animate-spin" />
+                    Chargement des trajets...
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
 
-                <div ref={timelineRef} className="p-3 space-y-0.5">
-                  {selectedEnrichedEvents.map((event, idx) => {
-                    const isNotLast = idx < selectedEnrichedEvents.length - 1
-                    if (event.type === 'movement') {
-                      return (
-                        <div key={event._key} className="flex gap-3">
-                          <div className="w-5 shrink-0 flex justify-center">
-                            <div className="bg-muted-foreground/15 min-h-6" style={{ width: 2 }} />
-                          </div>
-                          <div className="flex items-center py-1 min-h-6">
-                            <p className="text-[11px] text-muted-foreground/70 italic">
-                              {`En déplacement${event.durationMs > 60000 ? ` · ${formatDurationMs(event.durationMs)}` : ''}${event.distanceMeters > 100 ? ` · ${formatDistanceKm(event.distanceMeters)}` : ''}`}
-                            </p>
-                          </div>
-                        </div>
-                      )
-                    }
-
-                    const isDeparture = event.type === 'departure'
-                    const isArrival = event.type === 'arrival'
-                    const isStop = event.type === 'stop'
-
+          <div
+            className="flex-1 min-h-0 overflow-y-auto overscroll-contain"
+            style={{ scrollbarWidth: 'thin' }}
+          >
+            {mode === 'live' ? (
+              liveActors.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-full py-10 gap-3 text-muted-foreground">
+                  <div className="rounded-full bg-muted/40 p-4">
+                    <MapPin className="h-7 w-7 text-muted-foreground/30" />
+                  </div>
+                  <p className="text-sm">Aucune position disponible</p>
+                </div>
+              ) : (
+                <div className="divide-y divide-border/40">
+                  {liveActors.map((actor, index) => {
+                    const isSelected = actor.key === selectedActorKey
+                    const BattIcon = getBatteryIcon(actor.batteryLevel)
+                    const battColor = getBatteryColor(actor.batteryLevel)
                     return (
-                      <div key={event._key} className="flex gap-3">
-                        <div className="flex flex-col items-center w-5 shrink-0">
-                          <button
-                            type="button"
-                            onClick={() => handleEventClick(event)}
-                            className={`h-5 w-5 rounded-full border-2 border-background shadow-sm flex items-center justify-center hover:scale-110 transition-transform ${
-                              isDeparture
-                                ? 'bg-chart-2'
-                                : isArrival
-                                  ? 'bg-muted-foreground'
-                                  : 'bg-destructive'
-                            }`}
+                      <button
+                        key={actor.key}
+                        type="button"
+                        onClick={() => handleCardClick(actor)}
+                        className={`w-full p-3 text-left transition-colors ${
+                          isSelected ? 'bg-primary/6 ring-1 ring-primary/20' : 'hover:bg-muted/25'
+                        }`}
+                      >
+                        <div className="flex items-start gap-3">
+                          <div
+                            className={`h-8 w-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${getAvatarColor(actor.key, index)}`}
                           >
-                            {isArrival && <Flag className="h-2.5 w-2.5 text-white" />}
-                            {isDeparture && <Navigation2 className="h-2.5 w-2.5 text-white" />}
-                            {isStop && <MapPin className="h-2.5 w-2.5 text-white" />}
-                          </button>
-                          {isNotLast && (
-                            <div className="flex-1 bg-border/50 min-h-2" style={{ width: 2 }} />
-                          )}
-                        </div>
-
-                        <button
-                          type="button"
-                          onClick={() => handleEventClick(event)}
-                          className="flex-1 pb-2 pt-0.5 text-left hover:opacity-75 transition-opacity"
-                        >
-                          {isDeparture && (
-                            <div className="flex items-center gap-2">
-                              <span className="text-xs font-semibold text-chart-2 tabular-nums">
-                                {formatTime(event.time)}
-                              </span>
-                              <span className="text-xs text-muted-foreground">Départ</span>
+                            {getActorInitial(actor)}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center justify-between gap-2">
+                              <p className="text-sm font-semibold truncate">
+                                {actor.name || 'Non assigné'}
+                              </p>
+                              <span
+                                className={`h-2 w-2 rounded-full shrink-0 ${
+                                  actor.online ? 'bg-chart-2' : 'bg-muted-foreground/40'
+                                }`}
+                              />
                             </div>
-                          )}
-                          {isArrival && (
-                            <div className="flex items-center gap-2">
-                              <span className="text-xs font-semibold text-foreground tabular-nums">
-                                {formatTime(event.time)}
-                              </span>
-                              <span className="text-xs text-muted-foreground">Arrivée</span>
-                            </div>
-                          )}
-                          {isStop && (
-                            <div>
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <span className="text-xs font-semibold text-destructive tabular-nums">
-                                  {formatTime(event.startTime)}
-                                </span>
-                                <span className="text-xs text-muted-foreground">Arrêt</span>
-                                <span className="inline-flex items-center rounded-full bg-destructive/10 text-destructive px-1.5 py-0.5 text-[10px] font-bold">
-                                  {formatDurationMs(event.duration)}
+                            <p className="text-[11px] text-muted-foreground truncate mt-0.5">
+                              {getActorRoleLabel(actor)}
+                            </p>
+                            <div className="mt-2 flex items-center justify-between gap-2">
+                              <div className="flex items-center gap-1.5">
+                                <BattIcon className={`h-3 w-3 ${battColor}`} />
+                                <span
+                                  className={`text-[11px] font-medium tabular-nums ${battColor}`}
+                                >
+                                  {formatBattery(actor.batteryLevel)}
                                 </span>
                               </div>
-                              <p className="text-[10px] text-muted-foreground/65 mt-0.5">
-                                jusqu'à {formatTime(event.endTime)}
-                              </p>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-auto px-0 py-0 text-[11px] text-primary/70 hover:text-primary hover:bg-transparent gap-0.5"
+                                onClick={e => {
+                                  e.stopPropagation()
+                                  setSelectedActorKey(actor.key)
+                                  setMode('trajet')
+                                }}
+                              >
+                                Voir trajet
+                                <ChevronRight className="h-3 w-3" />
+                              </Button>
                             </div>
-                          )}
-                        </button>
-                      </div>
+                          </div>
+                        </div>
+                      </button>
                     )
                   })}
                 </div>
-              </>
+              )
+            ) : routeLoading ? (
+              <div className="p-3 space-y-2">
+                {[0, 1, 2, 3].map(i => (
+                  <div
+                    key={i}
+                    className="rounded-lg border border-border/40 bg-muted/15 p-3 animate-pulse space-y-2"
+                  >
+                    <div className="h-3 w-28 rounded-full bg-muted/50" />
+                    <div className="h-2.5 w-20 rounded-full bg-muted/40" />
+                    <div className="h-1.5 w-full rounded-full bg-muted/40" />
+                  </div>
+                ))}
+              </div>
+            ) : selectedActorKey ? (
+              hasRoute ? (
+                <>
+                  <div className="sticky top-0 z-20 bg-card/95 backdrop-blur-sm border-b border-border/40 p-3 space-y-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedActorKey(null)
+                        setTrajetPopupPos(null)
+                        setSelectedStopIndex(null)
+                      }}
+                      className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground bg-muted/40 hover:bg-muted/60 rounded-full px-3 py-1.5 transition-colors"
+                    >
+                      <ChevronLeft className="h-3.5 w-3.5" />
+                      Tous les commerciaux
+                    </button>
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-sm font-bold truncate">
+                          {selectedActor?.name || 'Non assigné'}
+                        </p>
+                        <p className="text-[11px] text-muted-foreground">{periodLabel}</p>
+                      </div>
+                      <div className="shrink-0 text-right">
+                        <p className="text-sm font-semibold tabular-nums">
+                          {formatDistanceKm(routeStats.totalDistance)}
+                        </p>
+                        <p className="text-[11px] text-muted-foreground">
+                          {routeStats.stops.length} arrêt
+                          {routeStats.stops.length !== 1 ? 's' : ''}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div ref={timelineRef} className="p-3 space-y-0.5">
+                    {selectedEnrichedEvents.map((event, idx) => {
+                      const isNotLast = idx < selectedEnrichedEvents.length - 1
+                      if (event.type === 'movement') {
+                        return (
+                          <div key={event._key} className="flex gap-3">
+                            <div className="w-5 shrink-0 flex justify-center">
+                              <div
+                                className="bg-muted-foreground/15 min-h-6"
+                                style={{ width: 2 }}
+                              />
+                            </div>
+                            <div className="flex items-center py-1 min-h-6">
+                              <p className="text-[11px] text-muted-foreground/70 italic">
+                                {`En déplacement${event.durationMs > 60000 ? ` · ${formatDurationMs(event.durationMs)}` : ''}${event.distanceMeters > 100 ? ` · ${formatDistanceKm(event.distanceMeters)}` : ''}`}
+                              </p>
+                            </div>
+                          </div>
+                        )
+                      }
+
+                      const isDeparture = event.type === 'departure'
+                      const isArrival = event.type === 'arrival'
+                      const isStop = event.type === 'stop'
+
+                      return (
+                        <div key={event._key} className="flex gap-3">
+                          <div className="flex flex-col items-center w-5 shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => handleEventClick(event)}
+                              className={`h-5 w-5 rounded-full border-2 border-background shadow-sm flex items-center justify-center hover:scale-110 transition-transform ${
+                                isDeparture
+                                  ? 'bg-chart-2'
+                                  : isArrival
+                                    ? 'bg-muted-foreground'
+                                    : 'bg-destructive'
+                              }`}
+                            >
+                              {isArrival && <Flag className="h-2.5 w-2.5 text-white" />}
+                              {isDeparture && <Navigation2 className="h-2.5 w-2.5 text-white" />}
+                              {isStop && <MapPin className="h-2.5 w-2.5 text-white" />}
+                            </button>
+                            {isNotLast && (
+                              <div className="flex-1 bg-border/50 min-h-2" style={{ width: 2 }} />
+                            )}
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => handleEventClick(event)}
+                            className="flex-1 pb-2 pt-0.5 text-left hover:opacity-75 transition-opacity"
+                          >
+                            {isDeparture && (
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs font-semibold text-chart-2 tabular-nums">
+                                  {formatTime(event.time)}
+                                </span>
+                                <span className="text-xs text-muted-foreground">Départ</span>
+                              </div>
+                            )}
+                            {isArrival && (
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs font-semibold text-foreground tabular-nums">
+                                  {formatTime(event.time)}
+                                </span>
+                                <span className="text-xs text-muted-foreground">Arrivée</span>
+                              </div>
+                            )}
+                            {isStop && (
+                              <div>
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className="text-xs font-semibold text-destructive tabular-nums">
+                                    {formatTime(event.startTime)}
+                                  </span>
+                                  <span className="text-xs text-muted-foreground">Arrêt</span>
+                                  <span className="inline-flex items-center rounded-full bg-destructive/10 text-destructive px-1.5 py-0.5 text-[10px] font-bold">
+                                    {formatDurationMs(event.duration)}
+                                  </span>
+                                </div>
+                                <p className="text-[10px] text-muted-foreground/65 mt-0.5">
+                                  jusqu'à {formatTime(event.endTime)}
+                                </p>
+                              </div>
+                            )}
+                          </button>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </>
+              ) : (
+                <div className="flex flex-col items-center justify-center py-12 gap-4 text-center">
+                  <div className="h-16 w-16 rounded-full border-2 border-dashed border-muted-foreground/20 flex items-center justify-center">
+                    <Route className="h-7 w-7 text-muted-foreground/30" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-muted-foreground">
+                      Aucun déplacement enregistré
+                    </p>
+                    <p className="text-xs text-muted-foreground/60 mt-1">{periodLabel}</p>
+                  </div>
+                </div>
+              )
             ) : (
               <div className="flex flex-col items-center justify-center py-12 gap-4 text-center">
                 <div className="h-16 w-16 rounded-full border-2 border-dashed border-muted-foreground/20 flex items-center justify-center">
@@ -1011,27 +1524,30 @@ export default function LocationTab({
                 </div>
                 <div>
                   <p className="text-sm font-medium text-muted-foreground">
-                    Aucun déplacement enregistré
+                    Aucun trajet disponible
                   </p>
                   <p className="text-xs text-muted-foreground/60 mt-1">{periodLabel}</p>
                 </div>
               </div>
-            )
-          ) : (
-            <div className="flex flex-col items-center justify-center py-12 gap-4 text-center">
-              <div className="h-16 w-16 rounded-full border-2 border-dashed border-muted-foreground/20 flex items-center justify-center">
-                <Route className="h-7 w-7 text-muted-foreground/30" />
-              </div>
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">Aucun trajet disponible</p>
-                <p className="text-xs text-muted-foreground/60 mt-1">{periodLabel}</p>
-              </div>
-            </div>
-          )}
-        </div>
-      </aside>
+            )}
+          </div>
+        </aside>
+      )}
 
       <div className="relative flex-1 min-w-0 min-h-0 bg-muted/20">
+        {/* Seule porte d'entrée du panneau une fois qu'il est en tiroir. */}
+        {isCompact && (
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            onClick={() => setPanelOpen(true)}
+            className="absolute left-3 top-3 z-10 gap-1.5 shadow-md"
+          >
+            <PanelLeftOpen className="h-4 w-4" />
+            Panneau
+          </Button>
+        )}
         <MapboxMap
           ref={mapRef}
           {...(viewState || defaultCenter)}

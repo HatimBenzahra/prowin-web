@@ -54,7 +54,7 @@ export class CoachingMappedProductDto {
 @ObjectType()
 export class CoachingAnalysisDto {
   @Field(() => Int) id: number;
-  @Field(() => Int) recordingId: number;
+  @Field(() => Int, { nullable: true }) recordingId?: number | null;
   @Field(() => Int, { nullable: true }) porteId?: number | null;
   @Field(() => Int, { nullable: true }) userId?: number | null;
   @Field(() => Int, { nullable: true }) managerId?: number | null;

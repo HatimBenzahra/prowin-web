@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Loader2, X } from 'lucide-react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { useModalGeometry } from '@/hooks/ui/use-modal-geometry'
 import { Button } from '@/components/ui/button'
 import CoachingService from '@/services/coaching/coaching.service'
 import CoachingDetail from './CoachingDetail'
@@ -11,6 +12,7 @@ import AnalyzedSessionsList from './AnalyzedSessionsList'
  * `CoachingDetail`), avec fil d'ariane « Analysés › … » et bouton retour.
  */
 export default function AnalyzedRecordingsModal({ open, onOpenChange }) {
+  const geometry = useModalGeometry()
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(false)
   const [selected, setSelected] = useState(null)
@@ -34,7 +36,10 @@ export default function AnalyzedRecordingsModal({ open, onOpenChange }) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex h-[94vh] w-[97vw] flex-col gap-0 overflow-hidden p-0 sm:max-w-none lg:ml-[9.5rem] lg:w-[calc(100vw-19rem)]">
+      <DialogContent
+        className="flex h-[94vh] max-w-none flex-col gap-0 overflow-hidden p-0 sm:max-w-none"
+        style={geometry}
+      >
         {selected ? (
           <CoachingDetail
             analysis={selected}

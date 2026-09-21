@@ -7,6 +7,7 @@ import {
   WinLeadPlusBinding,
 } from './product-sheet.types';
 import { StepApplicability } from './sales-plan.types';
+import { CRM_TENANT } from '../shared/crm-scope';
 
 type ProductSheetVersionRow = {
   id: number;
@@ -50,7 +51,11 @@ export class ProductSheetService {
   ): Promise<ActiveProductSheet[]> {
     if (productKeys.length === 0) return [];
     const rows = await this.prisma.productSheetVersion.findMany({
-      where: { productKey: { in: productKeys }, isActive: true },
+      where: {
+        tenantId: CRM_TENANT,
+        productKey: { in: productKeys },
+        isActive: true,
+      },
     });
     return rows.map((row) => ({
       versionId: row.id,
@@ -64,7 +69,11 @@ export class ProductSheetService {
   ): Promise<ProductSheetDescriptor[]> {
     if (productKeys.length === 0) return [];
     const rows = await this.prisma.productSheetVersion.findMany({
-      where: { productKey: { in: productKeys }, isActive: true },
+      where: {
+        tenantId: CRM_TENANT,
+        productKey: { in: productKeys },
+        isActive: true,
+      },
       select: {
         productKey: true,
         label: true,
@@ -85,7 +94,7 @@ export class ProductSheetService {
   /** Toutes les fiches actives — alimente l'onglet Produits en lecture seule. */
   async listActiveSheets() {
     return this.prisma.productSheetVersion.findMany({
-      where: { isActive: true },
+      where: { tenantId: CRM_TENANT, isActive: true },
       orderBy: { label: 'asc' },
     });
   }
