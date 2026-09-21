@@ -45,7 +45,11 @@ export default function PeopleCardsView({
 
   return (
     <>
-      <div className="space-y-3">
+      {/* `@container/list` : c'est CETTE largeur — celle que la grille de la page laisse
+          à la liste — qui décide de la forme d'une rangée, pas celle de la fenêtre. Les
+          deux divergent de plusieurs centaines de pixels dès que la sidebar est ouverte
+          ou qu'un panneau occupe la colonne de droite. `PersonListCard` s'y replie. */}
+      <div className="@container/list space-y-3">
         {people.map(person => (
           <PersonListCard
             key={person.rowKey || person.id}

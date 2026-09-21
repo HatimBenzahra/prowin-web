@@ -64,7 +64,9 @@ export default memo(function Commerciaux() {
   }
 
   return (
-    <div className="space-y-6">
+    // `@container/page` : c'est la largeur du conteneur, pas celle de la fenêtre, qui
+    // décide si le panneau « Paliers » tient à droite de la liste.
+    <div className="@container/page space-y-6">
       <PeopleListToolbar
         search={search}
         onSearchChange={setSearch}
@@ -75,12 +77,13 @@ export default memo(function Commerciaux() {
       {/* minmax(0,1fr) et non 1fr : sinon la colonne refuse de descendre sous la
           largeur min-content du tableau, la grille déborde et la page scrolle.
 
-          Deux colonnes seulement à partir de 1536 px : en dessous, les 320 px du
-          panneau Paliers laissaient 546 px à la liste à 1280 px, où une rangée de
-          `PersonListCard` en coûte ~750 — et le conteneur applicatif est en
-          `overflow-x-hidden`, donc la rangée était coupée, pas scrollée. Les paliers
-          sont une légende de référence : ils passent sous la liste. */}
-      <div className="grid grid-cols-1 items-start gap-6 2xl:grid-cols-[minmax(0,1fr)_320px]">
+          Le seuil porte sur `@container/page`, donc sur la largeur réellement
+          disponible, pas sur celle de la fenêtre : 1536 px de viewport n'étaient pas
+          atteints sur un 14 pouces alors que le conteneur en offrait 1103, largement
+          de quoi tenir les deux colonnes. Budget : 680 px pour une rangée d'un seul
+          tenant + 24 px de gap + 320 px de panneau = 1024. En dessous, le panneau
+          Paliers est une légende de référence : il passe sous la liste. */}
+      <div className="grid grid-cols-1 items-start gap-6 @min-[1024px]/page:grid-cols-[minmax(0,1fr)_320px]">
         <PeopleCardsView
           people={cardsPeople}
           detailsPath="/commerciaux"
