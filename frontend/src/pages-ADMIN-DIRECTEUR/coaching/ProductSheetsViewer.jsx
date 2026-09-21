@@ -43,7 +43,7 @@ export default function ProductSheetsViewer() {
       <div className="mb-4 flex items-center justify-between gap-3">
         <h3 className="text-lg font-semibold">Fiches produit</h3>
         <span className="shrink-0 font-mono text-xs text-muted-foreground">
-          {sheets.length} fiche{sheets.length > 1 ? 's' : ''} active
+          {sheets.length} fiche{sheets.length > 1 ? 's' : ''}
           {sheets.length > 1 ? 's' : ''}
         </span>
       </div>

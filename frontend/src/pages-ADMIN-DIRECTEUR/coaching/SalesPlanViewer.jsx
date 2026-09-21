@@ -15,7 +15,7 @@ export default function SalesPlanViewer() {
   useEffect(() => {
     let active = true
     CoachingService.activePlan()
-      .then((p) => active && setPlan(p))
+      .then(p => active && setPlan(p))
       .finally(() => active && setLoading(false))
     return () => {
       active = false
@@ -43,7 +43,7 @@ export default function SalesPlanViewer() {
         </span>
       </div>
       <div className="space-y-2.5">
-        {(plan.steps || []).map((s) => (
+        {(plan.steps || []).map(s => (
           <div key={s.key} className="overflow-hidden rounded-xl border border-border/60">
             <div className="flex items-center justify-between gap-3 border-b border-border/60 bg-muted/40 px-4 py-2.5">
               <span className="font-medium">{s.label}</span>
@@ -52,7 +52,7 @@ export default function SalesPlanViewer() {
               </span>
             </div>
             <ul>
-              {(s.criteria || []).map((c) => (
+              {(s.criteria || []).map(c => (
                 <li
                   key={c.key}
                   className="flex items-start justify-between gap-3 border-t border-dashed border-border/60 px-4 py-2 text-sm first:border-t-0"
@@ -68,8 +68,8 @@ export default function SalesPlanViewer() {
         ))}
       </div>
       <p className="mt-4 rounded-lg border-l-[3px] border-primary bg-primary/5 px-4 py-3 text-sm text-muted-foreground">
-        Vue lecture seule : elle reflète le plan de vente markdown versionné qui pilote le
-        scoring. L'édition du plan viendra plus tard.
+        Vue lecture seule : elle reflète le plan de vente markdown versionné qui pilote le scoring.
+        L'édition du plan viendra plus tard.
       </p>
     </div>
   )
