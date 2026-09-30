@@ -9,6 +9,7 @@ import {
 } from '@/hooks/metier/react-query'
 import { useErrorToast } from '@/hooks/utils/ui/use-error-toast'
 import { PointerSensor, useSensor, useSensors } from '@dnd-kit/core'
+import { UserStatus } from '@/constants/domain/user-status'
 
 // Identifiant de la zone de dépôt « Non assignés » (désassignation).
 export const UNASSIGN_DROPZONE_ID = 'dropzone-unassigned'
@@ -74,7 +75,7 @@ export function useGestionLogic() {
 
   // État local
   const [activeId, setActiveId] = useState(null)
-  const [statusFilter, setStatusFilter] = useState('ACTIF')
+  const [statusFilter, setStatusFilter] = useState(UserStatus.ACTIF)
   const [searchQuery, setSearchQuery] = useState('')
   const [addModal, setAddModal] = useState({
     isOpen: false,
@@ -97,8 +98,9 @@ export function useGestionLogic() {
 
   const statusFilterOptions = useMemo(
     () => [
-      { value: 'ACTIF', label: 'Actifs' },
-      { value: 'UTILISATEUR_TEST', label: 'Utilisateurs test' },
+      { value: UserStatus.ACTIF, label: 'Actifs' },
+      { value: UserStatus.CONTRAT_FINIE, label: 'Contrat fini' },
+      { value: UserStatus.UTILISATEUR_TEST, label: 'Utilisateurs test' },
     ],
     []
   )
@@ -116,7 +118,7 @@ export function useGestionLogic() {
     status => {
       if (!status) return false
       // Seuls les admins basculent le filtre ; les autres ne voient que les actifs.
-      return status === (showStatusFilter ? statusFilter : 'ACTIF')
+      return status === (showStatusFilter ? statusFilter : UserStatus.ACTIF)
     },
     [statusFilter, showStatusFilter]
   )
