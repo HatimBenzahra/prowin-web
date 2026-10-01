@@ -15,6 +15,8 @@ const COACHING_FIELDS = `
   scoreBeforeMalus
   malus
   violations { productSlug productLabel severity quote sheetSays planSays why }
+  productAlerts { productSlug productLabel type quote reference referenceKind reason }
+  productVerification { status products { productSlug productLabel status reason } }
   detectedProducts
   productMapping { key presentedByCommercial evidence }
   confidence

@@ -8,6 +8,8 @@ import {
 } from './product-sheet.types';
 import { StepApplicability } from './sales-plan.types';
 import { CRM_TENANT } from '../shared/crm-scope';
+import { CoachingApiClient } from '../coaching-api.client';
+import { createHash } from 'crypto';
 
 type ProductSheetVersionRow = {
   id: number;
@@ -43,7 +45,23 @@ export interface ProductSheetDescriptor {
 export class ProductSheetService {
   private readonly logger = new Logger(ProductSheetService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService, private readonly api: CoachingApiClient) {}
+
+  async importSheet(markdown: string) {
+    const parsed = await this.api.parseSheet(markdown);
+    if (parsed.rawMarkdown !== markdown || parsed.contentHash !== createHash('sha256').update(markdown).digest('hex')) throw new Error('Fiche retournée incompatible');
+    return this.prisma.$transaction(async tx => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`coaching-sheet:${CRM_TENANT}:${parsed.sheet.slug}`}))`;
+      let row = await tx.productSheetVersion.findUnique({ where: { tenantId_contentHash: { tenantId: CRM_TENANT, contentHash: parsed.contentHash } } });
+      if (!row) {
+        const last = await tx.productSheetVersion.findFirst({ where: { tenantId: CRM_TENANT, slug: parsed.sheet.slug }, orderBy: { version: 'desc' } });
+        const { slug, label, productKey, facts, identifiers, sttTerms, forbidden, winleadplus } = parsed.sheet;
+        row = await tx.productSheetVersion.create({ data: { tenantId: CRM_TENANT, slug, label, productKey, facts, identifiers, sttTerms, forbidden: JSON.parse(JSON.stringify(forbidden)), winleadplus: winleadplus ? JSON.parse(JSON.stringify(winleadplus)) : undefined, version: (last?.version ?? 0) + 1, contentHash: parsed.contentHash, rawMarkdown: markdown } });
+      }
+      await tx.productSheetVersion.updateMany({ where: { tenantId: CRM_TENANT, slug: row.slug, isActive: true, NOT: { id: row.id } }, data: { isActive: false } });
+      return tx.productSheetVersion.update({ where: { id: row.id }, data: { isActive: true } });
+    });
+  }
 
   /** Un produit sans fiche est absent du résultat : la passe 2 ne l'invente pas. */
   async getActiveSheetsFor(

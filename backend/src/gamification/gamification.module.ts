@@ -9,11 +9,13 @@ import { ContratService } from './contrat.service';
 import { EvaluationService } from './evaluation.service';
 import { GamificationCronService } from './gamification-cron.service';
 import { PrismaService } from '../prisma.service';
+import { WinleadPlusAuthService } from './winleadplus-auth.service';
 
 @Module({
   providers: [
     GamificationResolver,
     WinleadPlusApiService,
+    WinleadPlusAuthService,
     MappingService,
     OffreService,
     BadgeService,
@@ -23,5 +25,6 @@ import { PrismaService } from '../prisma.service';
     GamificationCronService,
     PrismaService,
   ],
+  exports: [WinleadPlusApiService, WinleadPlusAuthService],
 })
 export class GamificationModule {}

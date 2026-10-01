@@ -65,7 +65,7 @@ export const GET_COMMERCIAL_TEAM_RANKING = `
 
 export const GET_COMMERCIAL_FULL = `
   query GetCommercialFull($id: Int!) {
-    commercial(id: $id, excludeTestUsers: true) {
+    commercial(id: $id) {
       id
       nom
       prenom

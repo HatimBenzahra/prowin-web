@@ -52,7 +52,7 @@ export const GET_MANAGER = `
 
 export const GET_MANAGER_PERSONAL = `
   query GetManagerPersonal($id: Int!) {
-    managerPersonal(id: $id, excludeTestUsers: true) {
+    managerPersonal(id: $id) {
       id
       nom
       prenom

@@ -5,6 +5,8 @@ import {
   SalesPlanCriteriaPayload,
 } from './sales-plan.types';
 import { CRM_TENANT } from '../shared/crm-scope';
+import { CoachingApiClient } from '../coaching-api.client';
+import { createHash } from 'crypto';
 
 type SalesPlanVersionRow = {
   id: number;
@@ -23,7 +25,24 @@ type SalesPlanVersionRow = {
 export class SalesPlanService {
   private readonly logger = new Logger(SalesPlanService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService, private readonly api: CoachingApiClient) {}
+
+  /** The engine parses; only this application versions and stores the reference. */
+  async importPlan(markdown: string) {
+    const parsed = await this.api.parsePlan(markdown);
+    if (parsed.rawMarkdown !== markdown || parsed.contentHash !== createHash('sha256').update(markdown).digest('hex')) throw new Error('Plan retourné incompatible');
+    return this.prisma.$transaction(async tx => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`coaching-plan:${CRM_TENANT}:${parsed.plan.slug}`}))`;
+      let row = await tx.salesPlanVersion.findUnique({ where: { tenantId_contentHash: { tenantId: CRM_TENANT, contentHash: parsed.contentHash } } });
+      if (!row) {
+        const last = await tx.salesPlanVersion.findFirst({ where: { tenantId: CRM_TENANT, slug: parsed.plan.slug }, orderBy: { version: 'desc' } });
+        const { slug, title, ...criteria } = parsed.plan;
+        row = await tx.salesPlanVersion.create({ data: { tenantId: CRM_TENANT, slug, title, version: (last?.version ?? 0) + 1, contentHash: parsed.contentHash, rawMarkdown: markdown, criteria: JSON.parse(JSON.stringify(criteria)) } });
+      }
+      await tx.salesPlanVersion.updateMany({ where: { tenantId: CRM_TENANT, slug: row.slug, isActive: true, NOT: { id: row.id } }, data: { isActive: false } });
+      return tx.salesPlanVersion.update({ where: { id: row.id }, data: { isActive: true } });
+    });
+  }
 
   /**
    * Version active pour un slug donné, ou la plus récente si slug omis.

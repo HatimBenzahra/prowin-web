@@ -9,5 +9,5 @@
  * produit n'écrivait de référentiel ; depuis, un plan « actif » ne veut plus rien dire
  * sans dire actif *chez qui*.
  */
-export const CRM_SOURCE = 'prowin';
-export const CRM_TENANT = '';
+export const CRM_SOURCE = process.env.COACHING_SOURCE?.trim() || 'prowin';
+export const CRM_TENANT = process.env.COACHING_TENANT_ID?.trim() || '';

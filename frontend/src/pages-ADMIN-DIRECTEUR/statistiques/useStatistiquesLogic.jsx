@@ -13,7 +13,6 @@ import {
 } from '@/services'
 import { useRoleBasedData } from '@/hooks/metier/permissions/useRoleBasedData'
 import { useDateFilter } from '@/hooks/utils/filters/useDateFilter'
-import { UserStatus } from '@/constants/domain/user-status'
 import CoachingService from '@/services/coaching/coaching.service'
 import { defaultRange, granularityForRange, toIsoEnd, toIsoStart } from './stats-period'
 import { DEFAULT_TAB, TAB_QUERIES } from './stats-tabs'
@@ -23,8 +22,6 @@ export const SCOPE_FILTERS = [
   { value: 'commercials', label: 'Commerciaux' },
   { value: 'managers', label: 'Managers' },
 ]
-
-const isProductionUser = user => user?.status !== UserStatus.UTILISATEUR_TEST
 
 const fullName = (person, fallbackLabel, id) =>
   `${person?.prenom || ''} ${person?.nom || ''}`.trim() || `${fallbackLabel} #${id}`
@@ -147,21 +144,14 @@ export function useStatistiquesLogic() {
   const filteredCommercials = useRoleBasedData('commerciaux', rawCommercials)
   const filteredManagers = useRoleBasedData('managers', rawManagers)
 
-  const productionCommercials = useMemo(
-    () => (filteredCommercials || []).filter(isProductionUser),
-    [filteredCommercials]
-  )
-  const productionManagers = useMemo(
-    () => (filteredManagers || []).filter(isProductionUser),
-    [filteredManagers]
-  )
-
   /** Options du sélecteur d'intervenant, restreintes au périmètre courant. */
   const ownerOptions = useMemo(() => {
     const options = []
+    const commercials = filteredCommercials || []
+    const managers = filteredManagers || []
 
     if (scopeType === 'all' || scopeType === 'commercials') {
-      productionCommercials.forEach(commercial => {
+      commercials.forEach(commercial => {
         options.push({
           value: `commercial:${commercial.id}`,
           label: fullName(commercial, 'Commercial', commercial.id),
@@ -170,7 +160,7 @@ export function useStatistiquesLogic() {
     }
 
     if (scopeType === 'all' || scopeType === 'managers') {
-      productionManagers.forEach(manager => {
+      managers.forEach(manager => {
         options.push({
           value: `manager:${manager.id}`,
           label: fullName(manager, 'Manager', manager.id),
@@ -179,7 +169,7 @@ export function useStatistiquesLogic() {
     }
 
     return options.sort((a, b) => a.label.localeCompare(b.label, 'fr'))
-  }, [productionCommercials, productionManagers, scopeType])
+  }, [filteredCommercials, filteredManagers, scopeType])
 
   // Changer de périmètre peut rendre l'intervenant sélectionné hors-champ.
   useEffect(() => {

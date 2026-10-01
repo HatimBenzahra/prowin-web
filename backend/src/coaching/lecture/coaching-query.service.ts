@@ -20,6 +20,7 @@ import {
   CoachingViolationDto,
 } from '../coaching.dto';
 import { CriterionScore, StepScore } from '../shared/coaching.types';
+import { CRM_SOURCE, CRM_TENANT } from '../shared/crm-scope';
 
 // Filtre par tranche de durée (secondes) pour la liste de gestion.
 function matchDurationTier(sec: number, tier: string): boolean {
@@ -37,7 +38,7 @@ function matchDurationTier(sec: number, tier: string): boolean {
 @Injectable()
 export class CoachingQueryService {
   /** Les écrans de ProWin ne montrent QUE les analyses de ProWin. */
-  private readonly CRM_SOURCE = 'prowin';
+  private readonly CRM_SOURCE = CRM_SOURCE;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -57,7 +58,7 @@ export class CoachingQueryService {
   }> {
     const grouped = await this.prisma.coachingAnalysis.groupBy({
       by: ['status'],
-      where: { source: this.CRM_SOURCE },
+      where: { source: this.CRM_SOURCE, tenantId: CRM_TENANT },
       _count: { _all: true },
     });
     const c: Record<string, number> = {};
@@ -74,11 +75,11 @@ export class CoachingQueryService {
     const total = pending + processing + ready + failed;
 
     const inexploitable = await this.prisma.coachingAnalysis.count({
-      where: { source: this.CRM_SOURCE, quality: CoachingQuality.INEXPLOITABLE },
+      where: { source: this.CRM_SOURCE, tenantId: CRM_TENANT, quality: CoachingQuality.INEXPLOITABLE },
     });
     const agg = await this.prisma.coachingAnalysis.aggregate({
       _avg: { score: true },
-      where: { score: { not: null } },
+      where: { source: this.CRM_SOURCE, tenantId: CRM_TENANT, score: { not: null } },
     });
     const avgScore =
       agg._avg.score != null ? Math.round(agg._avg.score * 10) / 10 : null;
@@ -108,7 +109,7 @@ export class CoachingQueryService {
     });
     // Un appelant ne voit que SES analyses : sans ce filtre, une app tierce
     // lirait les échanges d'une autre.
-    if (!row || row.source !== source) {
+    if (!row || row.source !== source || row.tenantId !== CRM_TENANT) {
       throw new NotFoundException('Analyse coaching introuvable');
     }
     return this.toDto(row);
@@ -119,6 +120,7 @@ export class CoachingQueryService {
   ): Promise<{ items: CoachingAnalysisDto[]; total: number }> {
     const where = {
       source: this.CRM_SOURCE,
+      tenantId: CRM_TENANT,
       ...(filter.userId != null
         ? { userId: filter.userId }
         : {}),
@@ -159,6 +161,7 @@ export class CoachingQueryService {
     const rows = await this.prisma.coachingAnalysis.findMany({
       where: {
         source: this.CRM_SOURCE,
+        tenantId: CRM_TENANT,
         s3KeyOriginal: { in: s3Keys },
         ...(version ? { salesPlanVersionId: version.id } : {}),
       },
@@ -178,6 +181,7 @@ export class CoachingQueryService {
     const rows = await this.prisma.coachingAnalysis.findMany({
       where: {
         source: this.CRM_SOURCE,
+        tenantId: CRM_TENANT,
         status: {
           in: [
             CoachingStatus.PENDING,
@@ -433,6 +437,7 @@ export class CoachingQueryService {
       const analyses = await this.prisma.coachingAnalysis.findMany({
         where: {
           source: this.CRM_SOURCE,
+          tenantId: CRM_TENANT,
           s3KeyOriginal: { in: withOwner.map((r) => r.s3Key) },
           salesPlanVersionId: version.id,
         },
@@ -605,6 +610,7 @@ export class CoachingQueryService {
       this.prisma.coachingAnalysis.findMany({
         where: {
           source: this.CRM_SOURCE,
+          tenantId: CRM_TENANT,
           status: CoachingStatus.READY,
           ...dateWhere(startDate, endDate),
         },
@@ -615,6 +621,7 @@ export class CoachingQueryService {
         ? this.prisma.coachingAnalysis.findMany({
             where: {
               source: this.CRM_SOURCE,
+              tenantId: CRM_TENANT,
               status: CoachingStatus.READY,
               ...dateWhere(previousRange.start, previousRange.end),
             },
@@ -830,8 +837,10 @@ export class CoachingQueryService {
       score: row.score ?? null,
       scoreBeforeMalus: row.scoreBeforeMalus ?? null,
       malus: row.malus ?? null,
-      // Les analyses d'avant la règle des trois citations n'ont pas `planSays`,
-      // qui est non-nullable : une seule ligne fautive annulait toute la réponse.
+      productAlerts: row.remoteResultSnapshot?.productAlerts ?? [],
+      productVerification: row.remoteResultSnapshot?.productVerification ?? { status: 'unknown', products: [] },
+      // Anciennes analyses et plans silencieux : garder une chaîne vide pour
+      // les citations informatives absentes, conformément au contrat non-nullable.
       violations: ((row.violations as CoachingViolationDto[]) ?? []).map((v) => ({
         ...v,
         quote: v.quote ?? '',
@@ -849,7 +858,7 @@ export class CoachingQueryService {
       criterionResults: (row.criterionResults as CriterionScore[]) ?? [],
       transcript: row.transcript ?? null,
       transcriptDurationSec: row.transcriptDurationSec ?? null,
-      error: row.error ?? null,
+      error: row.error ?? row.remoteSyncError ?? null,
       planSlug: row.salesPlanVersion?.slug ?? '',
       planVersion: row.salesPlanVersion?.version ?? 0,
       createdAt: row.createdAt.toISOString(),

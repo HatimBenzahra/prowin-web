@@ -446,6 +446,7 @@ export class RecordingService {
   async confirmRecordingUpload(
     input: ConfirmRecordingUploadInput,
     currentUser: { id: number; role: string },
+    userToken?: string,
   ): Promise<RecordingItem> {
     const { s3Key, duration, doorSegments } = input;
 
@@ -530,15 +531,16 @@ export class RecordingService {
     }
 
     // Coaching IA : 1 audio = 1 porte. Analyse déclenchée automatiquement
-    // (non bloquant) à partir de la porte du premier segment. Le module coaching
+    // à partir de la porte du premier segment. Les tarifs sont figés pendant
+    // cette requête; le calcul audio reste asynchrone. Le module coaching
     // re-transcrit depuis S3, il ne dépend pas des RecordingSegment.
     const primaryDoor = doorSegments?.[0] ?? null;
-    void this.coaching.enqueue({
+    await this.coaching.enqueue({
       s3Key,
       porteId: primaryDoor?.porteId ?? null,
       statut: (primaryDoor?.statut as string | undefined) ?? null,
       durationSec: duration ?? null,
-    });
+    }, userToken);
 
     const url = await this.signedUrlOrUndefined(s3Key);
 

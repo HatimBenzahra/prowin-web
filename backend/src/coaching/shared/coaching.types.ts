@@ -27,7 +27,7 @@ export interface LlmCoachingOutput {
   diagnosticScore: number | null; // 0-100 (score LLM, diagnostic uniquement)
 }
 
-/** Un écart de conformité : sans ses trois citations, il ne coûte rien. */
+/** Contradiction evidenced by a transcript quote and a trusted product/tariff reference. */
 export interface ProductViolation {
   productSlug: string;
   /** Libellé lisible, résolu depuis la fiche (le LLM ne renvoie que le slug). */
@@ -35,10 +35,12 @@ export interface ProductViolation {
   severity: ViolationSeverity;
   /** Citation verbatim de ce que le commercial a dit. */
   quote: string;
-  /** La ligne de la fiche produit que ça contredit. */
+  /** Applicable sheet fact or supplied tariff line that is contradicted. */
   sheetSays: string;
-  /** Sans elle, la violation est rejetée : réciter son plan n'est jamais une faute. */
+  /** Informative only; empty when the plan is silent. */
   planSays: string;
+  referenceKind?: 'sheet' | 'price';
+  offerLabel?: string;
   why?: string;
 }
 

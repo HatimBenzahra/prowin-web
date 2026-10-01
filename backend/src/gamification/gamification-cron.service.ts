@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
-import axios from 'axios';
+import { WinleadPlusAuthService } from './winleadplus-auth.service';
 import { ContratService } from './contrat.service';
 import { EvaluationService } from './evaluation.service';
 import { RankingService } from './ranking.service';
@@ -21,7 +21,6 @@ export class GamificationCronService {
   private readonly logger = new Logger(GamificationCronService.name);
 
   private readonly keycloakBaseUrl = process.env.KEYCLOAK_BASE_URL;
-  private readonly keycloakRealm = process.env.KEYCLOAK_REALM;
   private readonly keycloakClientId = process.env.KEYCLOAK_CLIENT_ID;
   private readonly keycloakClientSecret = process.env.KEYCLOAK_CLIENT_SECRET;
 
@@ -29,6 +28,7 @@ export class GamificationCronService {
     private readonly contratService: ContratService,
     private readonly evaluationService: EvaluationService,
     private readonly rankingService: RankingService,
+    private readonly auth: WinleadPlusAuthService,
   ) {}
 
   // ============================================================================
@@ -144,7 +144,7 @@ export class GamificationCronService {
     }
 
     try {
-      const token = await this.getServiceToken();
+      const token = await this.auth.getServiceToken();
 
       const result = await this.contratService.syncContrats(token);
       this.logger.log(
@@ -156,25 +156,6 @@ export class GamificationCronService {
         error.stack,
       );
     }
-  }
-
-  /**
-   * Obtient un token d'accès via Keycloak client_credentials grant.
-   * Utilisé pour l'authentification service-to-service (pas de contexte utilisateur).
-   */
-  private async getServiceToken(): Promise<string> {
-    const params = new URLSearchParams();
-    params.append('client_id', this.keycloakClientId!);
-    params.append('client_secret', this.keycloakClientSecret!);
-    params.append('grant_type', 'client_credentials');
-
-    const response = await axios.post(
-      `${this.keycloakBaseUrl}/realms/${this.keycloakRealm}/protocol/openid-connect/token`,
-      params.toString(),
-      { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } },
-    );
-
-    return response.data.access_token;
   }
 
   // ============================================================================

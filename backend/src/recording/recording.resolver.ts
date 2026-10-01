@@ -1,4 +1,6 @@
-import { Resolver, Mutation, Args, Query } from '@nestjs/graphql';
+import { Resolver, Mutation, Args, Query, Context } from '@nestjs/graphql';
+import { requestBearer } from '../auth/request-bearer';
+import type { BearerRequestContext } from '../auth/request-bearer';
 import { UseGuards } from '@nestjs/common';
 import { Int } from '@nestjs/graphql';
 import {
@@ -67,8 +69,9 @@ export class RecordingResolver {
   async confirmRecordingUpload(
     @Args('input') input: ConfirmRecordingUploadInput,
     @CurrentUser() user: any,
+    @Context() context: BearerRequestContext,
   ): Promise<RecordingItem> {
-    return this.svc.confirmRecordingUpload(input, user);
+    return this.svc.confirmRecordingUpload(input, user, requestBearer(context));
   }
 
   @Query(() => ExtractionProgressDto, { nullable: true })

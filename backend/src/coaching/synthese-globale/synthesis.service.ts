@@ -1,4 +1,5 @@
 import { Injectable, Logger, BadRequestException } from '@nestjs/common';
+import { CRM_SOURCE, CRM_TENANT } from '../shared/crm-scope';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { CoachingStatus } from '@prisma/client';
 import { PrismaService } from '../../prisma.service';
@@ -216,12 +217,12 @@ export class SynthesisService {
     // Commerciaux ayant des analyses READY + managers ayant des analyses perso.
     const [comm, mgrPerso] = await Promise.all([
       this.prisma.coachingAnalysis.findMany({
-        where: { source: 'prowin', status: CoachingStatus.READY, userId: { not: null } },
+        where: { source: CRM_SOURCE, tenantId: CRM_TENANT, status: CoachingStatus.READY, userId: { not: null } },
         distinct: ['userId'],
         select: { userId: true },
       }),
       this.prisma.coachingAnalysis.findMany({
-        where: { source: 'prowin', status: CoachingStatus.READY, managerId: { not: null } },
+        where: { source: CRM_SOURCE, tenantId: CRM_TENANT, status: CoachingStatus.READY, managerId: { not: null } },
         distinct: ['managerId'],
         select: { managerId: true },
       }),
@@ -277,7 +278,7 @@ export class SynthesisService {
     }
     const scopeWhere = await this.analysisScopeWhere(subjectType, subjectId);
     const last = await this.prisma.coachingAnalysis.findFirst({
-      where: { ...scopeWhere, status: CoachingStatus.READY },
+      where: { ...scopeWhere, source: CRM_SOURCE, tenantId: CRM_TENANT, status: CoachingStatus.READY },
       orderBy: { createdAt: 'desc' },
       select: { createdAt: true },
     });

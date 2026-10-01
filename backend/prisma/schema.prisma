@@ -664,6 +664,17 @@ model ProductSheetVersion {
 // RecordingSegment. Le LLM juge les critères, le backend calcule le score.
 model CoachingAnalysis {
   id                    Int              @id @default(autoincrement())
+  remoteManaged         Boolean          @default(false)
+  remoteAnalysisId      Int?
+  remoteRequestKey      String?
+  remoteRelaunch        Boolean          @default(false)
+  remoteSyncAttempts    Int              @default(0)
+  remoteNextSyncAt      DateTime?
+  remoteLeaseToken      String?
+  remoteLeaseUntil      DateTime?
+  remoteSyncError        String?
+  remotePlanSnapshot    Json?
+  remoteResultSnapshot  Json?
   // Appelant : renseigne depuis la CLÉ D'API, jamais depuis la requête.
   source                String   @default("prowin")
   // Organisation proprietaire de la ligne. "" = aucun tenant : c'est le CRM v1, qui
@@ -723,6 +734,7 @@ model CoachingAnalysis {
   // accepte, et se ferait tronquer differemment ici et dans la migration.
   @@unique([source, tenantId, s3KeyOriginal, salesPlanVersionId], map: "CoachingAnalysis_appelant_audio_plan_key")
   @@index([status])
+  @@index([remoteManaged, remoteNextSyncAt])
   @@index([source, tenantId]) // toutes les lectures filtrent sur le couple
   @@index([externalUserRef])
   @@index([userId])

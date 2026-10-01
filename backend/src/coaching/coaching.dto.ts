@@ -39,7 +39,7 @@ export class CoachingViolationDto {
   @Field() severity: string; // 'grave' | 'modere'
   @Field() quote: string; // ce que le commercial a dit
   @Field() sheetSays: string; // la ligne de la fiche que ça contredit
-  @Field() planSays: string; // la ligne du plan de vente que ça contredit aussi
+  @Field() planSays: string; // citation informative du plan ; vide si le plan est silencieux
   @Field(() => String, { nullable: true }) why?: string | null;
 }
 
@@ -49,6 +49,31 @@ export class CoachingMappedProductDto {
   @Field() key: string;
   @Field() presentedByCommercial: boolean;
   @Field() evidence: string;
+}
+
+@ObjectType()
+export class CoachingProductAlertDto {
+  @Field() productSlug: string;
+  @Field(() => String, { nullable: true }) productLabel?: string | null;
+  @Field() type: string;
+  @Field() quote: string;
+  @Field() reference: string;
+  @Field() referenceKind: string;
+  @Field() reason: string;
+}
+
+@ObjectType()
+export class CoachingProductVerificationItemDto {
+  @Field() productSlug: string;
+  @Field() productLabel: string;
+  @Field() status: string;
+  @Field() reason: string;
+}
+
+@ObjectType()
+export class CoachingProductVerificationDto {
+  @Field() status: string;
+  @Field(() => [CoachingProductVerificationItemDto]) products: CoachingProductVerificationItemDto[];
 }
 
 @ObjectType()
@@ -66,6 +91,8 @@ export class CoachingAnalysisDto {
   @Field(() => Float, { nullable: true }) scoreBeforeMalus?: number | null;
   @Field(() => Float, { nullable: true }) malus?: number | null; // points retirés (positif)
   @Field(() => [CoachingViolationDto]) violations: CoachingViolationDto[];
+  @Field(() => [CoachingProductAlertDto]) productAlerts?: CoachingProductAlertDto[];
+  @Field(() => CoachingProductVerificationDto) productVerification?: CoachingProductVerificationDto;
   @Field(() => [String]) detectedProducts: string[]; // offres PRÉSENTÉES par le commercial
   @Field(() => [CoachingMappedProductDto]) productMapping: CoachingMappedProductDto[];
   @Field(() => Float, { nullable: true }) confidence?: number | null;

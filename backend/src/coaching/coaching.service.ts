@@ -1,20 +1,18 @@
 import {
-  BadRequestException,
   Injectable,
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { CoachingStatus, StatutPorte } from '@prisma/client';
+import { CoachingStatus, Prisma, SalesPlanVersion, StatutPorte } from '@prisma/client';
 import { CRM_SOURCE, CRM_TENANT } from './shared/crm-scope';
 import { PrismaService } from '../prisma.service';
 import { SalesPlanService } from './referentiels/sales-plan.service';
-import { LlmService } from './shared/llm.service';
 import { CoachingConfigService } from './coaching-config.service';
 import { CoachingQueryService } from './lecture/coaching-query.service';
 import { CoachingApiClient } from './coaching-api.client';
+import { CoachingInputService } from './coaching-input.service';
+import { randomUUID } from 'crypto';
 
-/** Toutes les analyses créées par ce CRM portent cette source. */
-const PROWIN = 'prowin';
 import { CoachingAnalysisDto } from './coaching.dto';
 
 export interface EnqueueCoachingInput {
@@ -32,20 +30,20 @@ export class CoachingService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly salesPlans: SalesPlanService,
-    private readonly llm: LlmService,
     private readonly config: CoachingConfigService,
     private readonly query: CoachingQueryService,
     private readonly api: CoachingApiClient,
+    private readonly input: CoachingInputService,
   ) {}
 
   /**
-   * Déclenché automatiquement à l'upload d'un enregistrement (fire-and-forget).
+   * Déclenché automatiquement à l'upload; les références sont figées avant retour.
    * Idempotent : une seule analyse par (audio × version de plan).
    */
-  async enqueue(input: EnqueueCoachingInput): Promise<void> {
+  async enqueue(input: EnqueueCoachingInput, userToken?: string): Promise<void> {
     try {
-      if (!this.llm.isConfigured()) {
-        this.logger.warn('vLLM non configuré, coaching ignoré');
+      if (!this.api.isConfigured()) {
+        this.logger.warn('API coaching non configurée, coaching ignoré');
         return;
       }
       // Auto : on ne coache que les échanges dont le statut porte est configuré.
@@ -104,17 +102,20 @@ export class CoachingService {
         return;
       }
 
-      const created = await this.api.createAnalysis({
-        s3Key: input.s3Key,
+      const created = await this.createLocal({
+        s3KeyOriginal: input.s3Key,
+        recordingId: recording.id,
         porteId: input.porteId ?? null,
         userId: recording.commercialId,
         managerId: recording.managerId,
         statutPorte: this.asStatut(input.statut),
-      });
+        salesPlanVersionId: version.id,
+        manual: false,
+      }, version, userToken);
       this.logger.debug(`Coaching enfilé (#${created.id}) pour ${input.s3Key}`);
-    } catch (error) {
+    } catch {
       this.logger.error(
-        `enqueue coaching échoué pour ${input.s3Key}: ${(error as Error).message}`,
+        `enqueue coaching échoué pour ${input.s3Key}`,
       );
     }
   }
@@ -123,7 +124,12 @@ export class CoachingService {
    * Lancement manuel sur un enregistrement DÉJÀ existant (test / backfill).
    * Porte/statut résolus best-effort depuis un éventuel segment legacy.
    */
-  async launch(s3Key: string): Promise<CoachingAnalysisDto> {
+  async launch(s3Key: string, userToken?: string): Promise<CoachingAnalysisDto> {
+    const result = await this.scheduleManual(s3Key, userToken);
+    return this.query.getAnalysis(result.id);
+  }
+
+  private async scheduleManual(s3Key: string, userToken?: string): Promise<{ id: number; scheduled: boolean }> {
     const recording = await this.prisma.recording.findUnique({
       where: { s3Key },
       select: { id: true, commercialId: true, managerId: true },
@@ -137,31 +143,38 @@ export class CoachingService {
       select: { porteId: true, statut: true },
     });
 
-    const analysis = await this.api.createAnalysis({
-      s3Key,
+    const version = await this.salesPlans.getActiveVersion();
+    if (!version) throw new NotFoundException('Aucun plan de vente actif');
+    const existing = await this.prisma.coachingAnalysis.findUnique({ where: {
+      source_tenantId_s3KeyOriginal_salesPlanVersionId: { source: CRM_SOURCE, tenantId: CRM_TENANT, s3KeyOriginal: s3Key, salesPlanVersionId: version.id },
+    } });
+    if (existing) return { id: existing.id, scheduled: await this.requeue(existing, version, userToken) };
+    const analysis = await this.createLocal({
+      s3KeyOriginal: s3Key,
+      recordingId: recording.id,
       porteId: seg?.porteId ?? null,
       userId: recording.commercialId,
       managerId: recording.managerId,
       statutPorte: seg?.statut ?? null,
-    });
-
-    // Le job est en PENDING chez le service, qui le traitera.
-    return this.query.getAnalysis(analysis.id);
+      salesPlanVersionId: version.id,
+      manual: true,
+    }, version, userToken);
+    return analysis;
   }
 
   /** Lancement en lot, idempotent, sans gating de durée. */
-  async launchMany(s3Keys: string[]): Promise<number> {
+  async launchMany(s3Keys: string[], userToken?: string): Promise<number> {
     const keys = [...new Set((s3Keys ?? []).filter(Boolean))];
     let n = 0;
     for (const key of keys) {
       try {
-        await this.launch(key);
-        n++;
-      } catch (e) {
-        this.logger.warn(`launchMany: ${key} ignoré (${(e as Error).message})`);
+        const result = await this.scheduleManual(key, userToken);
+        if (result.scheduled) n++;
+      } catch {
+        this.logger.warn(`launchMany: ${key} ignoré (programmation échouée)`);
       }
     }
-    this.logger.log(`launchMany : ${n}/${keys.length} audios enfilés (manuel)`);
+    this.logger.log(`launchMany : ${n}/${keys.length} calculs réellement programmés ; les analyses en cours sont dédupliquées`);
     return n;
   }
 
@@ -187,82 +200,148 @@ export class CoachingService {
    * Rejoue l'audio sur le plan ACTIF sans toucher la ligne d'origine, qui reste
    * l'historique de ce qu'a valu cet échange sur son propre référentiel.
    */
-  async relaunch(id: number): Promise<CoachingAnalysisDto> {
+  async relaunch(id: number, userToken?: string): Promise<CoachingAnalysisDto> {
     const analysis = await this.prisma.coachingAnalysis.findUnique({
       where: { id },
     });
-    if (!analysis) throw new NotFoundException('Analyse coaching introuvable');
+    if (!analysis || analysis.source !== CRM_SOURCE || analysis.tenantId !== CRM_TENANT) throw new NotFoundException('Analyse coaching introuvable');
 
     const version = await this.salesPlans.getActiveVersion();
     if (!version) throw new NotFoundException('Aucun plan de vente actif');
 
-    const requeue = {
-      status: CoachingStatus.PENDING,
-      error: null,
-      attempts: 0,
-      nextRetryAt: null,
-      // Relance explicite : seul le gating de durée est levé.
-      manual: true,
-    };
+    // Explicit reanalysis always decodes audio again, including when changing plan.
 
     // Déjà sur le plan actif : simple remise en file.
     if (analysis.salesPlanVersionId === version.id) {
-      await this.prisma.coachingAnalysis.update({ where: { id }, data: requeue });
+      await this.requeue(analysis, version, userToken);
       return this.query.getAnalysis(id);
     }
 
     const existing = await this.prisma.coachingAnalysis.findUnique({
       where: {
         source_tenantId_s3KeyOriginal_salesPlanVersionId: {
-          source: CRM_SOURCE,
-          tenantId: CRM_TENANT,
-          s3KeyOriginal: analysis.s3KeyOriginal,
-          salesPlanVersionId: version.id,
+          source: CRM_SOURCE, tenantId: CRM_TENANT,
+          s3KeyOriginal: analysis.s3KeyOriginal, salesPlanVersionId: version.id,
         },
       },
-      select: { id: true, transcript: true },
     });
-
     if (existing) {
-      await this.prisma.coachingAnalysis.update({
-        where: { id: existing.id },
-        data: {
-          ...requeue,
-          // Le transcript de la cible fait foi : il vient de son propre profil STT.
-          ...(existing.transcript?.trim()
-            ? {}
-            : {
-                transcript: analysis.transcript,
-                transcriptDurationSec: analysis.transcriptDurationSec,
-              }),
-        },
-      });
+      await this.requeue(existing, version, userToken);
       return this.query.getAnalysis(existing.id);
     }
-
-    const created = await this.prisma.coachingAnalysis.create({
-      data: {
-        recordingId: analysis.recordingId,
-        porteId: analysis.porteId,
-        userId: analysis.userId,
-        managerId: analysis.managerId,
-        s3KeyOriginal: analysis.s3KeyOriginal,
-        statutPorte: analysis.statutPorte,
-        salesPlanVersionId: version.id,
-        transcript: analysis.transcript,
-        transcriptDurationSec: analysis.transcriptDurationSec,
-        ...requeue,
-      },
-      select: { id: true },
-    });
-    this.logger.log(
-      `Analyse ${id} relancée sur le plan actif v${version.version} → nouvelle analyse ${created.id}`,
-    );
+    const created = await this.createLocal({
+      recordingId: analysis.recordingId, porteId: analysis.porteId,
+      userId: analysis.userId, managerId: analysis.managerId,
+      s3KeyOriginal: analysis.s3KeyOriginal, statutPorte: analysis.statutPorte,
+      salesPlanVersionId: version.id, manual: true,
+    }, version, userToken);
+    this.logger.log(`Analyse ${id} programmée sur le plan actif v${version.version} → analyse locale ${created.id}`);
     return this.query.getAnalysis(created.id);
+  }
+
+  private requeueData() {
+    return {
+      status: CoachingStatus.PENDING,
+      error: null,
+      attempts: 0,
+      nextRetryAt: null,
+      transcript: null,
+      transcriptDurationSec: null,
+      quality: null,
+      score: null,
+      confidence: null,
+      summary: null,
+      scoreBeforeMalus: null,
+      malus: null,
+      strengths: Prisma.DbNull,
+      improvements: Prisma.DbNull,
+      recommendations: Prisma.DbNull,
+      subScores: Prisma.DbNull,
+      criterionResults: Prisma.DbNull,
+      violations: Prisma.DbNull,
+      detectedProducts: Prisma.DbNull,
+      productMapping: Prisma.DbNull,
+      productSheetVersions: Prisma.DbNull,
+      remoteResultSnapshot: Prisma.DbNull,
+      // References are replaced atomically with the new generation below.
+      remoteAnalysisId: null,
+      // Relance explicite : gating levé et transcript recalculé.
+      manual: true,
+      remoteManaged: true,
+      remoteRelaunch: false,
+      remoteRequestKey: randomUUID(),
+      remoteNextSyncAt: null,
+      remoteSyncAttempts: 0,
+      remoteSyncError: null,
+      remoteLeaseToken: null,
+      remoteLeaseUntil: null,
+    };
+
+  }
+
+  private async requeue(analysis: { id: number; status: CoachingStatus; updatedAt: Date; remoteRequestKey: string | null; remoteManaged: boolean }, version: SalesPlanVersion, userToken?: string): Promise<boolean> {
+    if (analysis.remoteManaged && analysis.status !== CoachingStatus.READY && analysis.status !== CoachingStatus.FAILED) return false;
+    const references = await this.input.references(version, userToken);
+    const updated = await this.prisma.coachingAnalysis.updateMany({
+      where: { id: analysis.id, source: CRM_SOURCE, tenantId: CRM_TENANT,
+        ...(analysis.remoteManaged ? { status: { in: [CoachingStatus.READY, CoachingStatus.FAILED] } } : { remoteManaged: false }),
+        updatedAt: analysis.updatedAt, remoteRequestKey: analysis.remoteRequestKey },
+      data: { ...this.requeueData(), remotePlanSnapshot: this.referenceJson(references) },
+    });
+    return updated.count === 1;
   }
 
   private asStatut(value?: string | null): StatutPorte | null {
     if (!value) return null;
     return (StatutPorte as Record<string, StatutPorte>)[value] ?? null;
+  }
+
+  private async createLocal(data: {
+    s3KeyOriginal: string;
+    salesPlanVersionId: number;
+    recordingId: number | null;
+    porteId: number | null;
+    userId: number | null;
+    managerId: number | null;
+    statutPorte: StatutPorte | null;
+    manual: boolean;
+    transcript?: string | null;
+    transcriptDurationSec?: number | null;
+  }, version: SalesPlanVersion, userToken?: string) {
+    const references = await this.input.references(version, userToken);
+    const where = {
+      source_tenantId_s3KeyOriginal_salesPlanVersionId: {
+        source: CRM_SOURCE,
+        tenantId: CRM_TENANT,
+        s3KeyOriginal: data.s3KeyOriginal,
+        salesPlanVersionId: data.salesPlanVersionId,
+      },
+    };
+    const requestKey = randomUUID();
+    const row = await this.prisma.coachingAnalysis.upsert({
+      where,
+      create: {
+        ...data,
+        remotePlanSnapshot: this.referenceJson(references),
+        source: CRM_SOURCE,
+        tenantId: CRM_TENANT,
+        remoteManaged: true,
+        remoteRequestKey: requestKey,
+        status: CoachingStatus.PENDING,
+      },
+      update: {},
+      select: { id: true, remoteRequestKey: true },
+    }).catch(error => {
+      // Prisma may emulate upsert when it cannot use a native ON CONFLICT.
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        return this.prisma.coachingAnalysis.findUniqueOrThrow({ where, select: { id: true, remoteRequestKey: true } });
+      }
+      throw error;
+    });
+    return { id: row.id, scheduled: row.remoteRequestKey === requestKey };
+  }
+
+  private referenceJson(references: Awaited<ReturnType<CoachingInputService['references']>>): Prisma.InputJsonValue {
+    return JSON.parse(JSON.stringify(references)) as Prisma.InputJsonValue;
   }
 }

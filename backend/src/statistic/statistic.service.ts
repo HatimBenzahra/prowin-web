@@ -48,7 +48,7 @@ export class StatisticService {
   constructor(private prisma: PrismaService) {}
 
   private productionUserWhere() {
-    return { status: { not: UserStatus.UTILISATEUR_TEST } };
+    return {};
   }
 
   private mergeWhere(...conditions: any[]) {

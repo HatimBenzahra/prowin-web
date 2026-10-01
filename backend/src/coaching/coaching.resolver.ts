@@ -1,4 +1,6 @@
-import { Args, Int, Mutation, Query, Resolver } from '@nestjs/graphql';
+import { Args, Context, Int, Mutation, Query, Resolver } from '@nestjs/graphql';
+import { requestBearer } from '../auth/request-bearer';
+import type { BearerRequestContext } from '../auth/request-bearer';
 import { UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
@@ -185,16 +187,18 @@ export class CoachingResolver {
   @Roles('admin', 'directeur')
   launchCoachingAnalysis(
     @Args('s3Key') s3Key: string,
+    @Context() context: BearerRequestContext,
   ): Promise<CoachingAnalysisDto> {
-    return this.coaching.launch(s3Key);
+    return this.coaching.launch(s3Key, requestBearer(context));
   }
 
   @Mutation(() => Int)
   @Roles('admin', 'directeur')
   launchCoachingAnalyses(
     @Args({ name: 's3Keys', type: () => [String] }) s3Keys: string[],
+    @Context() context: BearerRequestContext,
   ): Promise<number> {
-    return this.coaching.launchMany(s3Keys);
+    return this.coaching.launchMany(s3Keys, requestBearer(context));
   }
 
   @Mutation(() => Boolean)
@@ -210,7 +214,8 @@ export class CoachingResolver {
   @Roles('admin', 'directeur')
   relaunchCoachingAnalysis(
     @Args('id', { type: () => Int }) id: number,
+    @Context() context: BearerRequestContext,
   ): Promise<CoachingAnalysisDto> {
-    return this.coaching.relaunch(id);
+    return this.coaching.relaunch(id, requestBearer(context));
   }
 }

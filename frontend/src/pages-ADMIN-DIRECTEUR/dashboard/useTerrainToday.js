@@ -1,6 +1,4 @@
 import { useCallback, useMemo, useState } from 'react'
-import { useCommercials } from '@/services'
-import { UserStatus } from '@/constants/domain/user-status'
 import {
   useGpsLatestActorPositions,
   useGpsDailyRouteByActor,
@@ -45,26 +43,16 @@ function isSameDay(isoDate, reference) {
  */
 export function useTerrainToday() {
   const { data: gpsPositions, isLoading } = useGpsLatestActorPositions()
-  const { data: allCommercials } = useCommercials()
   const { buildActors } = useActorDirectory()
   const [selectedKey, setSelectedKey] = useState(null)
 
   const todayStr = useMemo(todayIsoDate, [])
-
-  const testUserIds = useMemo(() => {
-    const ids = new Set()
-    for (const commercial of allCommercials ?? []) {
-      if (commercial?.status === UserStatus.UTILISATEUR_TEST) ids.add(Number(commercial.id))
-    }
-    return ids
-  }, [allCommercials])
 
   // Commerciaux ayant émis une position aujourd'hui, en ligne d'abord puis alphabétique.
   const commercials = useMemo(() => {
     const today = new Date()
     const result = buildActors(gpsPositions ?? [])
       .filter(a => a.userType === 'COMMERCIAL')
-      .filter(a => !testUserIds.has(Number(a.userId)))
       .filter(a => isSameDay(a.lastSeen, today))
       .map(a => ({
         ...a,
@@ -75,7 +63,7 @@ export function useTerrainToday() {
       return (a.name || '').localeCompare(b.name || '')
     })
     return result
-  }, [gpsPositions, buildActors, testUserIds])
+  }, [gpsPositions, buildActors])
 
   const located = useMemo(() => commercials.filter(c => c.hasPosition), [commercials])
 

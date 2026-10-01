@@ -235,8 +235,8 @@ export default function Immeubles() {
             </SelectContent>
           </Select>
 
-          {/* Statut du commercial rattaché. « Actif » par défaut : la page montre le
-              patrimoine en cours d'exploitation, et écarte de fait les comptes test. */}
+          {/* Le filtre de statut du propriétaire permet aussi de consulter les
+              bâtiments des utilisateurs test et les comptes terminés. */}
           <Select value={filterOwnerStatus} onValueChange={setFilterOwnerStatus}>
             <SelectTrigger className="w-auto">
               <BadgeCheck className="mr-2 h-4 w-4" />

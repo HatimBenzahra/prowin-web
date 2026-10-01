@@ -1,6 +1,4 @@
 import { useMemo } from 'react'
-import { useCommercials, useManagers } from '@/services'
-import { UserStatus } from '@/constants/domain/user-status'
 import { useAllCurrentAssignments } from '@/hooks/metier/api/zones'
 import { zoneToGeoJSON, getZoneColor } from '@/pages-ADMIN-DIRECTEUR/zones/zones-utils'
 import { useActorDirectory } from '../gps-tracking/useActorDirectory'
@@ -17,28 +15,13 @@ const SUPPORTED_USER_TYPES = new Set(['COMMERCIAL', 'MANAGER'])
  */
 export function useAssignedZones() {
   const { data: assignments, loading } = useAllCurrentAssignments()
-  const { data: allCommercials } = useCommercials()
-  const { data: allManagers } = useManagers()
   const { resolveActorName } = useActorDirectory()
 
   // Le client GraphQL maison peut renvoyer `data: null` : le défaut `[]` de
   // useApiCall ne couvre que `undefined`, d'où la garde explicite.
-  const testUserKeys = useMemo(() => {
-    const keys = new Set()
-    for (const commercial of allCommercials ?? []) {
-      if (commercial?.status === UserStatus.UTILISATEUR_TEST)
-        keys.add(`COMMERCIAL-${Number(commercial.id)}`)
-    }
-    for (const manager of allManagers ?? []) {
-      if (manager?.status === UserStatus.UTILISATEUR_TEST) keys.add(`MANAGER-${Number(manager.id)}`)
-    }
-    return keys
-  }, [allCommercials, allManagers])
-
   const zones = useMemo(() => {
     const result = (assignments || [])
       .filter(a => SUPPORTED_USER_TYPES.has(a?.userType))
-      .filter(a => !testUserKeys.has(`${a.userType}-${Number(a.userId)}`))
       .map(a => {
         const geoJson = zoneToGeoJSON(a.zone)
         return {
@@ -61,7 +44,7 @@ export function useAssignedZones() {
 
     result.sort((a, b) => a.zoneName.localeCompare(b.zoneName))
     return result
-  }, [assignments, testUserKeys, resolveActorName])
+  }, [assignments, resolveActorName])
 
   return { zones, loading }
 }

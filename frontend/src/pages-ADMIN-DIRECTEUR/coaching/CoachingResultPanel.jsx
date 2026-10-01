@@ -8,9 +8,11 @@ import {
   XCircle,
   MinusCircle,
   CircleDashed,
-  ShieldCheck,
+  AlertTriangle,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert'
+import { productComplianceMessage } from './product-compliance'
 import AudioPlayer from '@/components/AudioPlayer'
 import RecordingService from '@/services/audio/recordings/recording.service'
 import AnalysisProgress from './AnalysisProgress'
@@ -23,16 +25,10 @@ import {
   isInProgress,
 } from './CoachingComponents'
 
-/**
- * Un écart de conformité produit : ce que le commercial a dit, face aux DEUX
- * référentiels qu'il contredit — la fiche produit et l'argumentaire du plan de
- * vente. Les afficher tous les deux, c'est ce qui rend l'écart discutable avec
- * lui : sans la ligne du plan, il peut toujours répondre « c'est ce qu'on
- * m'apprend à dire », et il a raison.
- */
+/** Proven contradiction against the product sheet or supplied price grid. */
 function ViolationCard({ violation }) {
   return (
-    <div className="rounded-lg border border-border/60 bg-muted/20 p-3">
+    <div className="rounded-lg border border-destructive/40 bg-destructive/5 p-3">
       <div className="mb-2 flex items-center gap-2">
         <SeverityPill severity={violation.severity} />
         <span className="text-xs font-medium text-muted-foreground">
@@ -44,7 +40,9 @@ function ViolationCard({ violation }) {
 
       <dl className="space-y-1.5 text-xs">
         <div>
-          <dt className="font-medium text-muted-foreground">La fiche produit dit</dt>
+          <dt className="font-medium text-muted-foreground">
+            La référence produit / tarifaire dit
+          </dt>
           <dd className="text-foreground/80">{violation.sheetSays}</dd>
         </div>
         {violation.planSays && (
@@ -159,8 +157,8 @@ export default function CoachingResultPanel({
   const malus = typeof analysis.malus === 'number' ? analysis.malus : 0
   const hasMalus = malus > 0 && typeof analysis.scoreBeforeMalus === 'number'
   const violations = analysis.violations || []
-  // Une offre présentée = la passe de conformité a bien eu lieu sur cet échange.
-  const productsChecked = (analysis.detectedProducts || []).length > 0
+  const productAlerts = analysis.productAlerts || []
+  const compliance = productComplianceMessage(analysis)
 
   const ScoreFooter = () => (
     <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-border/60 bg-muted/30 px-4 py-3">
@@ -224,29 +222,50 @@ export default function CoachingResultPanel({
             </div>
           )}
 
-          {/* Sans écart, le bloc disparaissait entièrement : à l'écran, « rien
-              trouvé » et « jamais vérifié » se ressemblaient. On distingue les
-              deux — c'est l'état du contrôle, pas un satisfecit. */}
           {violations.length === 0 && (
-            <div className="flex items-start gap-2 rounded-lg border border-border/50 bg-muted/20 px-3 py-2">
-              {productsChecked ? (
-                <>
-                  <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-green-600" />
-                  <p className="text-xs text-muted-foreground">
-                    <span className="font-medium text-foreground">Conformité produit</span> —
-                    aucun écart relevé sur les offres présentées.
-                  </p>
-                </>
-              ) : (
-                <>
-                  <CircleDashed className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-                  <p className="text-xs text-muted-foreground">
-                    <span className="font-medium text-foreground">Conformité produit</span> — aucune
-                    offre présentée, contrôle non requis.
-                  </p>
-                </>
+            <Alert
+              className={cn(
+                'p-3',
+                compliance.warning
+                  ? 'border-amber-500/30 bg-amber-500/10 [&>svg]:text-amber-600'
+                  : 'bg-muted/20'
               )}
-            </div>
+            >
+              {compliance.warning ? (
+                <AlertTriangle className="h-4 w-4" />
+              ) : (
+                <CircleDashed className="h-4 w-4" />
+              )}
+              <AlertTitle className="text-sm">Conformité produit</AlertTitle>
+              <AlertDescription>{compliance.text}</AlertDescription>
+            </Alert>
+          )}
+
+          {analysis.productVerification?.products?.length > 0 && (
+            <ul className="space-y-1 text-xs text-muted-foreground">
+              {analysis.productVerification.products.map(p => (
+                <li key={p.productSlug}>
+                  <span className="font-medium">{p.productLabel}</span> — {p.reason}
+                </li>
+              ))}
+            </ul>
+          )}
+
+          {productAlerts.length > 0 && (
+            <Alert className="border-amber-500/30 bg-amber-500/10 [&>svg]:text-amber-600">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertTitle>Points produit à clarifier · sans malus</AlertTitle>
+              <AlertDescription className="space-y-3">
+                {productAlerts.map((a, i) => (
+                  <div key={`${a.productSlug}-${i}`} className="text-xs">
+                    <p className="font-medium">{a.productLabel || a.productSlug}</p>
+                    <p className="mt-1 italic">« {a.quote} »</p>
+                    <p className="mt-1">Référence disponible : {a.reference}</p>
+                    <p className="mt-1 text-muted-foreground">{a.reason}</p>
+                  </div>
+                ))}
+              </AlertDescription>
+            </Alert>
           )}
 
           {violations.length > 0 && (

@@ -13,12 +13,12 @@ describe('relaunch — version de plan', () => {
         findUnique: jest.fn(({ where }) =>
           where.id ? analysis : existing,
         ),
-        update: jest.fn((args) => {
+        updateMany: jest.fn((args) => {
           updated.push(args);
-          return args;
+          return { count: 1 };
         }),
-        create: jest.fn((args) => {
-          created.push(args);
+        upsert: jest.fn(async (args) => {
+          created.push({ data: args.create });
           return { id: 999 };
         }),
       },
@@ -28,16 +28,20 @@ describe('relaunch — version de plan', () => {
     const service = new CoachingService(
       prisma,
       salesPlans,
-      { isConfigured: () => true } as any, // llm
       {} as any, // config
       query,
       {} as any, // intake
+      { references: jest.fn(async () => ({ plan: { version: 10 }, products: [] })) } as any,
     );
     return { service, prisma, updated, created };
   };
 
   const base = {
     id: 1,
+    source: 'prowin',
+    tenantId: '',
+    status: 'READY',
+    updatedAt: new Date('2026-01-01'),
     s3KeyOriginal: 'rec/a.mp4',
     salesPlanVersionId: 1,
     recordingId: 5,
@@ -56,8 +60,7 @@ describe('relaunch — version de plan', () => {
     expect(created).toHaveLength(1);
     expect(created[0].data.salesPlanVersionId).toBe(active.id);
     expect(created[0].data.status).toBe('PENDING');
-    // Le transcript est repris : l'audio n'a pas changé, inutile de re-payer Whisper.
-    expect(created[0].data.transcript).toBe(base.transcript);
+    expect(created[0].data.transcript).toBeUndefined();
     expect(created[0].data.manual).toBe(true);
     expect(res.id).toBe(999);
   });
@@ -82,21 +85,29 @@ describe('relaunch — version de plan', () => {
     expect(updated[0].data.attempts).toBe(0);
   });
 
-  it('préserve le transcript de la cible quand elle en a déjà un', async () => {
+  it('efface le transcript de la cible pour une réanalyse explicite', async () => {
     const { service, updated } = build(base, {
       id: 42,
+      status: 'READY',
       transcript: 'transcript plus récent',
     });
     await service.relaunch(1);
 
     expect(updated).toHaveLength(1);
     expect(updated[0].where.id).toBe(42);
-    expect(updated[0].data.transcript).toBeUndefined();
+    expect(updated[0].data.transcript).toBeNull();
   });
 
   it('refuse de relancer sans plan de vente actif', async () => {
     const { service } = build(base);
     (service as any).salesPlans.getActiveVersion = jest.fn(() => null);
     await expect(service.relaunch(1)).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('ne réinitialise pas une analyse distante déjà en cours sur le plan actif', async () => {
+    const { service, updated, created } = build({ ...base, salesPlanVersionId: active.id, remoteManaged: true, status: 'ANALYZING' });
+    expect((await service.relaunch(1)).id).toBe(1);
+    expect(updated).toHaveLength(0);
+    expect(created).toHaveLength(0);
   });
 });

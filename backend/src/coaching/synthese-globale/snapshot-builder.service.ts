@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { CRM_SOURCE, CRM_TENANT } from '../shared/crm-scope';
 import { CoachingStatus, UserType } from '@prisma/client';
 import { PrismaService } from '../../prisma.service';
 import { calculateStatsForStatus } from '../../porte/porte-status.constants';
@@ -80,7 +81,7 @@ export class SnapshotBuilderService {
     // Analyses coaching READY (verdicts LLM par critère + score backend).
     const analyses = await this.prisma.coachingAnalysis.findMany({
       // Le bilan d'un commercial ProWin ne compte que les analyses de ProWin.
-      where: { ...analysisWhere, source: 'prowin', status: CoachingStatus.READY },
+      where: { ...analysisWhere, source: CRM_SOURCE, tenantId: CRM_TENANT, status: CoachingStatus.READY },
       select: {
         id: true,
         score: true,
@@ -496,7 +497,7 @@ export class SnapshotBuilderService {
       const [byAnalyse, byContrat, perso] = await Promise.all([
         this.prisma.coachingAnalysis.groupBy({
           by: ['userId'],
-          where: { userId: { in: teamIds }, status: CoachingStatus.READY },
+          where: { source: CRM_SOURCE, tenantId: CRM_TENANT, userId: { in: teamIds }, status: CoachingStatus.READY },
           _count: { _all: true },
           _avg: { score: true },
         }),
@@ -506,7 +507,7 @@ export class SnapshotBuilderService {
           _count: { _all: true },
         }),
         this.prisma.coachingAnalysis.aggregate({
-          where: { managerId: subjectId, status: CoachingStatus.READY },
+          where: { source: CRM_SOURCE, tenantId: CRM_TENANT, managerId: subjectId, status: CoachingStatus.READY },
           _count: { _all: true },
           _avg: { score: true },
         }),
