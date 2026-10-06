@@ -321,7 +321,5 @@ export function useStatistiquesLogic() {
     zoneStats: zoneStats || [],
     scoreboard,
     scoreboardLoading,
-    productionCommercials,
-    productionManagers,
   }
 }
