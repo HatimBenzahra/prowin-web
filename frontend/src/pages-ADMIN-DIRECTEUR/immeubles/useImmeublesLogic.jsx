@@ -85,6 +85,26 @@ export function useImmeublesLogic() {
     [ownerStatusByKey]
   )
 
+  /** Le filtre commerciaux suit le statut choisi : il ne propose que ce que ce statut laisse voir. */
+  const commercialsForStatus = useMemo(
+    () =>
+      filterOwnerStatus === 'all'
+        ? commercials || []
+        : (commercials || []).filter(c => c.status === filterOwnerStatus),
+    [commercials, filterOwnerStatus]
+  )
+
+  // Un commercial sélectionné qui sort du statut choisi ne doit pas vider la liste en silence.
+  useEffect(() => {
+    if (
+      filterCommercial !== 'all' &&
+      commercials &&
+      !commercialsForStatus.some(c => String(c.id) === String(filterCommercial))
+    ) {
+      setFilterCommercial('all')
+    }
+  }, [filterCommercial, commercials, commercialsForStatus])
+
   /** Champ de date qui gouverne à la fois le tri et le groupement par journée. */
   const activeDateField = useMemo(
     () => (dateFilterMode.startsWith('updatedAt') ? 'updatedAt' : 'createdAt'),
@@ -522,7 +542,7 @@ export function useImmeublesLogic() {
     setDateFilterMode,
     createdDate,
     setCreatedDate,
-    commercialsList: commercials,
+    commercialsList: commercialsForStatus,
     quartiersList: quartiers,
   }
 }
