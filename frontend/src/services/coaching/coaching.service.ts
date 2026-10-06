@@ -63,78 +63,85 @@ const RELAUNCH = `
     relaunchCoachingAnalysis(id: $id, retranscribe: $retranscribe) { ${COACHING_FIELDS} }
   }
 `
-const PLAN_FIELDS = `
-  slug
-  title
-  version
-  scoringScale
-  steps {
-    key
-    label
-    weight
-    appliesWhen
-    criteria { key label points evidenceRequired appliesWhen }
+const REFERENCE_FIELDS = `
+  id status version isActive contentHash createdBy createdAt updatedAt publishedBy publishedAt
+  plan {
+    slug title scoringScale rawMarkdown
+    steps { key label weight appliesWhen criteria { key label points evidenceRequired appliesWhen } }
+  }
+  products {
+    key label identifiers sttTerms offreExternalIds offreFournisseur
+    offres { externalId nom fournisseur isActive prixBase }
+    sheet { facts forbidden { say severity } rawMarkdown }
   }
 `
-const SHEET_FIELDS = `
-  id
-  slug
-  label
-  productKey
-  version
-  facts
-  forbidden { say severity }
-  rawMarkdown
+const DRAFT_FIELDS = `
+  reference { ${REFERENCE_FIELDS} }
+  issues { level code message productKey stepKey }
 `
-const VERSION_FIELDS = `id version createdAt importedBy isActive contentHash`
-const ACTIVE_PLAN = `
-  query ActiveSalesPlan {
-    activeSalesPlan { ${PLAN_FIELDS} }
+const ACTIVE_REFERENCE = `
+  query ActiveReference {
+    activeReference { ${REFERENCE_FIELDS} }
   }
 `
-const PRODUCT_SHEETS = `
-  query CoachingProductSheets {
-    coachingProductSheets { ${SHEET_FIELDS} }
+const REFERENCE_VERSIONS = `
+  query ReferenceVersions {
+    referenceVersions { id version isActive contentHash publishedAt publishedBy }
   }
 `
-const PLAN_VERSIONS = `
-  query SalesPlanVersions($slug: String!) {
-    salesPlanVersions(slug: $slug) { ${VERSION_FIELDS} }
+const REFERENCE_VERSION = `
+  query ReferenceVersion($id: Int!) {
+    referenceVersion(id: $id) { ${REFERENCE_FIELDS} }
   }
 `
-const SHEET_VERSIONS = `
-  query ProductSheetVersions($slug: String!) {
-    productSheetVersions(slug: $slug) { ${VERSION_FIELDS} }
+const REFERENCE_DRAFT = `
+  query ReferenceDraft {
+    referenceDraft { ${DRAFT_FIELDS} }
   }
 `
-const PLAN_VERSION = `
-  query SalesPlanVersion($id: Int!) {
-    salesPlanVersion(id: $id) { ${PLAN_FIELDS} ${VERSION_FIELDS} rawMarkdown }
+const COACHING_OFFRES = `
+  query CoachingOffres {
+    coachingOffres { externalId nom fournisseur isActive prixBase }
   }
 `
-const SHEET_VERSION = `
-  query ProductSheetVersion($id: Int!) {
-    productSheetVersion(id: $id) { ${SHEET_FIELDS} ${VERSION_FIELDS} }
+const OPEN_DRAFT = `
+  mutation OpenReferenceDraft {
+    openReferenceDraft { ${DRAFT_FIELDS} }
   }
 `
-const IMPORT_PLAN = `
-  mutation ImportSalesPlan($markdown: String!) {
-    importSalesPlan(markdown: $markdown) { ${PLAN_FIELDS} }
+const SET_DRAFT_PLAN = `
+  mutation SetReferenceDraftPlan($markdown: String!) {
+    setReferenceDraftPlan(markdown: $markdown) { ${DRAFT_FIELDS} }
   }
 `
-const ACTIVATE_PLAN = `
-  mutation ActivateSalesPlanVersion($id: Int!) {
-    activateSalesPlanVersion(id: $id) { ${PLAN_FIELDS} }
+const SAVE_DRAFT_PRODUCT = `
+  mutation SaveReferenceDraftProduct($product: ReferenceProductInput!) {
+    saveReferenceDraftProduct(product: $product) { ${DRAFT_FIELDS} }
   }
 `
-const IMPORT_SHEET = `
-  mutation ImportProductSheet($markdown: String!) {
-    importProductSheet(markdown: $markdown) { ${SHEET_FIELDS} }
+const SET_DRAFT_SHEET = `
+  mutation SetReferenceDraftProductSheet($key: String!, $markdown: String!) {
+    setReferenceDraftProductSheet(key: $key, markdown: $markdown) { ${DRAFT_FIELDS} }
   }
 `
-const ACTIVATE_SHEET = `
-  mutation ActivateProductSheetVersion($id: Int!) {
-    activateProductSheetVersion(id: $id) { ${SHEET_FIELDS} }
+const REMOVE_DRAFT_PRODUCT = `
+  mutation RemoveReferenceDraftProduct($key: String!) {
+    removeReferenceDraftProduct(key: $key) { ${DRAFT_FIELDS} }
+  }
+`
+const PUBLISH_DRAFT = `
+  mutation PublishReferenceDraft {
+    publishReferenceDraft { ${REFERENCE_FIELDS} }
+  }
+`
+const DISCARD_DRAFT = `
+  mutation DiscardReferenceDraft {
+    discardReferenceDraft
+  }
+`
+const ACTIVATE_REFERENCE = `
+  mutation ActivateReferenceVersion($id: Int!) {
+    activateReferenceVersion(id: $id) { ${REFERENCE_FIELDS} }
   }
 `
 
@@ -441,72 +448,74 @@ export class CoachingService {
     }
   }
 
-  static async activePlan(): Promise<any | null> {
-    try {
-      const data = await graphqlClient.request(ACTIVE_PLAN)
-      return data.activeSalesPlan || null
-    } catch {
-      return null
-    }
-  }
-
   /*
-   * Référentiels (plan de vente, fiches produit). Les écritures sont réservées à
-   * l'admin côté serveur ; elles lèvent l'erreur pour que l'écran affiche le message
-   * du parseur tel quel.
+   * Référentiel coaching (plan de vente + catalogue de produits). Les écritures sont
+   * réservées à l'admin côté serveur ; elles lèvent l'erreur pour que l'écran affiche
+   * le message du moteur tel quel.
    */
-  static async salesPlanVersions(slug: string): Promise<any[]> {
-    const data = await graphqlClient.request(PLAN_VERSIONS, { slug })
-    return data?.salesPlanVersions || []
+  static async activeReference(): Promise<any | null> {
+    const data = await graphqlClient.request(ACTIVE_REFERENCE)
+    return data?.activeReference ?? null
   }
 
-  static async productSheetVersions(slug: string): Promise<any[]> {
-    const data = await graphqlClient.request(SHEET_VERSIONS, { slug })
-    return data?.productSheetVersions || []
+  static async referenceVersions(): Promise<any[]> {
+    const data = await graphqlClient.request(REFERENCE_VERSIONS)
+    return data?.referenceVersions || []
   }
 
-  /** Une version précise, contenu et markdown source compris. */
-  static async salesPlanVersion(id: number): Promise<any> {
-    const data = await graphqlClient.request(PLAN_VERSION, { id })
-    return data.salesPlanVersion
+  static async referenceVersion(id: number): Promise<any> {
+    const data = await graphqlClient.request(REFERENCE_VERSION, { id })
+    return data.referenceVersion
   }
 
-  static async productSheetVersion(id: number): Promise<any> {
-    const data = await graphqlClient.request(SHEET_VERSION, { id })
-    return data.productSheetVersion
+  static async referenceDraft(): Promise<any | null> {
+    const data = await graphqlClient.request(REFERENCE_DRAFT)
+    return data?.referenceDraft ?? null
   }
 
-  static async importSalesPlan(markdown: string): Promise<any> {
-    const data = await graphqlClient.request(IMPORT_PLAN, { markdown })
-    return data.importSalesPlan
+  static async coachingOffres(): Promise<any[]> {
+    const data = await graphqlClient.request(COACHING_OFFRES)
+    return data?.coachingOffres || []
   }
 
-  static async activateSalesPlanVersion(id: number): Promise<any> {
-    const data = await graphqlClient.request(ACTIVATE_PLAN, { id })
-    return data.activateSalesPlanVersion
+  static async openReferenceDraft(): Promise<any> {
+    const data = await graphqlClient.request(OPEN_DRAFT)
+    return data.openReferenceDraft
   }
 
-  static async importProductSheet(markdown: string): Promise<any> {
-    const data = await graphqlClient.request(IMPORT_SHEET, { markdown })
-    return data.importProductSheet
+  static async setReferenceDraftPlan(markdown: string): Promise<any> {
+    const data = await graphqlClient.request(SET_DRAFT_PLAN, { markdown })
+    return data.setReferenceDraftPlan
   }
 
-  static async activateProductSheetVersion(id: number): Promise<any> {
-    const data = await graphqlClient.request(ACTIVATE_SHEET, { id })
-    return data.activateProductSheetVersion
+  static async saveReferenceDraftProduct(product: any): Promise<any> {
+    const data = await graphqlClient.request(SAVE_DRAFT_PRODUCT, { product })
+    return data.saveReferenceDraftProduct
   }
 
-  /** Fiches produit actives — onglet Produits. */
-  static async productSheets(): Promise<any[]> {
-    try {
-      const data = await graphqlClient.request(PRODUCT_SHEETS)
-      // Le client GraphQL maison peut renvoyer data:null : le défaut ne couvre
-      // que undefined, d'où le || [].
-      return (data?.coachingProductSheets || [])
-    } catch (error) {
-      console.error('Erreur coachingProductSheets:', error)
-      return []
-    }
+  static async setReferenceDraftProductSheet(key: string, markdown: string): Promise<any> {
+    const data = await graphqlClient.request(SET_DRAFT_SHEET, { key, markdown })
+    return data.setReferenceDraftProductSheet
+  }
+
+  static async removeReferenceDraftProduct(key: string): Promise<any> {
+    const data = await graphqlClient.request(REMOVE_DRAFT_PRODUCT, { key })
+    return data.removeReferenceDraftProduct
+  }
+
+  static async publishReferenceDraft(): Promise<any> {
+    const data = await graphqlClient.request(PUBLISH_DRAFT)
+    return data.publishReferenceDraft
+  }
+
+  static async discardReferenceDraft(): Promise<boolean> {
+    const data = await graphqlClient.request(DISCARD_DRAFT)
+    return data.discardReferenceDraft
+  }
+
+  static async activateReferenceVersion(id: number): Promise<any> {
+    const data = await graphqlClient.request(ACTIVATE_REFERENCE, { id })
+    return data.activateReferenceVersion
   }
 
   /**

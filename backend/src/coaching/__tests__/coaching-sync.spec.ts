@@ -4,10 +4,11 @@ import { CoachingStageError } from '../coaching-api.client';
 import { Prisma } from '@prisma/client';
 
 function fixture() {
-  let row: any = { id: 7, source: 'prowin', tenantId: '', status: 'PENDING', remoteManaged: true, remoteLeaseToken: null, remoteLeaseUntil: null, remoteNextSyncAt: null, remoteSyncAttempts: 0, attempts: 0, transcriptionAttempts: 0, evaluationAttempts: 0, remoteRequestKey: 'generation-1', s3KeyOriginal: 'audio', salesPlanVersionId: 23, recordingId: 40, updatedAt: new Date(), transcript: null };
-  const references = { plan: { markdown: 'plan', contentHash: 'hash', criteria: {}, version: 4 }, products: [] };
+  let row: any = { id: 7, source: 'prowin', tenantId: '', status: 'PENDING', remoteManaged: true, remoteLeaseToken: null, remoteLeaseUntil: null, remoteNextSyncAt: null, remoteSyncAttempts: 0, attempts: 0, transcriptionAttempts: 0, evaluationAttempts: 0, remoteRequestKey: 'generation-1', s3KeyOriginal: 'audio', referenceId: 5, salesPlanVersionId: null, recordingId: 40, updatedAt: new Date(), transcript: null };
+  const references = { reference: { version: 4, contentHash: 'hash', plan: { markdown: 'plan', contentHash: 'plan-hash', criteria: {} }, products: [] } };
+  const active = { id: 5, version: 4, contentHash: 'hash', products: [] };
   const delegate = {
-    findUniqueOrThrow: jest.fn(async () => ({ ...row, salesPlanVersion: { id: 23, contentHash: 'hash', rawMarkdown: 'plan', version: 4 } })),
+    findUniqueOrThrow: jest.fn(async () => ({ ...row, salesPlanVersion: null, reference: { id: 5, version: 4, contentHash: 'hash', products: [] } })),
     findUnique: jest.fn(async () => ({ ...row })),
     findMany: jest.fn(async () => [{ id: 7 }]),
     updateMany: jest.fn(async ({ where, data }: any) => {
@@ -21,11 +22,11 @@ function fixture() {
     }),
   };
   const prisma: any = { coachingAnalysis: delegate, coachingConfig: { findUnique: async () => null } };
-  const input: any = { references: jest.fn(async () => references), request: jest.fn(async (r: any, refs: any) => ({ ...refs, requestKey: r.remoteRequestKey, audio: { key: r.s3KeyOriginal, url: r.transcript == null ? 'https://signed.invalid/secret' : '' }, transcript: r.transcript, transcriptDurationSec: r.transcriptDurationSec })) };
-  const result = (q: any): any => ({ requestKey: q.requestKey, source: 'prowin', tenantId: '', audioKey: 'audio', status: 'READY', ...references, transcript: q.transcript ?? 'Conversation utile '.repeat(50), durationSec: q.transcriptDurationSec ?? 180, confidence: 0.87, score: 65, scoreBeforeMalus: 80, malus: 15, summary: 'Résumé', subScores: [], strengths: [], improvements: [], recommendations: [], criterionResults: [], violations: [], detectedProducts: [], productMapping: [], productSheetVersions: [] });
+  const input: any = { freeze: jest.fn(async () => references), request: jest.fn(async (r: any, refs: any) => ({ ...refs, requestKey: r.remoteRequestKey, audio: { key: r.s3KeyOriginal, url: r.transcript == null ? 'https://signed.invalid/secret' : '' }, transcript: r.transcript, transcriptDurationSec: r.transcriptDurationSec })) };
+  const result = (q: any): any => ({ requestKey: q.requestKey, source: 'prowin', tenantId: '', audioKey: 'audio', status: 'READY', reference: { version: 4, contentHash: 'hash' }, transcript: q.transcript ?? 'Conversation utile '.repeat(50), durationSec: q.transcriptDurationSec ?? 180, confidence: 0.87, score: 65, scoreBeforeMalus: 80, malus: 15, summary: 'Résumé', subScores: [], strengths: [], improvements: [], recommendations: [], criterionResults: [], violations: [], detectedProducts: [], productMapping: [], judgedProducts: [], productSheetVersions: [] });
   const api: any = { isConfigured: () => true, timeoutMs: 5_700_000, evaluationTimeoutMs: 600_000, transcribe: jest.fn(async (q: any) => ({ ...result(q), metadata: { quality: { score: 50 } } })), evaluate: jest.fn(async (q: any) => ({ ...result(q), transcript: q.transcript.trim() })) };
   const worker = () => new CoachingSyncService(prisma, api, input);
-  const service = new CoachingService(prisma, { getActiveVersion: async () => ({ id: 23, version: 4 }) } as any, {} as any, { getAnalysis: async () => row } as any, api, input);
+  const service = new CoachingService(prisma, { getActive: async () => active } as any, {} as any, { getAnalysis: async () => row } as any, api, input);
   return { worker, api, input, delegate, service, row: () => row, set: (data: any) => Object.assign(row, data), result };
 }
 
@@ -49,6 +50,16 @@ describe('durable stage queue', () => {
     expect(jobs[1].row()).toMatchObject({ status: 'TRANSCRIBING', transcriptionAttempts: 0, error: 'STT_BUSY' });
     expect(jobs.slice(2).map(job => job.row().status)).toEqual(['PENDING', 'PENDING']);
   });
+  it('keeps the legacy snapshot of an analysis attached to a référentiel by the migration', async () => {
+    const f = fixture();
+    const legacy = { plan: { markdown: 'ancien plan', contentHash: 'plan-v17', criteria: {}, version: 17 }, products: [] };
+    f.set({ remotePlanSnapshot: legacy, salesPlanVersionId: 23 });
+    f.delegate.findUniqueOrThrow.mockImplementation(async () => ({ ...f.row(), salesPlanVersion: { id: 23, contentHash: 'plan-v17', rawMarkdown: 'ancien plan', version: 17 }, reference: { id: 5, version: 4, contentHash: 'hash', products: [] } }));
+    await f.worker().sync(7);
+    expect(f.input.freeze).not.toHaveBeenCalled();
+    expect(f.api.transcribe).toHaveBeenCalledWith(expect.objectContaining({ plan: legacy.plan, products: [] }));
+    expect(f.row().remotePlanSnapshot).toEqual(legacy);
+  });
   it('checkpoints facts before scoring, one stage per lease and survives restart', async () => {
     const f = fixture(); await f.worker().sync(7);
     expect(f.row()).toMatchObject({ status: 'ANALYZING', transcriptionAttempts: 1, evaluationAttempts: 0, transcriptDurationSec: 180, transcriptMetadata: { quality: { score: 50 } }, remoteLeaseToken: null });
@@ -66,7 +77,7 @@ describe('durable stage queue', () => {
     await f.worker().sync(7); expect(f.api.evaluate).toHaveBeenCalledTimes(1);
     f.set({ remoteNextSyncAt: new Date(0) }); await f.worker().sync(7);
     expect(f.row().status).toBe('READY'); expect(f.api.transcribe).toHaveBeenCalledTimes(1);
-    expect(f.input.references).toHaveBeenCalledTimes(1);
+    expect(f.input.freeze).toHaveBeenCalledTimes(1);
   });
   it('busy delays with jitter without consuming failure budget', async () => {
     const f = fixture(); f.api.transcribe.mockRejectedValue(new CoachingStageError('STT_BUSY'));

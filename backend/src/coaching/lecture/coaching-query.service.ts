@@ -6,7 +6,7 @@ import {
   UserStatus,
 } from '@prisma/client';
 import { PrismaService } from '../../prisma.service';
-import { SalesPlanService } from '../referentiels/sales-plan.service';
+import { ReferenceService } from '../referentiels/reference.service';
 import { CoachingConfigService } from '../coaching-config.service';
 import {
   CoachingAnalysesFilter,
@@ -42,7 +42,7 @@ export class CoachingQueryService {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly salesPlans: SalesPlanService,
+    private readonly references: ReferenceService,
     private readonly config: CoachingConfigService,
   ) {}
 
@@ -104,6 +104,7 @@ export class CoachingQueryService {
       where: { id },
       include: {
         salesPlanVersion: { select: { slug: true, version: true } },
+        reference: { select: { planSlug: true, version: true } },
         porte: { select: { coachingFavori: true } },
       },
     });
@@ -135,6 +136,7 @@ export class CoachingQueryService {
         where,
         include: {
           salesPlanVersion: { select: { slug: true, version: true } },
+          reference: { select: { planSlug: true, version: true } },
           porte: { select: { coachingFavori: true } },
         },
         orderBy: { createdAt: 'desc' },
@@ -154,19 +156,20 @@ export class CoachingQueryService {
     return { items, total };
   }
 
-  /** Analyses existantes (plan actif) pour un lot de clés S3 — évite le N+1 côté UI. */
+  /** Analyses existantes (référentiel actif) pour un lot de clés S3 — évite le N+1 côté UI. */
   async byS3Keys(s3Keys: string[]): Promise<CoachingAnalysisDto[]> {
     if (!s3Keys?.length) return [];
-    const version = await this.salesPlans.getActiveVersion();
+    const reference = await this.references.getActive();
     const rows = await this.prisma.coachingAnalysis.findMany({
       where: {
         source: this.CRM_SOURCE,
         tenantId: CRM_TENANT,
         s3KeyOriginal: { in: s3Keys },
-        ...(version ? { salesPlanVersionId: version.id } : {}),
+        ...(reference ? { referenceId: reference.id } : {}),
       },
       include: {
         salesPlanVersion: { select: { slug: true, version: true } },
+        reference: { select: { planSlug: true, version: true } },
         porte: { select: { coachingFavori: true } },
       },
       orderBy: { createdAt: 'desc' },
@@ -426,20 +429,20 @@ export class CoachingQueryService {
       })
       .filter((r) => r.active);
 
-    // État d'analyse (plan actif) pour TOUS les candidats — requis pour le filtre
-    // "non analysés uniquement" et pour l'indicateur, sans requête par page.
-    const version = await this.salesPlans.getActiveVersion();
+    // État d'analyse (référentiel actif) pour TOUS les candidats — requis pour le
+    // filtre "non analysés uniquement" et pour l'indicateur, sans requête par page.
+    const reference = await this.references.getActive();
     const analysisByKey = new Map<
       string,
       { id: number; status: string; quality: string | null; score: number | null }
     >();
-    if (version && withOwner.length) {
+    if (reference && withOwner.length) {
       const analyses = await this.prisma.coachingAnalysis.findMany({
         where: {
           source: this.CRM_SOURCE,
           tenantId: CRM_TENANT,
           s3KeyOriginal: { in: withOwner.map((r) => r.s3Key) },
-          salesPlanVersionId: version.id,
+          referenceId: reference.id,
         },
         select: { s3KeyOriginal: true, id: true, status: true, quality: true, score: true },
       });
@@ -565,9 +568,9 @@ export class CoachingQueryService {
     startDate?: Date,
     endDate?: Date,
   ): Promise<CoachingScoreboardDto> {
-    const activeVersion = await this.salesPlans.getActiveVersion();
-    const planSteps = activeVersion
-      ? (this.salesPlans.toParsedPlan(activeVersion).steps ?? [])
+    const activeReference = await this.references.getActive();
+    const planSteps = activeReference
+      ? (this.references.planOf(activeReference)?.steps ?? [])
       : [];
 
     const dateWhere = (start?: Date, end?: Date) =>
@@ -867,8 +870,9 @@ export class CoachingQueryService {
       transcript: row.transcript ?? null,
       transcriptDurationSec: row.transcriptDurationSec ?? null,
       error: row.error ?? row.remoteSyncError ?? null,
-      planSlug: row.salesPlanVersion?.slug ?? '',
-      planVersion: row.salesPlanVersion?.version ?? 0,
+      // Référentiel figé par l'analyse ; avant lui, la seule version de plan.
+      planSlug: row.reference?.planSlug ?? row.salesPlanVersion?.slug ?? '',
+      planVersion: row.reference?.version ?? row.salesPlanVersion?.version ?? 0,
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
       favori: row.porte?.coachingFavori ?? false,

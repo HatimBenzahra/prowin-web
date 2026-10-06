@@ -8,8 +8,8 @@ import { CoachingInputService } from './coaching-input.service';
 import { CoachingResolver } from './coaching.resolver';
 import { CoachingConfigService } from './coaching-config.service';
 import { CoachingQueryService } from './lecture/coaching-query.service';
-import { SalesPlanService } from './referentiels/sales-plan.service';
-import { ProductSheetService } from './referentiels/product-sheet.service';
+import { ReferenceService } from './referentiels/reference.service';
+import { ReferenceResolver } from './referentiels/reference.resolver';
 import { SynthesisService } from './synthese-globale/synthesis.service';
 import { SynthesisResolver } from './synthese-globale/synthesis.resolver';
 import { SnapshotBuilderService } from './synthese-globale/snapshot-builder.service';
@@ -34,8 +34,8 @@ import { CoachingPricesService } from './coaching-prices.service';
     CoachingResolver,
     CoachingConfigService,
     CoachingQueryService,
-    SalesPlanService,
-    ProductSheetService,
+    ReferenceService,
+    ReferenceResolver,
     SynthesisService,
     SynthesisResolver,
     SnapshotBuilderService,

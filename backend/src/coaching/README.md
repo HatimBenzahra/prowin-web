@@ -51,15 +51,27 @@ Before deployment, the external engine must be configured with
 It accepts HTTPS only and does not follow redirects. No storage hostname is inferred
 or hardcoded, and no server configuration was changed during local implementation.
 
-Admins import sales plans and product sheets from the Coaching IA screen (tabs *Plan
-de vente* and *Produits*): GraphQL `importSalesPlan` / `importProductSheet`, then
-`activate*Version` to read-then-reactivate a previous version (`salesPlanVersion` /
-`productSheetVersion` return its content). A sheet cannot be retired. Directors can
-only read. `SalesPlanService.importPlan` and
-`ProductSheetService.importSheet` ask the stateless parser to validate (its message is
-returned to the admin on a 400), verify the returned hash/content locally, record the
-importing admin (`importedBy`) and version/activate only in ProWin's DB. Imports serialize per tenant/slug and dedup
-identical content. Existing local reference rows are used directly; nothing is
+## Référentiel (plan de vente + catalogue de produits)
+
+The CRM owns one **référentiel** per tenant (`CoachingReference` +
+`CoachingReferenceProduct`): the sales plan and an explicit product catalogue (stable
+key, label, recognition identifiers, STT terms, linked WinLead+ offers by
+`offreExternalIds` or `offreFournisseur`, optional sheet holding `facts`/`forbidden`).
+It is published as one version and every analysis pins it (`referenceId`).
+
+- Admins edit a **draft** (at most one per tenant) from the Coaching IA screen:
+  plan markdown, products, sheets. Each change is validated by the engine
+  (`POST /coaching/parse/reference`); unreadable documents and invalid keys are
+  refused with the engine message, consistency warnings are returned with the draft.
+- **Publish** creates the next version and makes it the only active one (partial
+  unique indexes); a draft identical to a published version reactivates it instead.
+  Any published version can be reactivated. Directors read only.
+- `src/scripts/coaching-reference-migrate.ts` migrates the former model once (active
+  plan + active sheets → référentiel v1, analyses of that plan attached); run it after
+  `prisma migrate deploy`. `SalesPlanVersion` / `ProductSheetVersion` are no longer
+  written; they remain for analyses created before the référentiel.
+
+Existing local reference rows are used directly; nothing is
 imported to a remote database. Manual launch, bulk launch and relaunch reuse the
 integration key when `WINLEADPLUS_INTEGRATION_API_KEY` is configured, through
 `WinleadPlusApiService.getIntegrationOffres`: a validated, complete `count/items`

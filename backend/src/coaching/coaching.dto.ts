@@ -292,33 +292,6 @@ export class CoachingConfigDto {
   @Field(() => String, { nullable: true }) synthesisCronLastRunAt?: string | null;
 }
 
-@ObjectType()
-export class SalesPlanCriterionDto {
-  @Field() key: string;
-  @Field() label: string;
-  @Field(() => Int) points: number;
-  @Field() evidenceRequired: boolean;
-  @Field() appliesWhen: string;
-}
-
-@ObjectType()
-export class SalesPlanStepDto {
-  @Field() key: string;
-  @Field() label: string;
-  @Field(() => Int) weight: number;
-  @Field() appliesWhen: string;
-  @Field(() => [SalesPlanCriterionDto]) criteria: SalesPlanCriterionDto[];
-}
-
-@ObjectType()
-export class ActiveSalesPlanDto {
-  @Field() slug: string;
-  @Field() title: string;
-  @Field(() => Int) version: number;
-  @Field(() => Int) scoringScale: number;
-  @Field(() => [SalesPlanStepDto]) steps: SalesPlanStepDto[];
-}
-
 @InputType()
 export class CoachingAnalysesFilter {
   @Field(() => Int, { nullable: true, defaultValue: 0 }) skip?: number;
@@ -327,55 +300,4 @@ export class CoachingAnalysesFilter {
   @Field(() => Int, { nullable: true }) managerId?: number;
   @Field(() => Int, { nullable: true }) porteId?: number;
   @Field(() => String, { nullable: true }) status?: string;
-}
-
-/** Une version de plan, contenu compris : consultée depuis l'historique. */
-@ObjectType()
-export class SalesPlanVersionDetailDto extends ActiveSalesPlanDto {
-  @Field(() => Int) id: number;
-  @Field() createdAt: Date;
-  @Field(() => String, { nullable: true }) importedBy: string | null;
-  @Field() isActive: boolean;
-  @Field() contentHash: string;
-  @Field() rawMarkdown: string;
-}
-
-/** Une version d'un plan ou d'une fiche, pour l'historique de l'interface. */
-@ObjectType()
-export class ReferenceVersionDto {
-  @Field(() => Int) id: number;
-  @Field(() => Int) version: number;
-  @Field() createdAt: Date;
-  @Field(() => String, { nullable: true }) importedBy: string | null;
-  @Field() isActive: boolean;
-  /** Préfixe du sha256 : distingue deux contenus sans exposer le markdown. */
-  @Field() contentHash: string;
-}
-
-/** Fiche produit active, pour l'onglet Produits. */
-@ObjectType()
-export class ProductSheetForbiddenDto {
-  @Field() say: string;
-  @Field() severity: string; // 'grave' | 'modere'
-}
-
-@ObjectType()
-export class ProductSheetDto {
-  @Field(() => Int) id: number;
-  @Field() slug: string;
-  @Field() label: string;
-  @Field() productKey: string;
-  @Field(() => Int) version: number;
-  @Field(() => [String]) facts: string[];
-  @Field(() => [ProductSheetForbiddenDto]) forbidden: ProductSheetForbiddenDto[];
-  @Field() rawMarkdown: string;
-}
-
-/** Une version de fiche, consultée depuis l'historique. */
-@ObjectType()
-export class ProductSheetVersionDetailDto extends ProductSheetDto {
-  @Field() createdAt: Date;
-  @Field(() => String, { nullable: true }) importedBy: string | null;
-  @Field() isActive: boolean;
-  @Field() contentHash: string;
 }

@@ -1,9 +1,9 @@
 import { NotFoundException } from '@nestjs/common';
 import { CoachingService } from '../coaching.service';
 
-/** Relancer doit rejouer sur le plan ACTIF, pas sur la version périmée épinglée. */
-describe('relaunch — version de plan', () => {
-  const active = { id: 10, version: 10 };
+/** Relancer doit rejouer sur le référentiel ACTIF, pas sur la version périmée épinglée. */
+describe('relaunch — référentiel', () => {
+  const active = { id: 10, version: 10, products: [] };
 
   const build = (analysis: any, existing: any = null) => {
     const updated: any[] = [];
@@ -24,16 +24,16 @@ describe('relaunch — version de plan', () => {
       },
     };
     const query: any = { getAnalysis: jest.fn((id: number) => ({ id })) };
-    const salesPlans: any = { getActiveVersion: jest.fn(() => active) };
+    const references: any = { getActive: jest.fn(() => active) };
     const service = new CoachingService(
       prisma,
-      salesPlans,
+      references,
       {} as any, // config
       query,
       {} as any, // intake
-      { references: jest.fn(async () => ({ plan: { version: 10 }, products: [] })) } as any,
+      { freeze: jest.fn(async () => ({ reference: { version: 10 } })) } as any,
     );
-    return { service, prisma, updated, created };
+    return { service, prisma, updated, created, references };
   };
 
   const base = {
@@ -43,7 +43,7 @@ describe('relaunch — version de plan', () => {
     status: 'READY',
     updatedAt: new Date('2026-01-01'),
     s3KeyOriginal: 'rec/a.mp4',
-    salesPlanVersionId: 1,
+    referenceId: 1,
     recordingId: 5,
     porteId: 7,
     userId: 3,
@@ -53,12 +53,12 @@ describe('relaunch — version de plan', () => {
     transcriptDurationSec: 120,
   };
 
-  it('crée une analyse sur le plan actif quand la ligne est sur une version périmée', async () => {
+  it('crée une analyse sur le référentiel actif quand la ligne est sur une version périmée', async () => {
     const { service, created } = build(base);
     const res = await service.relaunch(1);
 
     expect(created).toHaveLength(1);
-    expect(created[0].data.salesPlanVersionId).toBe(active.id);
+    expect(created[0].data.referenceId).toBe(active.id);
     expect(created[0].data.status).toBe('PENDING');
     expect(created[0].data.transcript).toBe(base.transcript);
     expect(created[0].data.manual).toBe(true);
@@ -71,10 +71,10 @@ describe('relaunch — version de plan', () => {
     expect(updated).toHaveLength(0);
   });
 
-  it('remet simplement en file quand la ligne est déjà sur le plan actif', async () => {
+  it('remet simplement en file quand la ligne est déjà sur le référentiel actif', async () => {
     const { service, updated, created } = build({
       ...base,
-      salesPlanVersionId: active.id,
+      referenceId: active.id,
     });
     await service.relaunch(1);
 
@@ -98,14 +98,14 @@ describe('relaunch — version de plan', () => {
     expect(updated[0].data.transcript).toBeNull();
   });
 
-  it('refuse de relancer sans plan de vente actif', async () => {
-    const { service } = build(base);
-    (service as any).salesPlans.getActiveVersion = jest.fn(() => null);
+  it('refuse de relancer sans référentiel actif', async () => {
+    const { service, references } = build(base);
+    references.getActive.mockReturnValue(null);
     await expect(service.relaunch(1)).rejects.toBeInstanceOf(NotFoundException);
   });
 
-  it('ne réinitialise pas une analyse distante déjà en cours sur le plan actif', async () => {
-    const { service, updated, created } = build({ ...base, salesPlanVersionId: active.id, remoteManaged: true, status: 'ANALYZING' });
+  it('ne réinitialise pas une analyse distante déjà en cours sur le référentiel actif', async () => {
+    const { service, updated, created } = build({ ...base, referenceId: active.id, remoteManaged: true, status: 'ANALYZING' });
     expect((await service.relaunch(1)).id).toBe(1);
     expect(updated).toHaveLength(0);
     expect(created).toHaveLength(0);

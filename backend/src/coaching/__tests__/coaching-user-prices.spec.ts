@@ -1,4 +1,3 @@
-import { createHash } from 'crypto';
 import { Logger } from '@nestjs/common';
 import axios from 'axios';
 import { CoachingResolver } from '../coaching.resolver';
@@ -14,15 +13,17 @@ jest.mock('axios');
 
 const token = 'synthetic.user.jwt-do-not-persist';
 const context = { req: { headers: { authorization: `Bearer ${token}` } } };
-const markdown = 'local plan';
-const version = { id: 23, version: 4, rawMarkdown: markdown, contentHash: createHash('sha256').update(markdown).digest('hex') };
+const reference = {
+  id: 3, version: 4, contentHash: 'reference-hash', planMarkdown: 'local plan', planContentHash: 'plan-hash', planCriteria: { steps: [{ appliesWhen: 'productDetected:orbit' }] },
+  products: [{ key: 'orbit', label: 'Orbit', identifiers: ['orbit'], sttTerms: [], offreExternalIds: [], offreFournisseur: 'ORBIT', sheetMarkdown: 'sheet', sheetContentHash: 'sheet-hash', sheetContent: { facts: ['fact'], forbidden: [] } }],
+};
 const grid = [
   { id: 601, fournisseur: 'ORBIT', nom: 'Orbit Compact', prix_base: 37.42, isActive: true },
   { id: 602, fournisseur: 'ORBIT', nom: 'Orbit Plus', prix_base: 64.18, isActive: true },
 ];
 
 function fixture(existing = true) {
-  let row: any = existing ? { id: 7, source: 'prowin', tenantId: '', status: 'READY', remoteManaged: true, remoteRequestKey: 'old-generation', updatedAt: new Date(), s3KeyOriginal: 'audio', salesPlanVersionId: 23, remotePlanSnapshot: { products: [{ prices: [{ price: 1 }] }] } } : null;
+  let row: any = existing ? { id: 7, source: 'prowin', tenantId: '', status: 'READY', remoteManaged: true, remoteRequestKey: 'old-generation', updatedAt: new Date(), s3KeyOriginal: 'audio', referenceId: 3, remotePlanSnapshot: { reference: { products: [{ prices: [{ price: 1 }] }] } } } : null;
   const writes: unknown[] = [];
   const prisma: any = {
     offre: { findMany: jest.fn(async () => []) },
@@ -34,17 +35,15 @@ function fixture(existing = true) {
       upsert: jest.fn(async (args) => { writes.push(args); row = { id: 7, ...args.create }; return row; }),
     },
   };
-  const plans: any = { getActiveVersion: async () => version, toParsedPlan: () => ({ steps: [{ appliesWhen: 'productDetected:orbit' }] }) };
-  const sheet = { productKey: 'orbit', winleadplus: { match: { fournisseur: 'ORBIT' } } };
-  const sheets: any = { listActiveSheets: async () => [{ id: 91, productKey: 'orbit', rawMarkdown: 'sheet', contentHash: 'sheet-hash' }], toParsedSheet: () => sheet };
+  const references: any = { getActive: async () => reference, planOf: (r: any) => r.planCriteria };
   const prices = new CoachingPricesService(new WinleadPlusApiService(), prisma);
-  const input = new CoachingInputService(plans, sheets, prices);
-  const references = jest.spyOn(input, 'references');
+  const input = new CoachingInputService(references, prices);
+  const freeze = jest.spyOn(input, 'freeze');
   const query: any = { getAnalysis: async () => row };
   const api: any = { isConfigured: () => true, compute: jest.fn() };
-  const service = new CoachingService(prisma, plans, { getCoachableStatuts: async () => ['ARGUMENTE'], getMinAutoDurationSec: async () => 120 } as any, query, api, input);
-  const resolver = new CoachingResolver(service, {} as any, query, plans, sheets);
-  return { service, resolver, references, prisma, writes, row: () => row };
+  const service = new CoachingService(prisma, references, { getCoachableStatuts: async () => ['ARGUMENTE'], getMinAutoDurationSec: async () => 120 } as any, query, api, input);
+  const resolver = new CoachingResolver(service, {} as any, query);
+  return { service, resolver, freeze, prisma, writes, row: () => row };
 }
 
 describe('request-scoped user tariffs before queue persistence', () => {
@@ -61,8 +60,8 @@ describe('request-scoped user tariffs before queue persistence', () => {
     else await f.resolver.relaunchCoachingAnalysis(7, context);
     expect(axios.get).toHaveBeenCalledTimes(1);
     expect(axios.get).toHaveBeenCalledWith(expect.stringContaining('/offres'), expect.objectContaining({ headers: { Authorization: `Bearer ${token}` } }));
-    expect(f.row().remotePlanSnapshot.products[0]).toMatchObject({ versionId: 91, sheet: { productKey: 'orbit' }, prices: [{ label: 'Orbit Compact', price: 37.42 }, { label: 'Orbit Plus', price: 64.18 }], priceVerification: { status: 'verified', source: 'winleadplus_api' } });
-    expect(f.row().remotePlanSnapshot.plan.contentHash).toBe(version.contentHash);
+    expect(f.row().remotePlanSnapshot.reference.products[0]).toMatchObject({ key: 'orbit', sheet: { markdown: 'sheet' }, prices: [{ label: 'Orbit Compact', price: 37.42 }, { label: 'Orbit Plus', price: 64.18 }], priceVerification: { status: 'verified', source: 'winleadplus_api' } });
+    expect(f.row().remotePlanSnapshot.reference).toMatchObject({ version: 4, contentHash: 'reference-hash', plan: { contentHash: 'plan-hash' } });
     expect(f.row().remoteRequestKey).not.toBe('old-generation');
     expect(f.prisma.coachingAnalysis.updateMany.mock.calls[0][0].where).toMatchObject({ id: 7, remoteRequestKey: 'old-generation' });
     expect(JSON.stringify(f.writes)).not.toContain(token);
@@ -74,8 +73,8 @@ describe('request-scoped user tariffs before queue persistence', () => {
   it('pins a newly launched manual job before inserting PENDING', async () => {
     const f = fixture(false);
     await f.resolver.launchCoachingAnalysis('audio', context);
-    expect(f.prisma.coachingAnalysis.upsert.mock.calls[0][0].create).toMatchObject({ status: 'PENDING', remotePlanSnapshot: { products: [{ priceVerification: { status: 'verified' } }] } });
-    expect(f.references).toHaveBeenCalledWith(version, token);
+    expect(f.prisma.coachingAnalysis.upsert.mock.calls[0][0].create).toMatchObject({ status: 'PENDING', remotePlanSnapshot: { reference: { products: [{ priceVerification: { status: 'verified' } }] } } });
+    expect(f.freeze).toHaveBeenCalledWith(reference, token);
     expect(JSON.stringify(f.writes)).not.toContain(token);
   });
 
@@ -97,7 +96,7 @@ describe('request-scoped user tariffs before queue persistence', () => {
     await resolver.confirmRecordingUpload(upload, { id: 60, role: 'commercial' }, context);
     expect(recording.ensureRoomAccess).toHaveBeenCalledWith('room:commercial:60', 60, 'commercial');
     expect(axios.get).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ headers: { Authorization: `Bearer ${token}` } }));
-    expect(f.row()).toMatchObject({ status: 'PENDING', manual: false, porteId: 50, remotePlanSnapshot: { products: [{ priceVerification: { status: 'verified' } }] } });
+    expect(f.row()).toMatchObject({ status: 'PENDING', manual: false, porteId: 50, remotePlanSnapshot: { reference: { products: [{ priceVerification: { status: 'verified' } }] } } });
     expect(JSON.stringify(f.writes)).not.toContain(token);
     expect(JSON.stringify(recording.logger.log.mock.calls)).not.toContain(token);
   });
@@ -108,7 +107,7 @@ describe('request-scoped user tariffs before queue persistence', () => {
     (axios.get as jest.Mock).mockRejectedValue({ message: `upstream echoed ${token}`, response: { status: 401 }, config: { headers: { Authorization: `Bearer ${token}` } } });
     if (mode === 'manual') await f.resolver.launchCoachingAnalysis('audio', context);
     else await f.service.enqueue({ s3Key: 'audio', statut: 'ARGUMENTE', durationSec: 180 }, token);
-    expect(f.row()).toMatchObject({ status: 'PENDING', remotePlanSnapshot: { products: [{ prices: null, priceVerification: { status: 'unavailable', source: 'winleadplus_api' } }] } });
+    expect(f.row()).toMatchObject({ status: 'PENDING', remotePlanSnapshot: { reference: { products: [{ prices: null, priceVerification: { status: 'unavailable', source: 'winleadplus_api' } }] } } });
     expect(f.prisma.offre.findMany).not.toHaveBeenCalled();
     expect(JSON.stringify(f.writes)).not.toContain(token);
     expect(JSON.stringify(log.mock.calls)).not.toContain(token);

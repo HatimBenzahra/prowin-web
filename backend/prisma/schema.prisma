@@ -600,6 +600,68 @@ model RecordingAnalysis {
   @@index([s3Key])
 }
 
+// Référentiel coaching d'un CRM : son plan de vente et son catalogue de produits,
+// publiés ensemble. Un brouillon (au plus un par tenant) se modifie puis se publie ;
+// une version publiée est figée et une seule est active (index partiels SQL). Chaque
+// analyse fige le référentiel entier. La cohérence plan ↔ catalogue et l'empreinte
+// (contentHash) sont calculées par le moteur (POST /coaching/parse/reference).
+model CoachingReference {
+  id              Int                     @id @default(autoincrement())
+  tenantId        String                  @default("")
+  status          CoachingReferenceStatus @default(DRAFT)
+  // Numéro attribué à la publication ; null tant que brouillon.
+  version         Int?
+  isActive        Boolean                 @default(false)
+  contentHash     String?
+  // Le plan de vente : markdown source et grille telle que le moteur l'a lue.
+  planMarkdown    String?
+  planContentHash String?
+  planSlug        String?
+  planTitle       String?
+  planCriteria    Json?
+  createdBy       String?
+  createdAt       DateTime                @default(now())
+  updatedAt       DateTime                @updatedAt
+  publishedBy     String?
+  publishedAt     DateTime?
+
+  products CoachingReferenceProduct[]
+  analyses CoachingAnalysis[]
+
+  @@unique([tenantId, version])
+  @@index([tenantId, status])
+}
+
+enum CoachingReferenceStatus {
+  DRAFT
+  PUBLISHED
+}
+
+// Un produit du catalogue d'un référentiel : son identité (clé stable, nom,
+// reconnaissance, termes STT), ses offres WinLead+ (prix) et sa fiche facultative.
+// Sans fiche, la conformité de ce produit n'est pas jugée.
+model CoachingReferenceProduct {
+  id               Int      @id @default(autoincrement())
+  referenceId      Int
+  // Ordre d'affichage dans le catalogue.
+  position         Int
+  key              String
+  label            String
+  identifiers      String[]
+  sttTerms         String[]
+  // Offres WinLead+ liées, par identifiant (Offre.externalId) ou par fournisseur.
+  offreExternalIds Int[]
+  offreFournisseur String?
+  sheetMarkdown    String?
+  sheetContentHash String?
+  // Contenu jugeable de la fiche, tel que le moteur l'a lu : { facts, forbidden }.
+  sheetContent     Json?
+
+  reference CoachingReference @relation(fields: [referenceId], references: [id], onDelete: Cascade)
+
+  @@unique([referenceId, key])
+}
+
 // Version figée d'un plan de vente, dérivée d'un fichier markdown
 // (frontmatter = grille de scoring). Chaque analyse coaching épingle la version
 // utilisée. Une seule version active par slug. contentHash = sha256 du markdown
@@ -699,7 +761,10 @@ model CoachingAnalysis {
   externalPorteRef      String?
   s3KeyOriginal         String
   statutPorte           StatutPorte? // snapshot du statut porte au moment de l'échange
-  salesPlanVersionId    Int
+  // Avant le référentiel unique : la version de plan seule. Null pour les analyses
+  // lancées depuis, qui figent le référentiel entier (referenceId).
+  salesPlanVersionId    Int?
+  referenceId           Int?
   status                CoachingStatus   @default(PENDING)
   quality               CoachingQuality?
   score                 Float? // 0-100, calculé par le backend (source de vérité)
@@ -737,7 +802,8 @@ model CoachingAnalysis {
 
   recording        Recording?       @relation(fields: [recordingId], references: [id], onDelete: Cascade)
   porte            Porte?           @relation(fields: [porteId], references: [id], onDelete: SetNull)
-  salesPlanVersion SalesPlanVersion @relation(fields: [salesPlanVersionId], references: [id])
+  salesPlanVersion SalesPlanVersion?  @relation(fields: [salesPlanVersionId], references: [id], onDelete: Restrict)
+  reference        CoachingReference? @relation(fields: [referenceId], references: [id], onDelete: Restrict)
 
   // Idempotence : 1 analyse par audio × version de plan, POUR UN APPELANT DONNE. Deux
   // organisations qui analysent le meme audio contre leur propre plan sont deux
@@ -745,6 +811,8 @@ model CoachingAnalysis {
   // Nom explicite : le nom derive par defaut depasse les 63 caracteres que Postgres
   // accepte, et se ferait tronquer differemment ici et dans la migration.
   @@unique([source, tenantId, s3KeyOriginal, salesPlanVersionId], map: "CoachingAnalysis_appelant_audio_plan_key")
+  // Idempotence depuis le référentiel unique : 1 analyse par audio × version de référentiel.
+  @@unique([source, tenantId, s3KeyOriginal, referenceId], map: "CoachingAnalysis_appelant_audio_referentiel_key")
   @@index([status])
   @@index([remoteManaged, remoteNextSyncAt])
   @@index([source, tenantId]) // toutes les lectures filtrent sur le couple

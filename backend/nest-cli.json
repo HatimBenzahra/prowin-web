@@ -3,10 +3,6 @@
   "collection": "@nestjs/schematics",
   "sourceRoot": "src",
   "compilerOptions": {
-    "deleteOutDir": true,
-    "assets": [
-      { "include": "coaching/referentiels/sales-plans/**/*.md", "watchAssets": true },
-      { "include": "coaching/referentiels/product-sheets/**/*.md", "watchAssets": true }
-    ]
+    "deleteOutDir": true
   }
 }

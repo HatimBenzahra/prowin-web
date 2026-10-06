@@ -21,16 +21,19 @@ describe('product alerts compute → snapshot → GraphQL → frontend selection
     const { ComputeService } = require(`${enginePath}/compute/compute.service`);
     const { ScoringService } = require(`${enginePath}/analyse-porte/etape-5-scoring/scoring.service`);
     const { parseSalesPlanMarkdown } = require(`${enginePath}/referentiels/sales-plan.parser`);
-    const { parseProductSheetMarkdown } = require(`${enginePath}/referentiels/product-sheet.parser`);
+    const { parseProductContentMarkdown } = require(`${enginePath}/referentiels/product-content.parser`);
+    const { referenceContentHash } = require(`${enginePath}/referentiels/reference`);
     const markdown = '---\nslug: orchard\ntitle: Orchard\nsteps:\n  - key: service\n    label: Service\n    weight: 100\n    appliesWhen: productDetected:orchard\n    criteria:\n      - key: nature\n        label: Nature du service\n        points: 100\n        requiresProductSheet: true\n---';
-    const sheetMarkdown = '---\nslug: orchard\nlabel: Orchard Assist\nappliesTo: productDetected:orchard\nfacts: [Entretien des arbres sans remplacement.]\nidentifiers: [Orchard]\n---';
-    const parsed = parseSalesPlanMarkdown(markdown), sheet = parseProductSheetMarkdown(sheetMarkdown);
+    const sheetMarkdown = '---\nfacts: [Entretien des arbres sans remplacement.]\n---';
+    const parsed = parseSalesPlanMarkdown(markdown), sheet = parseProductContentMarkdown(sheetMarkdown);
+    const identity = { key: 'orchard', label: 'Orchard Assist', identifiers: ['Orchard'], sttTerms: [] as string[] };
+    const contentHash = referenceContentHash(parsed.contentHash, [{ ...identity, sheetContentHash: sheet.contentHash }]);
     const quote = 'Orchard : vous payez 64 euros, je ne précise pas pourquoi.';
     const transcript = `${quote} ${'Nous parlons du service proposé et des besoins du client. '.repeat(10)}`;
     const request = { requestKey: 'flow-generation', audio: { key: 'flow-audio', url: 'https://unused.invalid' }, transcript, transcriptDurationSec: 180,
-      plan: { markdown, contentHash: parsed.contentHash, criteria: parsed.plan, version: 1 },
-      products: [{ markdown: sheetMarkdown, contentHash: sheet.contentHash, versionId: 31, sheet: sheet.sheet, prices: [{ label: 'Verger compact', price: 14.6 }],
-        ...(certified ? { priceVerification: { status: 'verified', source: 'winleadplus_api', checkedAt: '2026-10-01T00:00:00Z', comment: 'Grille complète certifiée.', completeGrid: true, variantsCertified: true } } : {}) }] };
+      reference: { version: 1, contentHash, plan: { markdown, contentHash: parsed.contentHash, criteria: parsed.plan },
+        products: [{ ...identity, sheet: { markdown: sheetMarkdown, contentHash: sheet.contentHash, content: sheet.content }, prices: [{ label: 'Verger compact', price: 14.6 }],
+          ...(certified ? { priceVerification: { status: 'verified', source: 'winleadplus_api', checkedAt: '2026-10-01T00:00:00Z', comment: 'Grille complète certifiée.', completeGrid: true, variantsCertified: true } } : {}) }] } };
     const model = { chatJson: jest.fn().mockResolvedValueOnce(JSON.stringify({ products: [{ key: 'orchard', presentedByCommercial: true, evidence: 'Orchard' }] }))
       .mockResolvedValueOnce(JSON.stringify({ criteria: [] })).mockResolvedValueOnce(JSON.stringify({ criteria: [], productAlerts: [{ productSlug: 'orchard', type: 'payment_unclear', quote,
         referenceKind: 'sheet', reference: 'Entretien des arbres sans remplacement.', reason: 'Nature du paiement à clarifier.', contextQuote: quote, productEvidence: 'Orchard', relevanceReason: 'Paiement dans la vente du service.' }] })) };
@@ -39,12 +42,12 @@ describe('product alerts compute → snapshot → GraphQL → frontend selection
     mutate?.(computed);
     let row: any = { id: 9, source: 'prowin', tenantId: '', status: 'PENDING', remoteManaged: true, remoteSyncAttempts: 0, remoteRequestKey: request.requestKey,
       transcript, transcriptDurationSec: 180, evaluationAttempts: 0, transcriptionAttempts: 0,
-      salesPlanVersion: { rawMarkdown: markdown, contentHash: parsed.contentHash, version: 1 }, s3KeyOriginal: request.audio.key, createdAt: new Date(), updatedAt: new Date() };
+      referenceId: 1, salesPlanVersion: null, reference: { id: 1, version: 1, contentHash, products: [] }, s3KeyOriginal: request.audio.key, createdAt: new Date(), updatedAt: new Date() };
     const prisma: any = { coachingConfig: { findUnique: async () => null }, coachingAnalysis: {
       findUnique: async () => row, findUniqueOrThrow: async () => row,
        updateMany: async ({ data }: any) => { for (const [key, value] of Object.entries(data)) row[key] = value && typeof value === 'object' && 'increment' in value ? (row[key] ?? 0) + (value as any).increment : value; return { count: 1 }; },
     } };
-    const worker = new CoachingSyncService(prisma, { timeoutMs: 1000, evaluationTimeoutMs: 1000, evaluate: async () => computed } as any, { references: async () => ({ plan: request.plan, products: request.products }), request: async () => request } as any);
+    const worker = new CoachingSyncService(prisma, { timeoutMs: 1000, evaluationTimeoutMs: 1000, evaluate: async () => computed } as any, { freeze: async () => ({ reference: request.reference }), request: async () => request } as any);
     await worker.sync(9);
     const queries = new CoachingQueryService(prisma, {} as any, {} as any);
     return { row, computed, dto: await queries.getAnalysis(9) };

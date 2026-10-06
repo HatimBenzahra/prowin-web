@@ -4,7 +4,7 @@ import { randomUUID } from 'crypto';
 import { isDeepStrictEqual } from 'util';
 import { CoachingQuality, CoachingStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma.service';
-import { CoachingApiClient, CoachingStageError, ComputeRequest, ComputeResult } from './coaching-api.client';
+import { CoachingApiClient, CoachingStageError, ComputeRequest, ComputeResult, FrozenReferences } from './coaching-api.client';
 import { CoachingInputService } from './coaching-input.service';
 import { CRM_SOURCE, CRM_TENANT } from './shared/crm-scope';
 
@@ -53,14 +53,12 @@ export class CoachingSyncService {
         remoteLeaseUntil: new Date(now.getTime() + (transcribing ? this.api.timeoutMs : this.api.evaluationTimeoutMs) + 120_000),
       } });
       if (!claimed.count) return;
-      const row = await this.prisma.coachingAnalysis.findUniqueOrThrow({ where: { id }, include: { salesPlanVersion: true } });
+      const row = await this.prisma.coachingAnalysis.findUniqueOrThrow({ where: { id }, include: { salesPlanVersion: true, reference: { include: { products: { orderBy: { position: 'asc' } } } } } });
       if (row.remoteLeaseToken !== token) return;
       attempt = row[counter];
       if (attempt > 3) throw new Error('Tentatives épuisées après reprise');
       if (!row.remoteRequestKey) row.remoteRequestKey = randomUUID();
-      const stored = row.remotePlanSnapshot as unknown as Pick<ComputeRequest, 'plan' | 'products'> | null;
-      const references = stored?.products && stored?.plan ? stored : await this.input.references(row.salesPlanVersion);
-      if (references.plan.contentHash !== row.salesPlanVersion.contentHash || references.plan.markdown !== row.salesPlanVersion.rawMarkdown || references.plan.version !== row.salesPlanVersion.version) throw new Error('Référentiel local incompatible');
+      const references = await this.frozenReferences(row);
       const attached = await this.prisma.coachingAnalysis.updateMany({ where: owned(), data: { remoteRequestKey: row.remoteRequestKey, remotePlanSnapshot: json(references), remoteAnalysisId: null, remoteRelaunch: false } });
       if (!attached.count) return;
       const request = await this.input.request(row, references);
@@ -106,9 +104,32 @@ export class CoachingSyncService {
       this.logger.warn(`Calcul coaching #${id} : ${failed ? 'échec définitif' : 'nouvelle tentative programmée'}`);
     } finally { this.running--; }
   }
+  /**
+   * Le référentiel figé de l'analyse. Depuis le référentiel unique, il est revérifié
+   * contre sa version publiée (refigé si absent) ; les analyses antérieures gardent
+   * leur couple plan + fiches, qui doit correspondre à leur version de plan.
+   */
+  private async frozenReferences(row: Prisma.CoachingAnalysisGetPayload<{ include: { salesPlanVersion: true; reference: { include: { products: true } } } }>): Promise<FrozenReferences> {
+    const stored = row.remotePlanSnapshot as unknown as FrozenReferences | null;
+    // Une analyse lancée avant le référentiel (puis rattachée par la migration) garde le
+    // couple plan + fiches figé à sa création, jusqu'à sa prochaine remise en file.
+    const legacy = stored && !('reference' in stored) && stored.plan && stored.products ? stored : null;
+    if (row.reference && !legacy) {
+      const frozen = stored && 'reference' in stored ? stored : await this.input.freeze(row.reference);
+      if (!('reference' in frozen) || frozen.reference.version !== row.reference.version || frozen.reference.contentHash !== row.reference.contentHash) throw new Error('Référentiel local incompatible');
+      return frozen;
+    }
+    const plan = row.salesPlanVersion;
+    if (!plan || !legacy) throw new Error('Référentiel local absent');
+    if (legacy.plan.contentHash !== plan.contentHash || legacy.plan.markdown !== plan.rawMarkdown || legacy.plan.version !== plan.version) throw new Error('Référentiel local incompatible');
+    return legacy;
+  }
+
   private validate(result: ComputeResult, request: ComputeRequest) {
     if (result.transcript !== request.transcript?.trim() || result.durationSec !== request.transcriptDurationSec) throw new Error('Checkpoint modifié');
-    if (result?.requestKey !== request.requestKey || result.source !== CRM_SOURCE || result.tenantId !== CRM_TENANT || result.audioKey !== request.audio.key || result.status !== 'READY' || !equal(result.plan, request.plan) || !equal(result.products, request.products)) throw new Error('Résultat/référentiel incompatible');
+    const provenance = 'reference' in request ? equal(result.reference, { version: request.reference.version, contentHash: request.reference.contentHash }) : equal(result.plan, request.plan) && equal(result.products, request.products);
+    if (result?.requestKey !== request.requestKey || result.source !== CRM_SOURCE || result.tenantId !== CRM_TENANT || result.audioKey !== request.audio.key || result.status !== 'READY' || !provenance) throw new Error('Résultat/référentiel incompatible');
+    const products = judgeableProducts(request);
     if (typeof result.transcript !== 'string' || !Number.isFinite(result.durationSec) || result.durationSec < 0) throw new Error('Transcript/durée invalide');
     for (const key of ['score', 'scoreBeforeMalus', 'malus', 'confidence'] as const) if (result[key] !== null && !Number.isFinite(result[key])) throw new Error('Score invalide');
     for (const key of ['subScores', 'strengths', 'improvements', 'recommendations', 'criterionResults', 'violations', 'detectedProducts', 'productMapping', 'productSheetVersions'] as const) if (!Array.isArray(result[key])) throw new Error('Détail résultat invalide');
@@ -119,10 +140,10 @@ export class CoachingSyncService {
         !['sheet', 'price'].includes(a.referenceKind) ||
         ['productSlug', 'quote', 'reference', 'reason', 'contextQuote', 'productEvidence', 'relevanceReason'].some(k => typeof a[k] !== 'string' || !a[k].trim()) ||
         !result.transcript.includes(a.contextQuote) || !a.contextQuote.includes(a.quote) || !a.contextQuote.includes(a.productEvidence) ||
-        !request.products.some(p => p.sheet.productKey === a.productSlug && (a.referenceKind === 'price'
+        !products.some(p => p.key === a.productSlug && (a.referenceKind === 'price'
           ? !!p.prices?.length && (p.prices.some(price => a.reference === `${price.label} : ${price.price.toFixed(2).replace('.', ',')} € / mois`) ||
             a.reference === p.prices.map(price => `${price.label} : ${price.price.toFixed(2).replace('.', ',')} € / mois`).join(' ; '))
-          : p.sheet.facts.some(f => f.includes(a.reference)))))) throw new Error('Alertes produit invalides');
+          : p.facts.some(f => f.includes(a.reference)))))) throw new Error('Alertes produit invalides');
     }
     if (result.productVerification !== undefined) {
       const v = result.productVerification;
@@ -135,11 +156,24 @@ export class CoachingSyncService {
       if (v.products.length !== (result.detectedProducts as Prisma.JsonArray).length || v.status !== overall ||
         v.products.some(p => p.status === 'verified' && result.productAlerts?.some(a => a.productSlug === p.productSlug))) throw new Error('Périmètre vérification incompatible');
       for (const p of v.products.filter(p => p.status === 'verified')) {
-        const product = request.products.find(x => x.sheet.productKey === p.productSlug);
+        const product = products.find(x => x.key === p.productSlug);
         if (!product?.prices?.length || product.priceVerification?.completeGrid !== true || product.priceVerification?.variantsCertified !== true || product.priceVerification.status !== 'verified') throw new Error('Certification produit absente');
       }
     }
-    const versions = new Set(request.products.map(p => p.versionId));
-    if ((result.productSheetVersions as Prisma.JsonArray).some(id => typeof id !== 'number' || !versions.has(id))) throw new Error('Provenance résultat invalide');
+    if ('reference' in request) {
+      const keys = new Set(products.map(p => p.key));
+      if (!Array.isArray(result.judgedProducts) || result.judgedProducts.some(key => !keys.has(key)) || (result.productSheetVersions as Prisma.JsonArray).length) throw new Error('Provenance résultat invalide');
+    } else {
+      const versions = new Set(request.products.map(p => p.versionId));
+      if ((result.productSheetVersions as Prisma.JsonArray).some(id => typeof id !== 'number' || !versions.has(id))) throw new Error('Provenance résultat invalide');
+    }
   }
+}
+
+/** Les produits dont la conformité peut être jugée (avec fiche), quel que soit le contrat. */
+function judgeableProducts(request: ComputeRequest) {
+  if ('reference' in request) {
+    return request.reference.products.flatMap(p => (p.sheet ? [{ key: p.key, facts: p.sheet.content.facts, prices: p.prices, priceVerification: p.priceVerification }] : []));
+  }
+  return request.products.map(p => ({ key: p.sheet.productKey, facts: p.sheet.facts, prices: p.prices, priceVerification: p.priceVerification }));
 }
