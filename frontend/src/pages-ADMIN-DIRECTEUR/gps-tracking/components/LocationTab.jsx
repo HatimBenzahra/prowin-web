@@ -1,3 +1,4 @@
+import { UserStatus } from '@/constants/domain/user-status'
 import React, { useMemo, useState, useCallback, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import MapboxMap, { Marker, NavigationControl, Popup, Source, Layer } from 'react-map-gl/mapbox'
@@ -358,6 +359,11 @@ export default function LocationTab({
 
   const hasRoute = routeStats.positions.length >= 2
 
+  // Filtre du trajet : seuls les comptes actifs (ni test, ni contrat fini).
+  const trajetActors = useMemo(
+    () => (actors || []).filter(a => a.status === UserStatus.ACTIF),
+    [actors]
+  )
   const routeSafeId = useMemo(() => sanitizeId(selectedActorKey || 'route'), [selectedActorKey])
 
   useEffect(() => {
@@ -770,7 +776,7 @@ export default function LocationTab({
                           >
                             Tous
                           </button>
-                          {(actors || []).map(actor => {
+                          {trajetActors.map(actor => {
                             const active = selectedActorKey === actor.key
                             return (
                               <button
@@ -1246,7 +1252,7 @@ export default function LocationTab({
                       >
                         Tous
                       </button>
-                      {(actors || []).map(actor => {
+                      {trajetActors.map(actor => {
                         const active = selectedActorKey === actor.key
                         return (
                           <button
