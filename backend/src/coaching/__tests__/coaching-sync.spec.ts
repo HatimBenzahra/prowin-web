@@ -1,9 +1,10 @@
 import { CoachingSyncService } from '../coaching-sync.service';
 import { CoachingService } from '../coaching.service';
-import { CoachingStatus, Prisma } from '@prisma/client';
+import { CoachingStageError } from '../coaching-api.client';
+import { Prisma } from '@prisma/client';
 
 function fixture() {
-  let row: any = { id: 7, source: 'prowin', tenantId: '', status: 'PENDING', remoteManaged: true, remoteLeaseToken: null, remoteLeaseUntil: null, remoteNextSyncAt: null, remoteSyncAttempts: 0, attempts: 0, remoteRequestKey: 'generation-1', s3KeyOriginal: 'audio', salesPlanVersionId: 23, recordingId: 40, updatedAt: new Date(), transcript: null };
+  let row: any = { id: 7, source: 'prowin', tenantId: '', status: 'PENDING', remoteManaged: true, remoteLeaseToken: null, remoteLeaseUntil: null, remoteNextSyncAt: null, remoteSyncAttempts: 0, attempts: 0, transcriptionAttempts: 0, evaluationAttempts: 0, remoteRequestKey: 'generation-1', s3KeyOriginal: 'audio', salesPlanVersionId: 23, recordingId: 40, updatedAt: new Date(), transcript: null };
   const references = { plan: { markdown: 'plan', contentHash: 'hash', criteria: {}, version: 4 }, products: [] };
   const delegate = {
     findUniqueOrThrow: jest.fn(async () => ({ ...row, salesPlanVersion: { id: 23, contentHash: 'hash', rawMarkdown: 'plan', version: 4 } })),
@@ -11,130 +12,102 @@ function fixture() {
     findMany: jest.fn(async () => [{ id: 7 }]),
     updateMany: jest.fn(async ({ where, data }: any) => {
       if (where.remoteLeaseToken && where.remoteLeaseToken !== row.remoteLeaseToken) return { count: 0 };
+      if (where.remoteLeaseUntil?.gt && !(row.remoteLeaseUntil > where.remoteLeaseUntil.gt)) return { count: 0 };
+      if (where.remoteRequestKey && where.remoteRequestKey !== row.remoteRequestKey) return { count: 0 };
       if (where.status?.in && !where.status.in.includes(row.status)) return { count: 0 };
       if (where.remoteManaged === true && (!row.remoteManaged || ['READY', 'FAILED'].includes(row.status) || row.remoteLeaseUntil > new Date() || row.remoteNextSyncAt > new Date())) return { count: 0 };
-      if (where.remoteManaged === false && row.remoteManaged) return { count: 0 };
-      for (const [key, value] of Object.entries(data)) row[key] = value === Prisma.DbNull ? null : typeof value === 'object' && value !== null && 'increment' in value ? (row[key] ?? 0) + (value as any).increment : value;
+      for (const [key, value] of Object.entries(data)) row[key] = value === Prisma.DbNull ? null : typeof value === 'object' && value !== null && 'increment' in value ? (row[key] ?? 0) + (value as any).increment : typeof value === 'object' && value !== null && 'decrement' in value ? row[key] - (value as any).decrement : value;
       return { count: 1 };
     }),
-    upsert: jest.fn(async ({ create }: any) => { row = { ...row, ...create }; return { id: 7, remoteRequestKey: row.remoteRequestKey }; }),
   };
-  const prisma: any = { coachingAnalysis: delegate, coachingConfig: { findUnique: async () => null }, recording: { findUnique: async () => ({ id: 40 }) }, recordingSegment: { findFirst: async () => null } };
-  const input: any = { references: jest.fn(async () => references), request: jest.fn(async (r: any, refs: any) => ({ ...refs, requestKey: r.remoteRequestKey, audio: { key: r.s3KeyOriginal, url: 'https://signed.invalid/secret' } })) };
-  const result = (request: any): any => ({ requestKey: request.requestKey, source: 'prowin', tenantId: '', audioKey: 'audio', status: 'READY', ...references, transcript: 'Conversation utile '.repeat(50), durationSec: 180, confidence: 0.87, score: 65, scoreBeforeMalus: 80, malus: 15, summary: 'Résumé', subScores: [], strengths: [], improvements: [], recommendations: [], criterionResults: [], violations: [], detectedProducts: [], productMapping: [], productSheetVersions: [] });
-  const api: any = { isConfigured: () => true, timeoutMs: 1_800_000, compute: jest.fn(async (r: any) => result(r)) };
+  const prisma: any = { coachingAnalysis: delegate, coachingConfig: { findUnique: async () => null } };
+  const input: any = { references: jest.fn(async () => references), request: jest.fn(async (r: any, refs: any) => ({ ...refs, requestKey: r.remoteRequestKey, audio: { key: r.s3KeyOriginal, url: r.transcript == null ? 'https://signed.invalid/secret' : '' }, transcript: r.transcript, transcriptDurationSec: r.transcriptDurationSec })) };
+  const result = (q: any): any => ({ requestKey: q.requestKey, source: 'prowin', tenantId: '', audioKey: 'audio', status: 'READY', ...references, transcript: q.transcript ?? 'Conversation utile '.repeat(50), durationSec: q.transcriptDurationSec ?? 180, confidence: 0.87, score: 65, scoreBeforeMalus: 80, malus: 15, summary: 'Résumé', subScores: [], strengths: [], improvements: [], recommendations: [], criterionResults: [], violations: [], detectedProducts: [], productMapping: [], productSheetVersions: [] });
+  const api: any = { isConfigured: () => true, timeoutMs: 5_700_000, evaluationTimeoutMs: 600_000, transcribe: jest.fn(async (q: any) => ({ ...result(q), metadata: { quality: { score: 50 } } })), evaluate: jest.fn(async (q: any) => ({ ...result(q), transcript: q.transcript.trim() })) };
   const worker = () => new CoachingSyncService(prisma, api, input);
-  const query: any = { getAnalysis: async (id: number) => ({ id }) };
-  const service = new CoachingService(prisma, { getActiveVersion: async () => ({ id: 23, version: 4 }) } as any, {} as any, query, api, input);
+  const service = new CoachingService(prisma, { getActiveVersion: async () => ({ id: 23, version: 4 }) } as any, {} as any, { getAnalysis: async () => row } as any, api, input);
   return { worker, api, input, delegate, service, row: () => row, set: (data: any) => Object.assign(row, data), result };
 }
 
-describe('local durable calculation queue', () => {
-  it('persists a complete synchronous result with local IDs and local quality', async () => {
-    const f = fixture(); await f.worker().sync(7);
-    expect(f.row()).toMatchObject({ id: 7, recordingId: 40, salesPlanVersionId: 23, remoteAnalysisId: null, status: 'READY', score: 65, confidence: 0.87, quality: 'ANALYZED' });
-    expect(f.row().remoteResultSnapshot).not.toHaveProperty('id');
-    expect(JSON.stringify(f.row().remotePlanSnapshot)).not.toContain('secret');
-  });
-  it('retries transport failures after restart, pinned references and stable request key', async () => {
-    const f = fixture(); f.api.compute.mockRejectedValueOnce(new Error('secret credential'));
-    await f.worker().sync(7);
-    expect(f.row()).toMatchObject({ status: 'PENDING', remoteSyncAttempts: 1, remoteSyncError: 'Calcul coaching échoué' });
-    await f.worker().sync(7); expect(f.api.compute).toHaveBeenCalledTimes(1);
-    f.set({ remoteNextSyncAt: new Date(0) }); await f.worker().poll();
-    expect(f.row().status).toBe('READY'); expect(f.input.references).toHaveBeenCalledTimes(1);
-    expect(f.api.compute.mock.calls[0][0].requestKey).toBe(f.api.compute.mock.calls[1][0].requestKey);
-  });
-  it('deduplicates concurrent workers and recovers an expired lease', async () => {
-    const f = fixture(); await Promise.all([f.worker().sync(7), f.worker().sync(7)]);
-    expect(f.api.compute).toHaveBeenCalledTimes(1);
-    f.set({ status: 'ANALYZING', remoteLeaseToken: 'dead', remoteLeaseUntil: new Date(0) });
-    await f.worker().sync(7); expect(f.row().status).toBe('READY');
-  });
-  it('pins tariff values and verification metadata across retries even if the live catalog changes', async () => {
-    const f = fixture();
-    const product = { versionId: 91, prices: [{ label: 'Orbit Compact', price: 37.42 }], priceVerification: { status: 'verified', source: 'winleadplus_api', checkedAt: '2026-10-01T01:00:00.000Z', comment: 'Grille courante vérifiée lors du snapshot' } };
-    f.input.references.mockResolvedValue({ plan: f.result({}).plan, products: [product] });
-    f.api.compute.mockRejectedValueOnce(new Error('transport failed')).mockImplementation(async (q: any) => ({ ...f.result(q), products: q.products }));
-    await f.worker().sync(7);
-    f.input.references.mockResolvedValue({ plan: f.result({}).plan, products: [{ ...product, prices: [{ label: 'Orbit Compact', price: 51.68 }] }] });
-    f.set({ remoteNextSyncAt: new Date(0) }); await f.worker().sync(7);
-    expect(f.row().status).toBe('READY');
-    expect(f.input.references).toHaveBeenCalledTimes(1);
-    expect(f.api.compute.mock.calls[1][0].products).toEqual([product]);
-    expect(f.api.compute.mock.calls[1][0].products).toEqual(f.api.compute.mock.calls[0][0].products);
-  });
-  it('rejects changed plan content and product provenance before saving scores', async () => {
-    for (const mutate of [(r: any) => r.plan.markdown = 'wrong', (r: any) => r.products = [{ versionId: 999 }], (r: any) => r.tenantId = 'other']) {
-      const f = fixture(); f.api.compute.mockImplementation(async (q: any) => { const r = JSON.parse(JSON.stringify(f.result(q))); mutate(r); return r; });
-      await f.worker().sync(7); expect(f.row().status).toBe('PENDING'); expect(f.row().score).toBeUndefined();
-    }
-  });
-  it('a superseded lease owner cannot write completion', async () => {
-    const f = fixture(); f.api.compute.mockImplementation(async (q: any) => { f.set({ remoteLeaseToken: 'new', status: 'PENDING' }); return f.result(q); });
-    await f.worker().sync(7); expect(f.row().status).toBe('PENDING'); expect(f.row().score).toBeUndefined();
-  });
-  it('labels the short/noisy dataset locally, retaining the raw score', async () => {
-    const f = fixture(); f.api.compute.mockImplementation(async (q: any) => ({ ...f.result(q), transcript: 'bruit', durationSec: 19.760, score: 5 }));
-    await f.worker().sync(7); expect(f.row()).toMatchObject({ score: null, quality: 'INEXPLOITABLE', remoteResultSnapshot: { score: 5 } });
-  });
-  it('bounds failures and expired-lease recovery; never recomputes terminal rows automatically', async () => {
-    const f = fixture(); f.api.compute.mockRejectedValue(new Error('down'));
-    for (let i = 0; i < 3; i++) { f.set({ remoteNextSyncAt: null }); await f.worker().sync(7); }
-    expect(f.row().status).toBe('FAILED'); await f.worker().sync(7); expect(f.api.compute).toHaveBeenCalledTimes(3);
-    f.set({ status: 'ANALYZING', remoteLeaseUntil: new Date(0), remoteSyncAttempts: 3 }); await f.worker().sync(7);
-    expect(f.row().status).toBe('FAILED'); expect(f.api.compute).toHaveBeenCalledTimes(3);
-  });
-  it('manual launchMany requeues completed results with same ID and resets transcript; counts only scheduling', async () => {
-    const f = fixture(); f.set({ status: CoachingStatus.READY, transcript: 'old', score: 65 });
-    expect(await f.service.launchMany(['audio', 'audio'])).toBe(1);
-    expect(f.row()).toMatchObject({ id: 7, status: 'PENDING', transcript: null, score: null });
-    expect(await f.service.launchMany(['audio'])).toBe(0); expect(f.api.compute).not.toHaveBeenCalled();
-  });
-  it('worker uses refreshed request-pinned prices without obtaining a bearer or refreshing tariffs', async () => {
-    const f = fixture();
-    const product = { versionId: 91, prices: [{ label: 'Updated offer', price: 42.9 }], priceVerification: { status: 'verified', source: 'winleadplus_api', checkedAt: new Date().toISOString() } };
-    f.set({ status: CoachingStatus.READY, remotePlanSnapshot: { plan: f.result({}).plan, products: [{ ...product, prices: [{ label: 'Old offer', price: 1 }] }] } });
-    f.input.references.mockResolvedValue({ plan: f.result({}).plan, products: [product] });
-    await f.service.launch('audio', 'synthetic-user-token');
-    f.input.references.mockRejectedValue(new Error('request credential no longer available'));
-    f.api.compute.mockImplementation(async (q: any) => ({ ...f.result(q), products: q.products }));
-    await f.worker().sync(7);
-    expect(f.row().status).toBe('READY');
-    expect(f.input.references).toHaveBeenCalledTimes(1);
-    expect(f.api.compute.mock.calls[0][0].products).toEqual([product]);
-    expect(JSON.stringify(f.row())).not.toContain('synthetic-user-token');
-    expect(JSON.stringify(f.api.compute.mock.calls)).not.toContain('synthetic-user-token');
-  });
-  it('ignores historical unmanaged rows', async () => {
-    const f = fixture(); f.set({ remoteManaged: false }); await f.worker().sync(7); expect(f.api.compute).not.toHaveBeenCalled();
-  });
-  it('explicit launch can recover a legacy unmanaged pending row', async () => {
-    const f = fixture(); f.set({ remoteManaged: false });
-    expect(await f.service.launchMany(['audio'])).toBe(1);
-    expect(f.row()).toMatchObject({ id: 7, remoteManaged: true, status: 'PENDING', transcript: null });
-  });
-  it('atomically clears all old generation results on READY → PENDING, including after failed retries', async () => {
-    const f = fixture();
-    const pinned = { plan: { markdown: 'plan', contentHash: 'hash', criteria: {}, version: 4 }, products: [] };
-    const scalarFields = ['transcript', 'transcriptDurationSec', 'quality', 'score', 'confidence', 'summary', 'scoreBeforeMalus', 'malus'];
-    const jsonFields = ['strengths', 'improvements', 'recommendations', 'subScores', 'criterionResults', 'violations', 'detectedProducts', 'productMapping', 'productSheetVersions', 'remoteResultSnapshot'];
-    f.set({ status: CoachingStatus.READY, remotePlanSnapshot: pinned, porteId: 50, userId: 60, managerId: 70,
-      ...Object.fromEntries(scalarFields.map(key => [key, key === 'transcript' || key === 'summary' || key === 'quality' ? 'old result' : 65])),
-      ...Object.fromEntries(jsonFields.map(key => [key, [{ old: true }]])),
+describe('durable stage queue', () => {
+  it('four queued jobs, two STT dispatches share one fail-fast slot; busy leaves budget intact', async () => {
+    const jobs = Array.from({ length: 4 }, () => fixture());
+    let occupied = false;
+    let release!: () => void;
+    const blocked = new Promise<void>(resolve => { release = resolve; });
+    const admission = jest.fn(async (q: any) => {
+      if (occupied) throw new CoachingStageError('STT_BUSY');
+      occupied = true;
+      try { await blocked; return jobs[0].result(q); } finally { occupied = false; }
     });
-    expect(await f.service.launchMany(['audio'])).toBe(1);
-    expect(f.delegate.updateMany).toHaveBeenCalledTimes(1);
-    const reset = f.delegate.updateMany.mock.calls[0][0].data;
-    for (const key of jsonFields) expect(reset[key]).toBe(Prisma.DbNull);
-    for (const key of [...scalarFields, ...jsonFields]) expect(f.row()[key]).toBeNull();
-    expect(f.row()).toMatchObject({ id: 7, status: 'PENDING', salesPlanVersionId: 23, recordingId: 40, porteId: 50, userId: 60, managerId: 70, remotePlanSnapshot: pinned });
-    expect(reset.remotePlanSnapshot).toEqual(pinned);
-    f.api.compute.mockRejectedValue(new Error('upstream unavailable'));
-    for (let i = 0; i < 3; i++) { f.set({ remoteNextSyncAt: null }); await f.worker().sync(7); }
-    expect(f.row().status).toBe('FAILED');
-    for (const key of [...scalarFields.filter(key => key !== 'quality'), ...jsonFields]) expect(f.row()[key]).toBeNull();
-    expect(f.row().quality).toBe('FAILED'); expect(f.row().remotePlanSnapshot).toEqual(pinned);
+    for (const job of jobs) job.api.transcribe = admission;
+    const active = Promise.all(jobs.slice(0, 2).map(job => job.worker().sync(7)));
+    for (let i = 0; i < 20 && admission.mock.calls.length < 2; i++) await new Promise(resolve => setImmediate(resolve));
+    expect(admission).toHaveBeenCalledTimes(2);
+    release(); await active;
+    expect(jobs[0].row().status).toBe('ANALYZING');
+    expect(jobs[1].row()).toMatchObject({ status: 'TRANSCRIBING', transcriptionAttempts: 0, error: 'STT_BUSY' });
+    expect(jobs.slice(2).map(job => job.row().status)).toEqual(['PENDING', 'PENDING']);
+  });
+  it('checkpoints facts before scoring, one stage per lease and survives restart', async () => {
+    const f = fixture(); await f.worker().sync(7);
+    expect(f.row()).toMatchObject({ status: 'ANALYZING', transcriptionAttempts: 1, evaluationAttempts: 0, transcriptDurationSec: 180, transcriptMetadata: { quality: { score: 50 } }, remoteLeaseToken: null });
+    expect(f.api.evaluate).not.toHaveBeenCalled();
+    await f.worker().sync(7);
+    expect(f.row()).toMatchObject({ status: 'READY', score: 65, quality: 'ANALYZED', evaluationAttempts: 1 });
+    expect(f.api.transcribe).toHaveBeenCalledTimes(1);
+    expect(f.api.evaluate.mock.calls[0][0].audio.url).toBe('');
+  });
+  it('score failure retry reuses transcript and pinned prices', async () => {
+    const f = fixture(); await f.worker().sync(7);
+    f.api.evaluate.mockRejectedValueOnce(new CoachingStageError('EVALUATION_FAILED'));
+    await f.worker().sync(7);
+    expect(f.row()).toMatchObject({ status: 'ANALYZING', error: 'EVALUATION_FAILED', evaluationAttempts: 1 });
+    await f.worker().sync(7); expect(f.api.evaluate).toHaveBeenCalledTimes(1);
+    f.set({ remoteNextSyncAt: new Date(0) }); await f.worker().sync(7);
+    expect(f.row().status).toBe('READY'); expect(f.api.transcribe).toHaveBeenCalledTimes(1);
     expect(f.input.references).toHaveBeenCalledTimes(1);
+  });
+  it('busy delays with jitter without consuming failure budget', async () => {
+    const f = fixture(); f.api.transcribe.mockRejectedValue(new CoachingStageError('STT_BUSY'));
+    await f.worker().sync(7);
+    expect(f.row()).toMatchObject({ status: 'TRANSCRIBING', error: 'STT_BUSY', transcriptionAttempts: 0, attempts: 0, remoteSyncAttempts: 0 });
+    expect(f.row().remoteNextSyncAt.getTime()).toBeGreaterThan(Date.now() + 50_000);
+  });
+  it('deduplicates concurrent claims and recovers an interrupted STT lease', async () => {
+    const f = fixture(); f.set({ status: 'TRANSCRIBING', remoteLeaseToken: 'dead', remoteLeaseUntil: new Date(0), transcriptionAttempts: 1 });
+    await Promise.all([f.worker().sync(7), f.worker().sync(7)]);
+    expect(f.api.transcribe).toHaveBeenCalledTimes(1); expect(f.row().transcriptionAttempts).toBe(2);
+  });
+  it('busy never clears an existing checkpoint', async () => {
+    const f = fixture(); await f.worker().sync(7);
+    const transcript = f.row().transcript;
+    f.api.evaluate.mockRejectedValue(new CoachingStageError('STT_BUSY'));
+    await f.worker().sync(7);
+    expect(f.row()).toMatchObject({ transcript, status: 'ANALYZING', evaluationAttempts: 0, transcriptionAttempts: 1 });
+  });
+  it.each(['superseded', 'expired'])('guards %s owner checkpoint writes', async mode => {
+    const f = fixture(); f.api.transcribe.mockImplementation(async (q: any) => { f.set(mode === 'expired' ? { remoteLeaseUntil: new Date(0) } : { remoteLeaseToken: 'new', remoteRequestKey: 'new-generation' }); return f.result(q); });
+    await f.worker().sync(7); expect(f.row().transcript).toBeNull(); expect(f.row().score).toBeUndefined();
+  });
+  it('bounds each stage independently and does not retry terminal rows', async () => {
+    const f = fixture(); await f.worker().sync(7); f.api.evaluate.mockRejectedValue(new Error('secret'));
+    for (let i = 0; i < 3; i++) { f.set({ remoteNextSyncAt: null }); await f.worker().sync(7); }
+    expect(f.row()).toMatchObject({ status: 'FAILED', evaluationAttempts: 3, transcriptionAttempts: 1, error: 'EVALUATION_INVALID_RESULT' });
+    expect(f.row().transcript).toBeTruthy(); await f.worker().sync(7); expect(f.api.evaluate).toHaveBeenCalledTimes(3);
+  });
+  it('manual relaunch recalculates score, preserving facts unless retranscribe is explicit', async () => {
+    const f = fixture(); await f.worker().sync(7); await f.worker().sync(7);
+    const transcript = f.row().transcript; await f.service.relaunch(7);
+    expect(f.row()).toMatchObject({ status: 'PENDING', transcript, score: null, evaluationAttempts: 0 });
+    await f.worker().sync(7); expect(f.api.transcribe).toHaveBeenCalledTimes(1);
+    await f.service.relaunch(7, undefined, true); expect(f.row().transcript).toBeNull();
+    await f.worker().sync(7); expect(f.api.transcribe).toHaveBeenCalledTimes(2);
+  });
+  it('empty speech is checkpointed and evaluated once without fallback', async () => {
+    const f = fixture(); f.api.transcribe.mockImplementation(async (q: any) => ({ ...f.result(q), transcript: '', durationSec: 19.76 }));
+    await f.worker().sync(7); await f.worker().sync(7);
+    expect(f.row()).toMatchObject({ status: 'READY', score: null, quality: 'INEXPLOITABLE' });
+    expect(f.api.transcribe).toHaveBeenCalledTimes(1);
   });
 });

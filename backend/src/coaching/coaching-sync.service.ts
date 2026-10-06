@@ -4,7 +4,7 @@ import { randomUUID } from 'crypto';
 import { isDeepStrictEqual } from 'util';
 import { CoachingQuality, CoachingStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma.service';
-import { CoachingApiClient, ComputeRequest, ComputeResult } from './coaching-api.client';
+import { CoachingApiClient, CoachingStageError, ComputeRequest, ComputeResult } from './coaching-api.client';
 import { CoachingInputService } from './coaching-input.service';
 import { CRM_SOURCE, CRM_TENANT } from './shared/crm-scope';
 
@@ -17,7 +17,7 @@ const equal = (a: unknown, b: unknown) => isDeepStrictEqual(json(a), json(b));
 export class CoachingSyncService {
   private readonly logger = new Logger(CoachingSyncService.name);
   private running = 0;
-  private readonly concurrency = Math.max(1, Number(process.env.COACHING_CONCURRENCY) || 2);
+  private readonly concurrency = Number.isInteger(Number(process.env.COACHING_CONCURRENCY)) && Number(process.env.COACHING_CONCURRENCY) >= 1 && Number(process.env.COACHING_CONCURRENCY) <= 8 ? Number(process.env.COACHING_CONCURRENCY) : 2;
   constructor(private readonly prisma: PrismaService, private readonly api: CoachingApiClient, private readonly input: CoachingInputService) {}
   @Interval(10_000)
   async poll(): Promise<void> {
@@ -37,53 +37,77 @@ export class CoachingSyncService {
     this.running++;
     const token = randomUUID();
     const now = new Date();
-    const where = { id, remoteLeaseToken: token };
+    const owned = () => ({ id, remoteLeaseToken: token, remoteLeaseUntil: { gt: new Date() } });
+    let transcribing = true;
+    let attempt = 0;
     try {
-      const claimed = await this.prisma.coachingAnalysis.updateMany({ where: { id, ...this.due(now) }, data: {
-        status: CoachingStatus.ANALYZING, remoteLeaseToken: token,
+      const candidate = await this.prisma.coachingAnalysis.findUnique({ where: { id } });
+      if (!candidate) return;
+      transcribing = !(typeof candidate.transcript === 'string' && candidate.transcriptDurationSec != null && Number.isFinite(candidate.transcriptDurationSec) && candidate.transcriptDurationSec >= 0);
+      const counter = transcribing ? 'transcriptionAttempts' : 'evaluationAttempts';
+      const claimed = await this.prisma.coachingAnalysis.updateMany({ where: { id, updatedAt: candidate.updatedAt, remoteRequestKey: candidate.remoteRequestKey, ...this.due(now) }, data: {
+        status: transcribing ? CoachingStatus.TRANSCRIBING : CoachingStatus.ANALYZING, remoteLeaseToken: token,
+        stageStartedAt: now, [transcribing ? 'transcriptionStartedAt' : 'evaluationStartedAt']: now,
+        [counter]: { increment: 1 },
         remoteSyncAttempts: { increment: 1 }, attempts: { increment: 1 },
-        remoteLeaseUntil: new Date(now.getTime() + this.api.timeoutMs + 120_000),
+        remoteLeaseUntil: new Date(now.getTime() + (transcribing ? this.api.timeoutMs : this.api.evaluationTimeoutMs) + 120_000),
       } });
       if (!claimed.count) return;
       const row = await this.prisma.coachingAnalysis.findUniqueOrThrow({ where: { id }, include: { salesPlanVersion: true } });
       if (row.remoteLeaseToken !== token) return;
-      if (row.remoteSyncAttempts > 3) throw new Error('Tentatives épuisées après reprise');
+      attempt = row[counter];
+      if (attempt > 3) throw new Error('Tentatives épuisées après reprise');
       if (!row.remoteRequestKey) row.remoteRequestKey = randomUUID();
       const stored = row.remotePlanSnapshot as unknown as Pick<ComputeRequest, 'plan' | 'products'> | null;
       const references = stored?.products && stored?.plan ? stored : await this.input.references(row.salesPlanVersion);
       if (references.plan.contentHash !== row.salesPlanVersion.contentHash || references.plan.markdown !== row.salesPlanVersion.rawMarkdown || references.plan.version !== row.salesPlanVersion.version) throw new Error('Référentiel local incompatible');
-      const attached = await this.prisma.coachingAnalysis.updateMany({ where, data: { remoteRequestKey: row.remoteRequestKey, remotePlanSnapshot: json(references), remoteAnalysisId: null, remoteRelaunch: false } });
+      const attached = await this.prisma.coachingAnalysis.updateMany({ where: owned(), data: { remoteRequestKey: row.remoteRequestKey, remotePlanSnapshot: json(references), remoteAnalysisId: null, remoteRelaunch: false } });
       if (!attached.count) return;
       const request = await this.input.request(row, references);
-      const result = await this.api.compute(request);
+      if (transcribing) {
+        const result = await this.api.transcribe(request);
+        if (result?.requestKey !== request.requestKey || result.source !== CRM_SOURCE || result.tenantId !== CRM_TENANT || result.audioKey !== request.audio.key || typeof result.transcript !== 'string' || !Number.isFinite(result.durationSec) || result.durationSec < 0) throw new Error('Transcript invalide');
+        await this.prisma.coachingAnalysis.updateMany({ where: owned(), data: {
+          status: CoachingStatus.ANALYZING, transcript: result.transcript, transcriptDurationSec: result.durationSec,
+          ...(result.metadata != null ? { transcriptMetadata: json(result.metadata) } : {}),
+          transcriptionCompletedAt: new Date(), stageStartedAt: null,
+          error: null, remoteSyncError: null, nextRetryAt: null, remoteNextSyncAt: null, remoteLeaseToken: null, remoteLeaseUntil: null,
+        } });
+        return;
+      }
+      const result = await this.api.evaluate(request);
       this.validate(result, request);
       const cfg = await this.prisma.coachingConfig.findUnique({ where: { id: 1 } });
       const quality = result.score === null || result.durationSec < (cfg?.minDurationSec ?? 45) || result.transcript.trim().length < (cfg?.minTranscriptChars ?? 400)
         ? CoachingQuality.INEXPLOITABLE : result.durationSec < (cfg?.lowConfidenceBelowSec ?? 90) ? CoachingQuality.LOW_CONFIDENCE : CoachingQuality.ANALYZED;
       const data: Prisma.CoachingAnalysisUpdateManyMutationInput = {
         status: CoachingStatus.READY, quality, transcript: result.transcript, transcriptDurationSec: result.durationSec,
+        evaluationCompletedAt: new Date(), stageStartedAt: null,
         confidence: result.confidence, summary: result.summary, score: quality === CoachingQuality.INEXPLOITABLE ? null : result.score,
         scoreBeforeMalus: result.scoreBeforeMalus, malus: result.malus, remoteResultSnapshot: json(result),
         error: null, nextRetryAt: null, remoteSyncError: null, remoteNextSyncAt: null, remoteLeaseToken: null, remoteLeaseUntil: null,
       };
       for (const key of ['subScores', 'strengths', 'improvements', 'recommendations', 'criterionResults', 'violations', 'detectedProducts', 'productMapping', 'productSheetVersions'] as const) data[key] = json(result[key]);
-      const saved = await this.prisma.coachingAnalysis.updateMany({ where, data });
+      const saved = await this.prisma.coachingAnalysis.updateMany({ where: owned(), data });
       if (saved.count) this.logger.log(`Calcul coaching #${id} enregistré localement`);
-    } catch {
-      const row = await this.prisma.coachingAnalysis.findUnique({ where: { id }, select: { remoteSyncAttempts: true } });
-      const attempts = row?.remoteSyncAttempts ?? 1;
-      const failed = attempts >= 3;
-      const retryAt = failed ? null : new Date(Date.now() + 30_000 * attempts);
-      await this.prisma.coachingAnalysis.updateMany({ where, data: {
-        status: failed ? CoachingStatus.FAILED : CoachingStatus.PENDING,
-        ...(failed ? { quality: CoachingQuality.FAILED } : {}), attempts, remoteSyncAttempts: attempts,
-        error: 'Calcul coaching échoué', remoteSyncError: 'Calcul coaching échoué', nextRetryAt: retryAt, remoteNextSyncAt: retryAt,
+    } catch (error) {
+      const busy = error instanceof CoachingStageError && error.code === 'STT_BUSY';
+      const failed = !busy && (attempt >= 3 || error instanceof CoachingStageError && error.code === 'REQUEST_TOO_LARGE');
+      const code = error instanceof CoachingStageError ? error.code : transcribing ? 'STT_INVALID_RESULT' : 'EVALUATION_INVALID_RESULT';
+      const delay = busy ? (error as CoachingStageError).retryAfterMs : code === 'STT_TIMEOUT' ? 300_000 : 30_000 * Math.max(1, attempt);
+      const retryAt = failed ? null : new Date(Date.now() + delay + Math.floor(Math.random() * 15_000));
+      await this.prisma.coachingAnalysis.updateMany({ where: owned(), data: {
+        status: failed ? CoachingStatus.FAILED : transcribing ? CoachingStatus.TRANSCRIBING : CoachingStatus.ANALYZING,
+        ...(failed ? { quality: CoachingQuality.FAILED } : {}),
+        ...(busy ? { [transcribing ? 'transcriptionAttempts' : 'evaluationAttempts']: { decrement: 1 }, attempts: { decrement: 1 }, remoteSyncAttempts: { decrement: 1 } } : {}),
+        error: code, remoteSyncError: code, nextRetryAt: retryAt, remoteNextSyncAt: retryAt, stageStartedAt: null,
         remoteLeaseToken: null, remoteLeaseUntil: null,
       } });
       this.logger.warn(`Calcul coaching #${id} : ${failed ? 'échec définitif' : 'nouvelle tentative programmée'}`);
     } finally { this.running--; }
   }
   private validate(result: ComputeResult, request: ComputeRequest) {
+    if (result.transcript !== request.transcript?.trim() || result.durationSec !== request.transcriptDurationSec) throw new Error('Checkpoint modifié');
     if (result?.requestKey !== request.requestKey || result.source !== CRM_SOURCE || result.tenantId !== CRM_TENANT || result.audioKey !== request.audio.key || result.status !== 'READY' || !equal(result.plan, request.plan) || !equal(result.products, request.products)) throw new Error('Résultat/référentiel incompatible');
     if (typeof result.transcript !== 'string' || !Number.isFinite(result.durationSec) || result.durationSec < 0) throw new Error('Transcript/durée invalide');
     for (const key of ['score', 'scoreBeforeMalus', 'malus', 'confidence'] as const) if (result[key] !== null && !Number.isFinite(result[key])) throw new Error('Score invalide');

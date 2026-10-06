@@ -60,7 +60,7 @@ describe('relaunch — version de plan', () => {
     expect(created).toHaveLength(1);
     expect(created[0].data.salesPlanVersionId).toBe(active.id);
     expect(created[0].data.status).toBe('PENDING');
-    expect(created[0].data.transcript).toBeUndefined();
+    expect(created[0].data.transcript).toBe(base.transcript);
     expect(created[0].data.manual).toBe(true);
     expect(res.id).toBe(999);
   });
@@ -91,7 +91,7 @@ describe('relaunch — version de plan', () => {
       status: 'READY',
       transcript: 'transcript plus récent',
     });
-    await service.relaunch(1);
+    await service.relaunch(1, undefined, true);
 
     expect(updated).toHaveLength(1);
     expect(updated[0].where.id).toBe(42);

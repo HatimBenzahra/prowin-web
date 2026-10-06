@@ -716,6 +716,14 @@ model CoachingAnalysis {
   productSheetVersions  Json? // ids des versions de fiche utilisées en passe 2 (traçabilité)
   transcript            String?
   transcriptDurationSec Float?
+  transcriptMetadata    Json?
+  transcriptionAttempts Int              @default(0)
+  evaluationAttempts    Int              @default(0)
+  stageStartedAt        DateTime?
+  transcriptionStartedAt DateTime?
+  transcriptionCompletedAt DateTime?
+  evaluationStartedAt   DateTime?
+  evaluationCompletedAt DateTime?
   error                 String?
   attempts              Int              @default(0) // file : nb de tentatives
   nextRetryAt           DateTime? // file : prochaine tentative (backoff)

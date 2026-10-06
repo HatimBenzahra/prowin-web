@@ -40,11 +40,12 @@ function AnalyseIndicator({ status, quality, score }) {
     return (
       <span className="inline-flex items-center gap-1 text-xs font-medium text-blue-600">
         <Loader2 className="h-3 w-3 animate-spin" />
-        En cours
+        {status === 'TRANSCRIBING' ? 'Transcription' : 'Évaluation'}
       </span>
     )
   if (status === 'FAILED')
     return <span className="text-xs font-medium text-red-600">Échec</span>
+  if (status !== 'READY') return <span className="text-xs text-muted-foreground">En cours</span>
   if (quality === 'INEXPLOITABLE')
     return <span className="text-xs text-slate-500">Inexploitable</span>
   // READY

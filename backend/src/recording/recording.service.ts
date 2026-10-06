@@ -30,7 +30,7 @@ import {
   RecordingSegmentDto,
 } from './recording.dto';
 import { PrismaService } from '../prisma.service';
-import { TranscriptionService } from '../transcription/transcription.service';
+import { TranscriptionService, WhisperBusyError } from '../transcription/transcription.service';
 import { SpeechAnalysisService } from '../transcription/speech-analysis.service';
 import { S3DiagnosticsService } from '../s3-diagnostics/s3-diagnostics.service';
 import { CoachingService } from '../coaching/coaching.service';
@@ -1167,6 +1167,17 @@ export class RecordingService {
       }
 
     } catch (error) {
+      if (error instanceof WhisperBusyError) {
+        this.logger.warn('Whisper occupé : enrichissement différé, segments conservés');
+        this.transcription.deferBusy(`enrich:${originalS3Key}`, async () => {
+          const retryDir = fs.mkdtempSync(path.join(os.tmpdir(), 'recording-enrich-'));
+          const retryFile = path.join(retryDir, 'original.mp4');
+          try {
+            if (await this.downloadFromS3(originalS3Key, retryFile)) await this.enrichSegments(originalS3Key, retryFile, segments);
+          } finally { this.cleanupDir(retryDir); }
+        });
+        return;
+      }
       this.logger.error(
         `Enrichment failed for ${originalS3Key}: ${error?.message || error}`,
       );

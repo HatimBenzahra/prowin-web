@@ -215,7 +215,8 @@ export class CoachingResolver {
   relaunchCoachingAnalysis(
     @Args('id', { type: () => Int }) id: number,
     @Context() context: BearerRequestContext,
+    @Args('retranscribe', { type: () => Boolean, nullable: true, defaultValue: false }) retranscribe = false,
   ): Promise<CoachingAnalysisDto> {
-    return this.coaching.relaunch(id, requestBearer(context));
+    return this.coaching.relaunch(id, requestBearer(context), retranscribe);
   }
 }

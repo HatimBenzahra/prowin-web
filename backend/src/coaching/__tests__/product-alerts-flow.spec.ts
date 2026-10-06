@@ -37,12 +37,13 @@ describe('product alerts compute → snapshot → GraphQL → frontend selection
     const computed = { ...await engine.compute(JSON.parse(JSON.stringify(request))), source: 'prowin', tenantId: '' };
     mutate?.(computed);
     let row: any = { id: 9, source: 'prowin', tenantId: '', status: 'PENDING', remoteManaged: true, remoteSyncAttempts: 0, remoteRequestKey: request.requestKey,
+      transcript, transcriptDurationSec: 180, evaluationAttempts: 0, transcriptionAttempts: 0,
       salesPlanVersion: { rawMarkdown: markdown, contentHash: parsed.contentHash, version: 1 }, s3KeyOriginal: request.audio.key, createdAt: new Date(), updatedAt: new Date() };
     const prisma: any = { coachingConfig: { findUnique: async () => null }, coachingAnalysis: {
       findUnique: async () => row, findUniqueOrThrow: async () => row,
-      updateMany: async ({ data }: any) => { row = { ...row, ...data, remoteSyncAttempts: typeof data.remoteSyncAttempts === 'object' ? row.remoteSyncAttempts + 1 : data.remoteSyncAttempts ?? row.remoteSyncAttempts }; return { count: 1 }; },
+       updateMany: async ({ data }: any) => { for (const [key, value] of Object.entries(data)) row[key] = value && typeof value === 'object' && 'increment' in value ? (row[key] ?? 0) + (value as any).increment : value; return { count: 1 }; },
     } };
-    const worker = new CoachingSyncService(prisma, { timeoutMs: 1000, compute: async () => computed } as any, { references: async () => ({ plan: request.plan, products: request.products }), request: async () => request } as any);
+    const worker = new CoachingSyncService(prisma, { timeoutMs: 1000, evaluationTimeoutMs: 1000, evaluate: async () => computed } as any, { references: async () => ({ plan: request.plan, products: request.products }), request: async () => request } as any);
     await worker.sync(9);
     const queries = new CoachingQueryService(prisma, {} as any, {} as any);
     return { row, computed, dto: await queries.getAnalysis(9) };
@@ -65,7 +66,7 @@ describe('product alerts compute → snapshot → GraphQL → frontend selection
   });
   it('rejects malformed alert metadata before persisting a score', async () => {
     const { row } = await flow(r => { r.productAlerts[0].quote = 'Fabricated quotation'; });
-    expect(row.status).toBe('PENDING'); expect(row.remoteResultSnapshot).toBeUndefined();
+    expect(row.status).toBe('ANALYZING'); expect(row.remoteResultSnapshot).toBeUndefined();
   });
   it('reads old snapshots as unknown rather than verified', async () => {
     const { dto } = await flow(r => { delete r.productAlerts; delete r.productVerification; });
@@ -78,7 +79,7 @@ describe('product alerts compute → snapshot → GraphQL → frontend selection
       r.productVerification.products.push({ productSlug: 'unreferenced', productLabel: 'Missing reference', status: 'unavailable', reason: 'Fiche non fournie.' });
       r.productVerification.status = 'partial';
     }, true);
-    expect(row.status).toBe('PENDING'); expect(row.remoteResultSnapshot).toBeUndefined(); expect(row.score).toBeUndefined();
+    expect(row.status).toBe('ANALYZING'); expect(row.remoteResultSnapshot).toBeUndefined(); expect(row.score).toBeUndefined();
   });
   it.each([
     ['unavailable', 'partial'],
@@ -91,7 +92,7 @@ describe('product alerts compute → snapshot → GraphQL → frontend selection
       r.productVerification.status = overall;
       r.productVerification.products[0].status = item;
     }, true);
-    expect(row.status).toBe('PENDING'); expect(row.remoteResultSnapshot).toBeUndefined(); expect(row.score).toBeUndefined();
+    expect(row.status).toBe('ANALYZING'); expect(row.remoteResultSnapshot).toBeUndefined(); expect(row.score).toBeUndefined();
   });
   it.each(['verified', 'unavailable'])('accepts consistent %s aggregation without alerts', async status => {
     const { row } = await flow(r => {

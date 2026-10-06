@@ -26,7 +26,7 @@ export class CoachingInputService {
     };
   }
   async request(row: CoachingAnalysis, references: Pick<ComputeRequest, 'plan' | 'products'>): Promise<ComputeRequest> {
-    const url = row.transcript?.trim() ? '' : await getSignedUrl(this.s3, new GetObjectCommand({ Bucket: process.env.S3_BUCKET_NAME, Key: row.s3KeyOriginal }), { expiresIn: 3600 });
+    const url = typeof row.transcript === 'string' && row.transcriptDurationSec != null ? '' : await getSignedUrl(this.s3, new GetObjectCommand({ Bucket: process.env.S3_BUCKET_NAME, Key: row.s3KeyOriginal }), { expiresIn: 3600 });
     return { ...references, requestKey: row.remoteRequestKey!, audio: { key: row.s3KeyOriginal, url }, statutPorte: row.statutPorte, transcript: row.transcript, transcriptDurationSec: row.transcriptDurationSec };
   }
 }

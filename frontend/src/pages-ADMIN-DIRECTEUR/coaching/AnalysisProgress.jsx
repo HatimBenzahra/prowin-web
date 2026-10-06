@@ -1,14 +1,13 @@
 import { useEffect, useState } from 'react'
-import { AudioLines, Check, ScanSearch, Clock, FileText, X, Gauge } from 'lucide-react'
+import { AudioLines, Check, Clock, FileText, X, Gauge } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import CoachingService from '@/services/coaching/coaching.service'
 
 /**
  * Avancement réel d'une analyse, étape par étape.
  *
- * États backend : PENDING → TRANSCRIBING → MAPPING (passe 0, quelles offres ont
- * été abordées) → ANALYZING (passes 1 et 2 EN PARALLÈLE : plan de vente et
- * conformité produit) → READY.
+ * États backend : PENDING → TRANSCRIBING → checkpoint → ANALYZING → READY.
+ * MAPPING/CONFORMITY restent reconnus pour les résultats historiques.
  *
  * CONFORMITY n'est plus jamais écrit ; il reste dans l'ordre pour que les analyses
  * antérieures, qui le portent en base, s'affichent correctement.
@@ -32,25 +31,16 @@ const STEPS = [
   {
     key: 'TRANSCRIBING',
     label: 'Transcription de l’échange',
-    hint: 'Whisper réécrit l’audio, sur CPU — c’est l’étape la plus longue.',
+    hint: 'Whisper transcrit l’audio. La durée dépend du fichier et de la capacité disponible.',
     icon: FileText,
     tone: 'text-blue-600',
     ring: 'bg-blue-500/10',
     bar: 'bg-blue-500',
   },
   {
-    key: 'MAPPING',
-    label: 'Recherche des offres abordées',
-    hint: 'Quelles offres le commercial a réellement présentées.',
-    icon: ScanSearch,
-    tone: 'text-sky-600',
-    ring: 'bg-sky-500/10',
-    bar: 'bg-sky-500',
-  },
-  {
     key: 'ANALYZING',
     label: 'Analyse face au plan de vente & aux fiches produit',
-    hint: 'Les deux jugements tournent en parallèle.',
+    hint: 'Évaluation du transcript enregistré : offres, plan et conformité produit.',
     icon: Gauge,
     tone: 'text-indigo-600',
     ring: 'bg-indigo-500/10',
@@ -146,6 +136,11 @@ function StepRow({ step, state, hint }) {
 }
 
 export default function AnalysisProgress({ analysis }) {
+  const [now, setNow] = useState(Date.now())
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(timer)
+  }, [])
   const rank = ORDER.indexOf(analysis?.status)
   const failed = analysis?.status === 'FAILED'
   const ready = analysis?.status === 'READY'
@@ -187,7 +182,15 @@ export default function AnalysisProgress({ analysis }) {
           <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-indigo-400 opacity-75" />
           <span className="relative inline-flex h-2 w-2 rounded-full bg-indigo-500" />
         </span>
-        <p className="text-sm font-medium">Analyse en cours</p>
+        <p className="text-sm font-medium">
+          {failed
+            ? 'Analyse échouée'
+            : ready
+              ? 'Analyse terminée'
+              : analysis.nextRetryAt
+                ? 'Étape en attente de reprise'
+                : 'Analyse en cours'}
+        </p>
       </div>
 
       <ul className="space-y-3">
@@ -212,10 +215,17 @@ export default function AnalysisProgress({ analysis }) {
           {analysis.error}
         </p>
       )}
-      {!pending && !failed && (
+      {!pending && !failed && !ready && (
         <p className="mt-3 text-xs text-muted-foreground">
-          Comptez plusieurs minutes : la transcription tourne sur CPU, à peu près au
-          rythme de l’audio.
+          {analysis.stageStartedAt && Number.isFinite(Date.parse(analysis.stageStartedAt))
+            ? `Étape démarrée il y a ${Math.max(0, Math.floor((now - Date.parse(analysis.stageStartedAt)) / 60000))} min. `
+            : ''}
+          {analysis.status === 'TRANSCRIBING'
+            ? `Tentative STT : ${analysis.transcriptionAttempts ?? 0}.`
+            : `Tentative d’évaluation : ${analysis.evaluationAttempts ?? 0}. Transcript conservé.`}
+          {analysis.nextRetryAt && Number.isFinite(Date.parse(analysis.nextRetryAt))
+            ? ` Reprise prévue à ${new Date(analysis.nextRetryAt).toLocaleTimeString()}.`
+            : ''}
         </p>
       )}
     </div>

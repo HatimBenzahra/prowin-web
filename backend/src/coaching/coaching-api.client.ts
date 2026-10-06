@@ -27,11 +27,20 @@ export interface ComputeResult {
   productAlerts?: Array<CoachingProductAlertDto & { contextQuote: string; productEvidence: string; relevanceReason: string }>;
   productVerification?: CoachingProductVerificationDto;
 }
+export interface TranscriptResult {
+  requestKey: string; source: string; tenantId: string; audioKey: string;
+  transcript: string; durationSec: number; metadata?: unknown;
+}
+export class CoachingStageError extends Error {
+  constructor(readonly code: 'STT_BUSY' | 'STT_TIMEOUT' | 'STT_FAILED' | 'EVALUATION_TIMEOUT' | 'EVALUATION_FAILED' | 'REQUEST_TOO_LARGE', readonly retryAfterMs = 60_000) { super(code); }
+}
 @Injectable()
 export class CoachingApiClient {
   private readonly baseUrl = (process.env.COACHING_API_URL ?? '').replace(/\/+$/, '');
   private readonly apiKey = process.env.COACHING_API_KEY ?? '';
-  readonly timeoutMs = Math.max(60_000, Number(process.env.COACHING_COMPUTE_TIMEOUT_MS) || 1_800_000);
+  readonly timeoutMs = this.bounded(process.env.COACHING_TRANSCRIBE_TIMEOUT_MS, 5_880_000, 6_000_000);
+  readonly evaluationTimeoutMs = this.bounded(process.env.COACHING_EVALUATE_TIMEOUT_MS, 600_000, 1_800_000);
+  private bounded(raw: string | undefined, fallback: number, max: number) { const value = Number(raw); return Number.isFinite(value) && value >= 60_000 && value <= max ? value : fallback; }
   isConfigured() { return Boolean(this.baseUrl); }
   async parsePlan(markdown: string): Promise<{ plan: ParsedSalesPlan; rawMarkdown: string; contentHash: string }> {
     return this.parse('plan', markdown);
@@ -53,6 +62,21 @@ export class CoachingApiClient {
     } catch {
       // Axios errors contain signed URLs and auth headers. Never persist/log them.
       throw new ServiceUnavailableException('Calcul coaching indisponible ou délai dépassé');
+    }
+  }
+  transcribe(input: ComputeRequest): Promise<TranscriptResult> { return this.stage('transcribe', input, this.timeoutMs); }
+  evaluate(input: ComputeRequest): Promise<ComputeResult> { return this.stage('evaluate', input, this.evaluationTimeoutMs); }
+  private async stage<T>(stage: 'transcribe' | 'evaluate', input: ComputeRequest, timeout: number): Promise<T> {
+    try { return (await axios.post<T>(`${this.baseUrl}/coaching/${stage}`, input, { headers: { 'x-api-key': this.apiKey, 'x-tenant-id': CRM_TENANT }, timeout })).data; }
+    catch (error) {
+      const status = axios.isAxiosError(error) ? error.response?.status : undefined;
+      if (status === 413) throw new CoachingStageError('REQUEST_TOO_LARGE');
+      if (status === 429 || (status === 503 && axios.isAxiosError(error) && error.response?.data?.message === 'STT_BUSY')) {
+        const seconds = Number(axios.isAxiosError(error) ? error.response?.headers?.['retry-after'] : 60);
+        throw new CoachingStageError('STT_BUSY', Number.isFinite(seconds) ? Math.max(30_000, Math.min(300_000, seconds * 1000)) : 60_000);
+      }
+      const timedOut = status === 504 || axios.isAxiosError(error) && ['ECONNABORTED', 'ETIMEDOUT'].includes(error.code ?? '');
+      throw new CoachingStageError(stage === 'transcribe' ? (timedOut ? 'STT_TIMEOUT' : 'STT_FAILED') : (timedOut ? 'EVALUATION_TIMEOUT' : 'EVALUATION_FAILED'));
     }
   }
 }

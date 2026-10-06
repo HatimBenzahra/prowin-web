@@ -8,7 +8,8 @@ ProWin stores jobs and results in its own `CoachingAnalysis` table. The existing
 
 - `remoteManaged`: enrolled in the local queue;
 - `remoteRequestKey`: local reanalysis generation/correlation key;
-- `remoteSyncAttempts` / `attempts`: calculation attempts, limited to three;
+- `remoteSyncAttempts` / `attempts`: total stage dispatches (legacy counters);
+- `transcriptionAttempts` / `evaluationAttempts`: independent budgets, three each;
 - `remoteNextSyncAt` / `nextRetryAt`: due time/backoff;
 - `remoteLeaseToken` / `remoteLeaseUntil`: conditional local ownership;
 - `remotePlanSnapshot`: pinned `{ plan, products }`, no signed audio URL;
@@ -16,18 +17,25 @@ ProWin stores jobs and results in its own `CoachingAnalysis` table. The existing
 - `remoteAnalysisId`: obsolete, cleared on computation/requeue;
 - `remoteRelaunch`: obsolete, cleared.
 
-Every 10 seconds the worker claims due jobs atomically, signs caller-owned audio,
-calls `/coaching/compute` with a 30-minute default timeout, validates the full
-plan/product snapshots and saves with the lease token condition. An expired lease
-is recovered by a later worker. Transport failure returns the row to PENDING with
-backoff, then FAILED after three attempts. A lost response may recalculate because
-the external engine intentionally has no persistent idempotency store.
+Every 10 seconds the worker claims due jobs atomically. Without a valid transcript
+checkpoint it writes TRANSCRIBING, signs caller-owned audio and calls
+`/coaching/transcribe`. It persists transcript, measured duration and optional word/
+quality metadata, then releases the lease. A later claim writes ANALYZING and calls
+`/coaching/evaluate` with those facts; this endpoint never falls back to STT.
+Writes require both the current token and an unexpired lease; claims also compare
+the observed generation and updatedAt. Restart recovery resumes the unfinished
+stage. STT_BUSY schedules a 60–75s jittered retry without consuming the failure
+budget. STT timeout uses a 5-minute cooldown; ordinary stage errors back off 30s
+per attempt plus jitter. Three actual attempts exhaust only that stage's budget.
+A lost STT response can still require retranscription after capacity is released;
+neither external service persists output or provides durable idempotency.
 
 Quality thresholds and official score masking are local. Historical unmanaged
 analyses remain readable and are never automatically recomputed. Manual launch
 and bulk launch actually requeue READY/FAILED targets, preserving local IDs; an
 already pending/running target is a no-op and excluded from the bulk count.
-Explicit relaunch clears transcript. Changing plan keeps the old reference result
+Relaunch preserves transcript facts by default; `retranscribe: true` on
+`relaunchCoachingAnalysis` explicitly discards them. Changing plan keeps the old reference result
 and schedules the active-plan target. Mutations return scheduling, not completion.
 
 Manual requeue atomically clears every generation output (summary, scores,
@@ -66,8 +74,28 @@ uses pinned inputs; historical jobs missing inputs refresh through integration w
 Only validated parent `prix_base` amounts are certified; nonempty/unidentified
 `formules` leave prices unavailable rather than claiming a verified variant grid.
 
-Configuration: `backend/.env.example`. No remote database migration is needed.
-The existing local tracking migration is retained; no applied migration was edited.
+Configuration: `backend/.env.example`. The additive local migration
+`20261001120000_coaching_stage_checkpoints` is required before this worker starts.
+It has only nullable facts/timestamps and default-zero counters, with no rewrites
+to applied migrations. The Prisma schema was validated and the client generated
+locally; SQL application and upgrade validation against a DB are deferred.
+STT budget is ffprobe duration × multiplier (at least 1.5) + 10-minute margin,
+bounded by 20–90 minutes by default. Unknown duration gets the 90-minute ceiling.
+For 68m45s the ceiling is 90m; for 40m05s the budget is 70m07.5s. These are deadlines,
+not predictions. Caller STT timeout is 98m including up to 5m download + 1m probe;
+lease is another 2m longer. Evaluation has its own 10m timeout and 12m lease.
+Signed URLs remain fresh 1h read URLs: download occurs first, so their expiry does
+not limit subsequent CPU processing. Invalid/nonfinite/out-of-range numeric config
+falls back to bounded defaults. Lowering caller budgets independently can truncate
+the upstream response; configure them together.
+
+Whisper admission protects all legacy routes and consumers, with no hidden waiting
+queue. Cancellation retains capacity until native thread completion. Recording
+extraction/enrichment distinguish busy from empty speech, preserve existing rows,
+and schedule a deduplicated in-memory delayed retry, re-downloading after temp cleanup.
+These auxiliary recording retries are best effort across process restarts; only the
+coaching queue is DB-durable. SpeechAnalysis uses ffmpeg silencedetect rather than
+Whisper, so its PENDING/READY/FAILED processing is independent of STT capacity.
 
 Automated tests use mocked local DB delegates and HTTP calculations. Run `npm test -- --runInBand coaching` and
 `npm run build` from `backend/`.

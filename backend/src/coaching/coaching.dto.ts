@@ -78,6 +78,14 @@ export class CoachingProductVerificationDto {
 
 @ObjectType()
 export class CoachingAnalysisDto {
+  @Field(() => Int, { nullable: true }) transcriptionAttempts?: number;
+  @Field(() => Int, { nullable: true }) evaluationAttempts?: number;
+  @Field(() => String, { nullable: true }) stageStartedAt?: string | null;
+  @Field(() => String, { nullable: true }) transcriptionStartedAt?: string | null;
+  @Field(() => String, { nullable: true }) transcriptionCompletedAt?: string | null;
+  @Field(() => String, { nullable: true }) evaluationStartedAt?: string | null;
+  @Field(() => String, { nullable: true }) evaluationCompletedAt?: string | null;
+  @Field(() => String, { nullable: true }) nextRetryAt?: string | null;
   @Field(() => Int) id: number;
   @Field(() => Int, { nullable: true }) recordingId?: number | null;
   @Field(() => Int, { nullable: true }) porteId?: number | null;

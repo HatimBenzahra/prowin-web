@@ -200,7 +200,7 @@ export class CoachingService {
    * Rejoue l'audio sur le plan ACTIF sans toucher la ligne d'origine, qui reste
    * l'historique de ce qu'a valu cet échange sur son propre référentiel.
    */
-  async relaunch(id: number, userToken?: string): Promise<CoachingAnalysisDto> {
+  async relaunch(id: number, userToken?: string, retranscribe = false): Promise<CoachingAnalysisDto> {
     const analysis = await this.prisma.coachingAnalysis.findUnique({
       where: { id },
     });
@@ -209,11 +209,11 @@ export class CoachingService {
     const version = await this.salesPlans.getActiveVersion();
     if (!version) throw new NotFoundException('Aucun plan de vente actif');
 
-    // Explicit reanalysis always decodes audio again, including when changing plan.
+    // A score retry reuses checkpointed audio facts unless explicitly requested.
 
     // Déjà sur le plan actif : simple remise en file.
     if (analysis.salesPlanVersionId === version.id) {
-      await this.requeue(analysis, version, userToken);
+      await this.requeue(analysis, version, userToken, retranscribe);
       return this.query.getAnalysis(id);
     }
 
@@ -226,7 +226,7 @@ export class CoachingService {
       },
     });
     if (existing) {
-      await this.requeue(existing, version, userToken);
+      await this.requeue(existing, version, userToken, retranscribe);
       return this.query.getAnalysis(existing.id);
     }
     const created = await this.createLocal({
@@ -234,19 +234,24 @@ export class CoachingService {
       userId: analysis.userId, managerId: analysis.managerId,
       s3KeyOriginal: analysis.s3KeyOriginal, statutPorte: analysis.statutPorte,
       salesPlanVersionId: version.id, manual: true,
+      ...(!retranscribe ? { transcript: analysis.transcript, transcriptDurationSec: analysis.transcriptDurationSec } : {}),
+      ...(!retranscribe && analysis.transcriptMetadata != null ? { transcriptMetadata: analysis.transcriptMetadata as Prisma.InputJsonValue } : {}),
+      ...(!retranscribe ? { transcriptionStartedAt: analysis.transcriptionStartedAt, transcriptionCompletedAt: analysis.transcriptionCompletedAt } : {}),
     }, version, userToken);
     this.logger.log(`Analyse ${id} programmée sur le plan actif v${version.version} → analyse locale ${created.id}`);
     return this.query.getAnalysis(created.id);
   }
 
-  private requeueData() {
+  private requeueData(retranscribe = false) {
     return {
       status: CoachingStatus.PENDING,
       error: null,
       attempts: 0,
       nextRetryAt: null,
-      transcript: null,
-      transcriptDurationSec: null,
+      ...(retranscribe ? { transcript: null, transcriptDurationSec: null, transcriptMetadata: Prisma.DbNull } : {}),
+      transcriptionAttempts: 0, evaluationAttempts: 0, stageStartedAt: null,
+      ...(retranscribe ? { transcriptionStartedAt: null, transcriptionCompletedAt: null } : {}),
+      evaluationStartedAt: null, evaluationCompletedAt: null,
       quality: null,
       score: null,
       confidence: null,
@@ -279,14 +284,14 @@ export class CoachingService {
 
   }
 
-  private async requeue(analysis: { id: number; status: CoachingStatus; updatedAt: Date; remoteRequestKey: string | null; remoteManaged: boolean }, version: SalesPlanVersion, userToken?: string): Promise<boolean> {
+  private async requeue(analysis: { id: number; status: CoachingStatus; updatedAt: Date; remoteRequestKey: string | null; remoteManaged: boolean }, version: SalesPlanVersion, userToken?: string, retranscribe = false): Promise<boolean> {
     if (analysis.remoteManaged && analysis.status !== CoachingStatus.READY && analysis.status !== CoachingStatus.FAILED) return false;
     const references = await this.input.references(version, userToken);
     const updated = await this.prisma.coachingAnalysis.updateMany({
       where: { id: analysis.id, source: CRM_SOURCE, tenantId: CRM_TENANT,
         ...(analysis.remoteManaged ? { status: { in: [CoachingStatus.READY, CoachingStatus.FAILED] } } : { remoteManaged: false }),
         updatedAt: analysis.updatedAt, remoteRequestKey: analysis.remoteRequestKey },
-      data: { ...this.requeueData(), remotePlanSnapshot: this.referenceJson(references) },
+      data: { ...this.requeueData(retranscribe), remotePlanSnapshot: this.referenceJson(references) },
     });
     return updated.count === 1;
   }
@@ -307,6 +312,9 @@ export class CoachingService {
     manual: boolean;
     transcript?: string | null;
     transcriptDurationSec?: number | null;
+    transcriptMetadata?: Prisma.InputJsonValue;
+    transcriptionStartedAt?: Date | null;
+    transcriptionCompletedAt?: Date | null;
   }, version: SalesPlanVersion, userToken?: string) {
     const references = await this.input.references(version, userToken);
     const where = {

@@ -27,6 +27,8 @@ const COACHING_FIELDS = `
   subScores { key label weight applicable score }
   criterionResults { stepKey criterionKey title status maxPoints score weightStep evidence comment }
   transcriptDurationSec
+  transcriptionAttempts evaluationAttempts stageStartedAt nextRetryAt
+  transcriptionStartedAt transcriptionCompletedAt evaluationStartedAt evaluationCompletedAt
   error
   planSlug
   planVersion
@@ -57,8 +59,8 @@ const LIST_ANALYSES = `
   }
 `
 const RELAUNCH = `
-  mutation RelaunchCoachingAnalysis($id: Int!) {
-    relaunchCoachingAnalysis(id: $id) { ${COACHING_FIELDS} }
+  mutation RelaunchCoachingAnalysis($id: Int!, $retranscribe: Boolean = false) {
+    relaunchCoachingAnalysis(id: $id, retranscribe: $retranscribe) { ${COACHING_FIELDS} }
   }
 `
 const ACTIVE_PLAN = `
@@ -247,8 +249,8 @@ export class CoachingService {
     }
   }
 
-  static async relaunch(id: number): Promise<any> {
-    const data = await graphqlClient.request(RELAUNCH, { id })
+  static async relaunch(id: number, retranscribe = false): Promise<any> {
+    const data = await graphqlClient.request(RELAUNCH, { id, retranscribe })
     return data.relaunchCoachingAnalysis
   }
 
