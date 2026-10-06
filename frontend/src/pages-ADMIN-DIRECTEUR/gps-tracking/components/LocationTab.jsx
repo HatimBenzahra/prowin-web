@@ -1594,7 +1594,9 @@ export default function LocationTab({
                 properties: {},
               }
               return (
-                <Source id={`route-${routeSafeId}`} type="geojson" data={geoJson}>
+                // react-map-gl refuse qu'une source change d'id : la key la recrée
+                // (avec ses couches) quand l'acteur sélectionné change.
+                <Source key={routeSafeId} id={`route-${routeSafeId}`} type="geojson" data={geoJson}>
                   <Layer
                     id={`route-shadow-${routeSafeId}`}
                     type="line"
