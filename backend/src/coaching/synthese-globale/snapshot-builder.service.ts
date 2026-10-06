@@ -6,8 +6,14 @@ import { calculateStatsForStatus } from '../../porte/porte-status.constants';
 
 type SubjectType = 'commercial' | 'manager';
 
-// Plafond de sécurité pour la fenêtre de contexte ; l'agrégat, lui, couvre 100 %.
-const SESSIONS_DETAIL_MAX = 80;
+// Les sessions détaillent les analyses une par une ; l'agrégat, lui, couvre 100 %.
+const SESSIONS_DETAIL_MAX = 80; // sessions listées au plus
+const SESSIONS_DETAILLEES = 15; // les plus récentes portent leurs critères
+const PREUVES_PAR_CRITERE = 2;
+// Budget de la liste des sessions dans le prompt (~3 caractères par token) : avec le
+// reste du snapshot, le prompt système et la réponse, il tient dans le contexte du
+// modèle (64k tokens). Au-delà, le détail se réduit au lieu de faire échouer l'appel.
+export const SESSIONS_BUDGET_CHARS = 90_000;
 const MAX_JOURS = 90; // plafond dur de la ventilation "activité par jour"
 const RECAP_MAX_COMMERCIAUX = 30; // plafond du récap équipe (manager)
 
@@ -393,33 +399,35 @@ export class SnapshotBuilderService {
       .sort((a, b) => a.s.localeCompare(b.s));
     const direction = trendDirection(scoreParSemaine.map((x) => x.score));
 
-    const sessions = analyses.slice(0, SESSIONS_DETAIL_MAX).map((a) => ({
-      date: recDateOf(a).toISOString().slice(0, 10),
-      // Pour un manager, rattache la session à son commercial (le LLM peut citer
-      // l'individu). Champ omis pour un commercial (teamNames vide).
-      ...(subjectType === 'manager'
-        ? { commercial: teamNames.get(a.userId as number) ?? null }
-        : {}),
-      statutPorte: a.statutPorte ?? null,
-      score: typeof a.score === 'number' ? Math.round(a.score) : null,
-      dureeSec:
-        typeof a.transcriptDurationSec === 'number'
-          ? Math.round(a.transcriptDurationSec)
-          : null,
-      resume: a.summary ?? null,
-      forces: (a.strengths as string[]) ?? [],
-      axes: (a.improvements as string[]) ?? [],
-      criteres: ((a.criterionResults as any[]) ?? [])
-        .filter((c) => c.status !== 'non_applicable')
-        .map((c) => ({
-          titre: c.title,
-          verdict: c.status,
-          commentaire: c.comment ?? null,
-          // Citations verbatim de ce que le commercial a dit (matière première
-          // du coaching : ce qu'il dit / ne dit pas vs le plan de vente).
-          preuves: Array.isArray(c.evidence) ? c.evidence : [],
-        })),
-    }));
+    const sessions = fitSessions(
+      analyses.slice(0, SESSIONS_DETAIL_MAX).map((a) => ({
+        date: recDateOf(a).toISOString().slice(0, 10),
+        // Pour un manager, rattache la session à son commercial (le LLM peut citer
+        // l'individu). Champ omis pour un commercial (teamNames vide).
+        ...(subjectType === 'manager'
+          ? { commercial: teamNames.get(a.userId as number) ?? null }
+          : {}),
+        statutPorte: a.statutPorte ?? null,
+        score: typeof a.score === 'number' ? Math.round(a.score) : null,
+        dureeSec:
+          typeof a.transcriptDurationSec === 'number'
+            ? Math.round(a.transcriptDurationSec)
+            : null,
+        resume: a.summary ?? null,
+        forces: (a.strengths as string[]) ?? [],
+        axes: (a.improvements as string[]) ?? [],
+        criteres: ((a.criterionResults as any[]) ?? [])
+          .filter((c) => c.status !== 'non_applicable')
+          .map((c) => ({
+            titre: c.title,
+            verdict: c.status,
+            commentaire: c.comment ?? null,
+            // Citations verbatim de ce que le commercial a dit (matière première
+            // du coaching : ce qu'il dit / ne dit pas vs le plan de vente).
+            preuves: Array.isArray(c.evidence) ? c.evidence.slice(0, PREUVES_PAR_CRITERE) : [],
+          })),
+      })),
+    );
 
     // --- Contrats : `points` = valeur de l'offre, pour juger le mix par VALEUR ---
     const parTypeMap = new Map<
@@ -665,4 +673,28 @@ function parseRecordingDate(s3Key: string | null | undefined): Date | null {
 function extractVille(adresse: string): string | null {
   const m = /(\d{5})\s+([A-Za-zÀ-ÿ'\- ]+)$/.exec((adresse ?? '').trim());
   return m ? `${m[1]} ${m[2].trim()}` : null;
+}
+
+type Session = { criteres?: unknown[]; forces?: unknown[]; axes?: unknown[] } & Record<string, unknown>;
+
+/**
+ * Tient les sessions dans le budget du prompt, du plus récent au plus ancien : les
+ * plus récentes gardent leurs critères, les autres leur seul résumé. Si cela dépasse
+ * encore, moins de sessions sont détaillées, puis les plus anciennes sont retirées.
+ */
+export function fitSessions<T extends Session>(sessions: T[], budget = SESSIONS_BUDGET_CHARS): T[] {
+  const summary = (s: T): T => {
+    const { criteres: _c, forces: _f, axes: _a, ...rest } = s;
+    return rest as T;
+  };
+  let detailed = Math.min(SESSIONS_DETAILLEES, sessions.length);
+  let kept = sessions.length;
+  const build = () => sessions.slice(0, kept).map((s, i) => (i < detailed ? s : summary(s)));
+  let result = build();
+  while (JSON.stringify(result).length > budget && kept > 0) {
+    if (detailed > 0) detailed = Math.floor(detailed / 2);
+    else kept--;
+    result = build();
+  }
+  return result;
 }

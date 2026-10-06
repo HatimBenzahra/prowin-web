@@ -1,3 +1,4 @@
+import axios from 'axios';
 import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { CRM_SOURCE, CRM_TENANT } from '../shared/crm-scope';
 import { Cron, CronExpression } from '@nestjs/schedule';
@@ -117,11 +118,12 @@ export class SynthesisService {
       });
       this.logger.log(`Synthèse ${subjectKey} générée (${snapshot.coaching.nbAnalyses} analyses)`);
     } catch (e) {
-      this.logger.error(`Synthèse ${subjectKey} échouée: ${(e as Error).message}`);
+      const error = describeFailure(e);
+      this.logger.error(`Synthèse ${subjectKey} échouée: ${error}`);
       await this.prisma.coachingSynthesis
         .update({
           where: { subjectKey },
-          data: { status: CoachingStatus.FAILED, error: (e as Error).message },
+          data: { status: CoachingStatus.FAILED, error },
         })
         .catch(() => undefined);
     }
@@ -357,4 +359,14 @@ export function synthesisScheduleLabel(
     return `Chaque ${WEEKDAYS_FR[weekday] ?? 'jour'} à ${hhmm}`;
   }
   return `Chaque jour à ${hhmm}`;
+}
+
+/** Ce que l'écran affiche d'un échec : une cause compréhensible, pas un statut HTTP. */
+export function describeFailure(error: unknown): string {
+  if (axios.isAxiosError(error)) {
+    if (error.response?.status === 400) return 'Le modèle a refusé la demande (contenu trop volumineux ou invalide).';
+    if (error.response) return `Le modèle a répondu une erreur (${error.response.status}).`;
+    return 'Le modèle est injoignable ou n\'a pas répondu à temps.';
+  }
+  return (error as Error).message;
 }
