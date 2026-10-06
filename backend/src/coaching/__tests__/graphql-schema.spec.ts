@@ -84,6 +84,8 @@ describe('schéma GraphQL coaching', () => {
     'importProductSheet(markdown: String!): ProductSheetDto!',
     'activateProductSheetVersion(id: Int!): ProductSheetDto!',
     'deactivateProductSheet(slug: String!): Boolean!',
+    'salesPlanVersion(id: Int!): SalesPlanVersionDetailDto!',
+    'productSheetVersion(id: Int!): ProductSheetVersionDetailDto!',
   ])('expose %s', (operation) => {
     expect(sdl).toContain(operation);
   });

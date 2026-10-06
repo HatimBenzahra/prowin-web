@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { History, Loader2, Upload } from 'lucide-react'
+import { ArrowLeft, Download, Eye, History, Loader2, Upload } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -9,12 +9,20 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useErrorToast } from '@/hooks/utils/ui/use-error-toast'
 import { formatDateTime } from './CoachingComponents'
 
 /**
  * Administration des référentiels du coaching (plan de vente, fiches produit) :
- * import d'un markdown, historique des versions, réactivation. Les écritures sont
+ * import d'un markdown, historique et lecture des versions, réactivation. Les écritures sont
  * réservées à l'admin par le serveur ; l'écran se contente de masquer les boutons.
  */
 
@@ -136,87 +144,161 @@ export function ReferenceImportButton({ label, title, description, onImport, onI
   )
 }
 
-/** Versions d'un référentiel, la plus récente d'abord, réactivables par l'admin. */
-export function ReferenceVersionHistory({
+/** Télécharge le markdown d'une version, pour la corriger puis la réimporter. */
+function downloadMarkdown(fileName, markdown) {
+  const url = URL.createObjectURL(new Blob([markdown], { type: 'text/markdown;charset=utf-8' }))
+  const link = Object.assign(document.createElement('a'), { href: url, download: fileName })
+  // Attaché au document le temps du clic : certains navigateurs l'exigent.
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  URL.revokeObjectURL(url)
+}
+
+/**
+ * Historique d'un référentiel dans un panneau latéral : la liste des versions, puis
+ * la lecture de l'une d'elles (rendu structuré ou markdown source) avant de la
+ * réactiver. La page, elle, ne montre que la version active.
+ */
+export function ReferenceHistorySheet({
+  title,
   loadVersions,
+  loadVersion,
+  renderContent,
+  fileName,
   onActivate,
   canEdit,
   activationDescription,
   refreshKey,
   onActivated,
 }) {
+  const [open, setOpen] = useState(false)
   const [versions, setVersions] = useState([])
-  const [loading, setLoading] = useState(true)
+  const [detail, setDetail] = useState(null)
+  const [loadingId, setLoadingId] = useState(null)
+  const [view, setView] = useState('lecture')
   const [target, setTarget] = useState(null)
   const [confirming, setConfirming] = useState(false)
   const { showError, showSuccess } = useErrorToast()
 
   useEffect(() => {
     let active = true
-    setLoading(true)
     loadVersions()
       .then(rows => active && setVersions(rows))
-      .catch(error => active && showError(error, 'ReferenceVersionHistory.load'))
-      .finally(() => active && setLoading(false))
+      .catch(error => active && showError(error, 'ReferenceHistorySheet.load'))
     return () => {
       active = false
     }
   }, [loadVersions, refreshKey, showError])
 
+  const openVersion = async version => {
+    setLoadingId(version.id)
+    try {
+      setDetail(await loadVersion(version.id))
+      setView('lecture')
+    } catch (error) {
+      showError(error, 'ReferenceHistorySheet.open')
+    } finally {
+      setLoadingId(null)
+    }
+  }
+
+  const askActivation = version => {
+    setTarget(version)
+    setConfirming(true)
+  }
+
   const activate = async () => {
     const result = await onActivate(target.id)
     showSuccess(`Version ${target.version} réactivée.`)
+    setDetail(null)
     onActivated?.(result)
   }
 
-  if (loading) {
-    return (
-      <div className="flex items-center gap-2 px-4 py-3 text-sm text-muted-foreground">
-        <Loader2 className="h-4 w-4 animate-spin" />
-        Chargement de l'historique…
-      </div>
-    )
+  const changeOpen = next => {
+    setOpen(next)
+    if (!next) setDetail(null)
   }
 
   return (
-    <div className="px-4 py-3">
-      <h4 className="mb-2 flex items-center gap-1.5 text-sm font-semibold">
-        <History className="h-4 w-4" />
-        Historique des versions
-      </h4>
-      <ul className="divide-y divide-dashed divide-border/60 text-sm">
-        {versions.map(v => (
-          <li
-            key={v.id}
-            className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 py-2"
-          >
-            <span className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
-              <span className="font-mono font-medium">v{v.version}</span>
-              <span className="text-muted-foreground">{formatDateTime(new Date(v.createdAt))}</span>
-              <span className="truncate text-muted-foreground">{v.importedBy || '—'}</span>
-              <span className="font-mono text-xs text-muted-foreground/70">{v.contentHash}</span>
-            </span>
-            {v.isActive ? (
-              <span className="rounded-full bg-primary/10 px-2.5 py-0.5 font-mono text-xs text-primary">
-                active
-              </span>
+    <>
+      <Button size="sm" variant="outline" onClick={() => setOpen(true)}>
+        <History />
+        Historique · {versions.length}
+      </Button>
+      <Sheet open={open} onOpenChange={changeOpen}>
+        <SheetContent className="w-full gap-0 sm:max-w-2xl">
+          <SheetHeader className="border-b">
+            <SheetTitle>{title}</SheetTitle>
+            <SheetDescription>
+              {detail
+                ? `Version ${detail.version} — consultation`
+                : `${versions.length} version${versions.length > 1 ? 's' : ''}, la plus récente en premier`}
+            </SheetDescription>
+          </SheetHeader>
+
+          <div className="min-h-0 flex-1 overflow-y-auto p-4">
+            {detail ? (
+              <VersionDetail
+                detail={detail}
+                view={view}
+                onViewChange={setView}
+                renderContent={renderContent}
+                onBack={() => setDetail(null)}
+                onDownload={() => downloadMarkdown(fileName(detail), detail.rawMarkdown)}
+                onActivate={canEdit && !detail.isActive ? () => askActivation(detail) : null}
+              />
             ) : (
-              canEdit && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => {
-                    setTarget(v)
-                    setConfirming(true)
-                  }}
-                >
-                  Réactiver
-                </Button>
-              )
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b text-left text-xs text-muted-foreground">
+                    <th className="py-2 pr-3 font-medium">Version</th>
+                    <th className="py-2 pr-3 font-medium">Date</th>
+                    <th className="py-2 pr-3 font-medium">Importé par</th>
+                    <th className="py-2" />
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-dashed divide-border/60">
+                  {versions.map(v => (
+                    <tr key={v.id}>
+                      <td className="py-2 pr-3">
+                        <span className="font-mono font-medium">v{v.version}</span>
+                        {v.isActive && (
+                          <span className="ml-2 rounded-full bg-primary/10 px-2 py-0.5 font-mono text-xs text-primary">
+                            active
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-2 pr-3 text-muted-foreground">
+                        {formatDateTime(new Date(v.createdAt))}
+                      </td>
+                      <td className="max-w-[12rem] truncate py-2 pr-3 text-muted-foreground">
+                        {v.importedBy || '—'}
+                      </td>
+                      <td className="py-2 text-right whitespace-nowrap">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          disabled={loadingId !== null}
+                          onClick={() => openVersion(v)}
+                        >
+                          {loadingId === v.id ? <Loader2 className="animate-spin" /> : <Eye />}
+                          Voir
+                        </Button>
+                        {canEdit && !v.isActive && (
+                          <Button size="sm" variant="outline" onClick={() => askActivation(v)}>
+                            Réactiver
+                          </Button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             )}
-          </li>
-        ))}
-      </ul>
+          </div>
+        </SheetContent>
+      </Sheet>
       <ConfirmDialog
         open={confirming}
         onOpenChange={setConfirming}
@@ -225,6 +307,70 @@ export function ReferenceVersionHistory({
         confirmLabel="Réactiver"
         onConfirm={activate}
       />
+    </>
+  )
+}
+
+/** Une version ouverte : métadonnées, contenu lisible ou markdown source, actions. */
+function VersionDetail({
+  detail,
+  view,
+  onViewChange,
+  renderContent,
+  onBack,
+  onDownload,
+  onActivate,
+}) {
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <Button size="sm" variant="ghost" onClick={onBack}>
+          <ArrowLeft />
+          Historique
+        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button size="sm" variant="outline" onClick={onDownload}>
+            <Download />
+            Télécharger le .md
+          </Button>
+          {onActivate && (
+            <Button size="sm" onClick={onActivate}>
+              Réactiver cette version
+            </Button>
+          )}
+        </div>
+      </div>
+
+      <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 rounded-lg bg-muted/40 px-4 py-3 text-sm">
+        <dt className="text-muted-foreground">Version</dt>
+        <dd>
+          <span className="font-mono font-medium">v{detail.version}</span>{' '}
+          <span className="text-muted-foreground">
+            {detail.isActive ? '· active' : '· ancienne version'}
+          </span>
+        </dd>
+        <dt className="text-muted-foreground">Importée le</dt>
+        <dd>{formatDateTime(new Date(detail.createdAt))}</dd>
+        <dt className="text-muted-foreground">Par</dt>
+        <dd>{detail.importedBy || '—'}</dd>
+        <dt className="text-muted-foreground">Empreinte</dt>
+        <dd className="font-mono text-xs leading-5">{detail.contentHash}</dd>
+      </dl>
+
+      <Tabs value={view} onValueChange={onViewChange}>
+        <TabsList>
+          <TabsTrigger value="lecture">Lecture</TabsTrigger>
+          <TabsTrigger value="markdown">Markdown</TabsTrigger>
+        </TabsList>
+        <TabsContent value="lecture" className="pt-3">
+          {renderContent(detail)}
+        </TabsContent>
+        <TabsContent value="markdown" className="pt-3">
+          <pre className="max-h-[60vh] overflow-auto rounded-lg border border-border/60 bg-muted/30 p-3 font-mono text-xs leading-relaxed whitespace-pre-wrap break-words">
+            {detail.rawMarkdown}
+          </pre>
+        </TabsContent>
+      </Tabs>
     </div>
   )
 }

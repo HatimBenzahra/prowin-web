@@ -94,6 +94,13 @@ describe('administration des référentiels', () => {
     expect(f.table.updateMany).not.toHaveBeenCalled();
   });
 
+  it("ne lit pas la version d'un autre tenant", async () => {
+    const rows = [{ ...row(1, true), tenantId: 'autre-organisation' }];
+    await expect(
+      new SalesPlanService(versions(rows).prisma, {} as any).getVersion(1),
+    ).rejects.toBeInstanceOf(NotFoundException);
+  });
+
   it('retire une fiche active, et signale une fiche déjà retirée', async () => {
     const rows = [row(1, true)];
     const service = new ProductSheetService(versions(rows).prisma, {} as any);
@@ -189,6 +196,8 @@ describe('droits sur les référentiels', () => {
     'coachingProductSheets',
     'salesPlanVersions',
     'productSheetVersions',
+    'salesPlanVersion',
+    'productSheetVersion',
   ] as const)('%s reste consultable par le directeur', (method) =>
     expect(roles(method)).toEqual(['admin', 'directeur']),
   );

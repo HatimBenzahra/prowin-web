@@ -24,7 +24,9 @@ import {
   PaginatedCoachingManagement,
   CoachableSubjectDto,
   ProductSheetDto,
+  ProductSheetVersionDetailDto,
   ReferenceVersionDto,
+  SalesPlanVersionDetailDto,
 } from './coaching.dto';
 import { SalesPlanVersion, ProductSheetVersion } from '@prisma/client';
 
@@ -121,7 +123,7 @@ export class CoachingResolver {
   async salesPlanVersions(
     @Args('slug') slug: string,
   ): Promise<ReferenceVersionDto[]> {
-    return (await this.salesPlans.listVersions(slug)).map(toVersionDto);
+    return (await this.salesPlans.listVersions(slug)).map(versionMeta);
   }
 
   @Query(() => [ReferenceVersionDto])
@@ -129,7 +131,29 @@ export class CoachingResolver {
   async productSheetVersions(
     @Args('slug') slug: string,
   ): Promise<ReferenceVersionDto[]> {
-    return (await this.productSheets.listVersions(slug)).map(toVersionDto);
+    return (await this.productSheets.listVersions(slug)).map(versionMeta);
+  }
+
+  @Query(() => SalesPlanVersionDetailDto)
+  @Roles('admin', 'directeur')
+  async salesPlanVersion(
+    @Args('id', { type: () => Int }) id: number,
+  ): Promise<SalesPlanVersionDetailDto> {
+    const row = await this.salesPlans.getVersion(id);
+    return {
+      ...this.toPlanDto(row),
+      ...versionMeta(row),
+      rawMarkdown: row.rawMarkdown,
+    };
+  }
+
+  @Query(() => ProductSheetVersionDetailDto)
+  @Roles('admin', 'directeur')
+  async productSheetVersion(
+    @Args('id', { type: () => Int }) id: number,
+  ): Promise<ProductSheetVersionDetailDto> {
+    const row = await this.productSheets.getVersion(id);
+    return { ...this.toSheetDto(row), ...versionMeta(row) };
   }
 
   /** Publie une nouvelle version du plan : les prochaines analyses seront notées avec. */
@@ -301,11 +325,19 @@ export class CoachingResolver {
   }
 }
 
-function toVersionDto(
-  row: Pick<
-    SalesPlanVersion,
-    'id' | 'version' | 'createdAt' | 'importedBy' | 'isActive' | 'contentHash'
-  >,
-): ReferenceVersionDto {
-  return { ...row, contentHash: row.contentHash.slice(0, SHORT_HASH) };
+type VersionRow = Pick<
+  SalesPlanVersion,
+  'id' | 'version' | 'createdAt' | 'importedBy' | 'isActive' | 'contentHash'
+>;
+
+/** Métadonnées d'une version, hash raccourci : de quoi la reconnaître. */
+function versionMeta(row: VersionRow) {
+  return {
+    id: row.id,
+    version: row.version,
+    createdAt: row.createdAt,
+    importedBy: row.importedBy,
+    isActive: row.isActive,
+    contentHash: row.contentHash.slice(0, SHORT_HASH),
+  };
 }

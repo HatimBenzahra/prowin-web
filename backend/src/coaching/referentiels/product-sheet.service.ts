@@ -97,6 +97,13 @@ export class ProductSheetService {
     });
   }
 
+  /** Une version précise, contenu compris, pour la consulter avant de la réactiver. */
+  async getVersion(id: number) {
+    const row = await this.prisma.productSheetVersion.findFirst({ where: { id, tenantId: CRM_TENANT } });
+    if (!row) throw new NotFoundException('Version de fiche introuvable');
+    return row;
+  }
+
   /** Réactive une version existante de la fiche. */
   async activateVersion(id: number) {
     return this.prisma.$transaction(async tx => {

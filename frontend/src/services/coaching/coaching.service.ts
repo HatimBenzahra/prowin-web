@@ -107,6 +107,16 @@ const SHEET_VERSIONS = `
     productSheetVersions(slug: $slug) { ${VERSION_FIELDS} }
   }
 `
+const PLAN_VERSION = `
+  query SalesPlanVersion($id: Int!) {
+    salesPlanVersion(id: $id) { ${PLAN_FIELDS} ${VERSION_FIELDS} rawMarkdown }
+  }
+`
+const SHEET_VERSION = `
+  query ProductSheetVersion($id: Int!) {
+    productSheetVersion(id: $id) { ${SHEET_FIELDS} ${VERSION_FIELDS} }
+  }
+`
 const IMPORT_PLAN = `
   mutation ImportSalesPlan($markdown: String!) {
     importSalesPlan(markdown: $markdown) { ${PLAN_FIELDS} }
@@ -458,6 +468,17 @@ export class CoachingService {
   static async productSheetVersions(slug: string): Promise<any[]> {
     const data = await graphqlClient.request(SHEET_VERSIONS, { slug })
     return data?.productSheetVersions || []
+  }
+
+  /** Une version précise, contenu et markdown source compris. */
+  static async salesPlanVersion(id: number): Promise<any> {
+    const data = await graphqlClient.request(PLAN_VERSION, { id })
+    return data.salesPlanVersion
+  }
+
+  static async productSheetVersion(id: number): Promise<any> {
+    const data = await graphqlClient.request(SHEET_VERSION, { id })
+    return data.productSheetVersion
   }
 
   static async importSalesPlan(markdown: string): Promise<any> {

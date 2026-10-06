@@ -329,6 +329,17 @@ export class CoachingAnalysesFilter {
   @Field(() => String, { nullable: true }) status?: string;
 }
 
+/** Une version de plan, contenu compris : consultée depuis l'historique. */
+@ObjectType()
+export class SalesPlanVersionDetailDto extends ActiveSalesPlanDto {
+  @Field(() => Int) id: number;
+  @Field() createdAt: Date;
+  @Field(() => String, { nullable: true }) importedBy: string | null;
+  @Field() isActive: boolean;
+  @Field() contentHash: string;
+  @Field() rawMarkdown: string;
+}
+
 /** Une version d'un plan ou d'une fiche, pour l'historique de l'interface. */
 @ObjectType()
 export class ReferenceVersionDto {
@@ -358,4 +369,13 @@ export class ProductSheetDto {
   @Field(() => [String]) facts: string[];
   @Field(() => [ProductSheetForbiddenDto]) forbidden: ProductSheetForbiddenDto[];
   @Field() rawMarkdown: string;
+}
+
+/** Une version de fiche, consultée depuis l'historique. */
+@ObjectType()
+export class ProductSheetVersionDetailDto extends ProductSheetDto {
+  @Field() createdAt: Date;
+  @Field(() => String, { nullable: true }) importedBy: string | null;
+  @Field() isActive: boolean;
+  @Field() contentHash: string;
 }
