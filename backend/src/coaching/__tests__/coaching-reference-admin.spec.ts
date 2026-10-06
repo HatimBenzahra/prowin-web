@@ -101,16 +101,6 @@ describe('administration des référentiels', () => {
     ).rejects.toBeInstanceOf(NotFoundException);
   });
 
-  it('retire une fiche active, et signale une fiche déjà retirée', async () => {
-    const rows = [row(1, true)];
-    const service = new ProductSheetService(versions(rows).prisma, {} as any);
-    await expect(service.deactivateSheet('plan')).resolves.toBe(true);
-    expect(rows[0].isActive).toBe(false);
-    await expect(service.deactivateSheet('plan')).rejects.toBeInstanceOf(
-      NotFoundException,
-    );
-  });
-
   it("enregistre l'auteur de l'import", async () => {
     const f = versions([]);
     f.table.create.mockImplementation(async ({ data }: any) => ({
@@ -186,7 +176,6 @@ describe('droits sur les référentiels', () => {
     'activateSalesPlanVersion',
     'importProductSheet',
     'activateProductSheetVersion',
-    'deactivateProductSheet',
   ] as const)('%s est réservé à l’admin', (method) =>
     expect(roles(method)).toEqual(['admin']),
   );

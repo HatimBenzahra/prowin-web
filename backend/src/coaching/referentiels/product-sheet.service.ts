@@ -115,19 +115,6 @@ export class ProductSheetService {
     });
   }
 
-  /**
-   * Retire la fiche (offre sortie du plan) sans rien supprimer : plus aucune version
-   * active, donc plus de conformité jugée pour ce produit. Un nouvel import la réactive.
-   */
-  async deactivateSheet(slug: string): Promise<boolean> {
-    const { count } = await this.prisma.productSheetVersion.updateMany({
-      where: { tenantId: CRM_TENANT, slug, isActive: true },
-      data: { isActive: false },
-    });
-    if (count === 0) throw new NotFoundException('Aucune fiche active pour ce slug');
-    return true;
-  }
-
   /** Un produit sans fiche est absent du résultat : la passe 2 ne l'invente pas. */
   async getActiveSheetsFor(
     productKeys: string[],

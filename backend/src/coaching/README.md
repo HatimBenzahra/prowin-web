@@ -53,8 +53,9 @@ or hardcoded, and no server configuration was changed during local implementatio
 
 Admins import sales plans and product sheets from the Coaching IA screen (tabs *Plan
 de vente* and *Produits*): GraphQL `importSalesPlan` / `importProductSheet`, then
-`activate*Version` to reactivate a previous version and `deactivateProductSheet` to
-retire a sheet. Directors can only read. `SalesPlanService.importPlan` and
+`activate*Version` to read-then-reactivate a previous version (`salesPlanVersion` /
+`productSheetVersion` return its content). A sheet cannot be retired. Directors can
+only read. `SalesPlanService.importPlan` and
 `ProductSheetService.importSheet` ask the stateless parser to validate (its message is
 returned to the admin on a 400), verify the returned hash/content locally, record the
 importing admin (`importedBy`) and version/activate only in ProWin's DB. Imports serialize per tenant/slug and dedup

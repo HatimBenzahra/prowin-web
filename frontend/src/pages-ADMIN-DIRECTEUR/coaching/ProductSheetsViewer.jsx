@@ -1,15 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Loader2 } from 'lucide-react'
-import { Button } from '@/components/ui/button'
 import CoachingService from '@/services/coaching/coaching.service'
 import { useRole } from '@/contexts/userole'
-import { useErrorToast } from '@/hooks/utils/ui/use-error-toast'
 import ProductSheetContent from './ProductSheetContent'
-import {
-  ConfirmDialog,
-  ReferenceHistorySheet,
-  ReferenceImportButton,
-} from './ReferenceVersionsPanel'
+import { ReferenceHistorySheet, ReferenceImportButton } from './ReferenceVersionsPanel'
 
 const ACTIVATION_DESCRIPTION =
   'Les prochaines analyses jugeront la conformité de ce produit avec cette version. Les analyses déjà faites gardent la leur.'
@@ -46,15 +40,12 @@ function SheetHistory({ sheet, canEdit, onChanged }) {
 /**
  * Fiches produit actives. Ce sont elles que le LLM oppose au discours du commercial
  * en passe 2 — avec le plan de vente. Une affirmation ne coûte des points que si elle
- * contredit les deux. L'admin importe, réactive ou retire une fiche.
+ * contredit les deux. L'admin importe une fiche ou réactive une ancienne version.
  */
 export default function ProductSheetsViewer() {
   const [sheets, setSheets] = useState([])
   const [loading, setLoading] = useState(true)
-  const [retiring, setRetiring] = useState(null)
-  const [confirmingRetire, setConfirmingRetire] = useState(false)
   const { isAdmin } = useRole()
-  const { showSuccess } = useErrorToast()
 
   const reload = useCallback(() => CoachingService.productSheets().then(setSheets), [])
 
@@ -67,12 +58,6 @@ export default function ProductSheetsViewer() {
       active = false
     }
   }, [])
-
-  const retire = async () => {
-    await CoachingService.deactivateProductSheet(retiring.slug)
-    showSuccess(`Fiche ${retiring.label} retirée.`)
-    await reload()
-  }
 
   const importButton = isAdmin && (
     <ReferenceImportButton
@@ -129,32 +114,10 @@ export default function ProductSheetsViewer() {
 
             <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border/60 px-4 py-2">
               <SheetHistory sheet={sheet} canEdit={isAdmin} onChanged={reload} />
-              {isAdmin && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => {
-                    setRetiring(sheet)
-                    setConfirmingRetire(true)
-                  }}
-                >
-                  Retirer la fiche
-                </Button>
-              )}
             </div>
           </div>
         ))}
       </div>
-
-      <ConfirmDialog
-        open={confirmingRetire}
-        onOpenChange={setConfirmingRetire}
-        title={`Retirer la fiche ${retiring?.label} ?`}
-        description="Plus aucune version ne sera active : la conformité de ce produit ne sera plus jugée dans les prochaines analyses. La fiche reste réactivable depuis un nouvel import."
-        confirmLabel="Retirer"
-        destructive
-        onConfirm={retire}
-      />
 
       <p className="mt-4 rounded-lg border-l-[3px] border-primary bg-primary/5 px-4 py-3 text-sm text-muted-foreground">
         Ces fiches versionnées sont le référentiel que l'analyse oppose au discours du commercial

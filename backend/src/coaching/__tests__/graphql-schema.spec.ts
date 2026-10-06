@@ -83,7 +83,6 @@ describe('schéma GraphQL coaching', () => {
     'activateSalesPlanVersion(id: Int!): ActiveSalesPlanDto!',
     'importProductSheet(markdown: String!): ProductSheetDto!',
     'activateProductSheetVersion(id: Int!): ProductSheetDto!',
-    'deactivateProductSheet(slug: String!): Boolean!',
     'salesPlanVersion(id: Int!): SalesPlanVersionDetailDto!',
     'productSheetVersion(id: Int!): ProductSheetVersionDetailDto!',
   ])('expose %s', (operation) => {

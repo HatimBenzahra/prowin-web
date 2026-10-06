@@ -137,11 +137,6 @@ const ACTIVATE_SHEET = `
     activateProductSheetVersion(id: $id) { ${SHEET_FIELDS} }
   }
 `
-const DEACTIVATE_SHEET = `
-  mutation DeactivateProductSheet($slug: String!) {
-    deactivateProductSheet(slug: $slug)
-  }
-`
 
 const CONFIG_FIELDS = `
   coachableStatuts allStatuts minAutoDurationSec
@@ -499,11 +494,6 @@ export class CoachingService {
   static async activateProductSheetVersion(id: number): Promise<any> {
     const data = await graphqlClient.request(ACTIVATE_SHEET, { id })
     return data.activateProductSheetVersion
-  }
-
-  static async deactivateProductSheet(slug: string): Promise<boolean> {
-    const data = await graphqlClient.request(DEACTIVATE_SHEET, { slug })
-    return data.deactivateProductSheet
   }
 
   /** Fiches produit actives — onglet Produits. */

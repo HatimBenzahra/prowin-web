@@ -195,13 +195,6 @@ export class CoachingResolver {
     return this.toSheetDto(await this.productSheets.activateVersion(id));
   }
 
-  /** Retire une fiche : la conformité de ce produit n'est plus jugée. */
-  @Mutation(() => Boolean)
-  @Roles('admin')
-  deactivateProductSheet(@Args('slug') slug: string): Promise<boolean> {
-    return this.productSheets.deactivateSheet(slug);
-  }
-
   @Query(() => CoachingConfigDto)
   @Roles('admin', 'directeur')
   coachingConfig(): Promise<CoachingConfigDto> {
