@@ -329,7 +329,19 @@ export class CoachingAnalysesFilter {
   @Field(() => String, { nullable: true }) status?: string;
 }
 
-/** Fiche produit active, pour l'onglet Produits en lecture seule. */
+/** Une version d'un plan ou d'une fiche, pour l'historique de l'interface. */
+@ObjectType()
+export class ReferenceVersionDto {
+  @Field(() => Int) id: number;
+  @Field(() => Int) version: number;
+  @Field() createdAt: Date;
+  @Field(() => String, { nullable: true }) importedBy: string | null;
+  @Field() isActive: boolean;
+  /** Préfixe du sha256 : distingue deux contenus sans exposer le markdown. */
+  @Field() contentHash: string;
+}
+
+/** Fiche produit active, pour l'onglet Produits. */
 @ObjectType()
 export class ProductSheetForbiddenDto {
   @Field() say: string;

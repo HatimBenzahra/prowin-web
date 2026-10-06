@@ -63,35 +63,73 @@ const RELAUNCH = `
     relaunchCoachingAnalysis(id: $id, retranscribe: $retranscribe) { ${COACHING_FIELDS} }
   }
 `
+const PLAN_FIELDS = `
+  slug
+  title
+  version
+  scoringScale
+  steps {
+    key
+    label
+    weight
+    appliesWhen
+    criteria { key label points evidenceRequired appliesWhen }
+  }
+`
+const SHEET_FIELDS = `
+  id
+  slug
+  label
+  productKey
+  version
+  facts
+  forbidden { say severity }
+  rawMarkdown
+`
+const VERSION_FIELDS = `id version createdAt importedBy isActive contentHash`
 const ACTIVE_PLAN = `
   query ActiveSalesPlan {
-    activeSalesPlan {
-      slug
-      title
-      version
-      scoringScale
-      steps {
-        key
-        label
-        weight
-        appliesWhen
-        criteria { key label points evidenceRequired appliesWhen }
-      }
-    }
+    activeSalesPlan { ${PLAN_FIELDS} }
   }
 `
 const PRODUCT_SHEETS = `
   query CoachingProductSheets {
-    coachingProductSheets {
-      id
-      slug
-      label
-      productKey
-      version
-      facts
-      forbidden { say severity }
-      rawMarkdown
-    }
+    coachingProductSheets { ${SHEET_FIELDS} }
+  }
+`
+const PLAN_VERSIONS = `
+  query SalesPlanVersions($slug: String!) {
+    salesPlanVersions(slug: $slug) { ${VERSION_FIELDS} }
+  }
+`
+const SHEET_VERSIONS = `
+  query ProductSheetVersions($slug: String!) {
+    productSheetVersions(slug: $slug) { ${VERSION_FIELDS} }
+  }
+`
+const IMPORT_PLAN = `
+  mutation ImportSalesPlan($markdown: String!) {
+    importSalesPlan(markdown: $markdown) { ${PLAN_FIELDS} }
+  }
+`
+const ACTIVATE_PLAN = `
+  mutation ActivateSalesPlanVersion($id: Int!) {
+    activateSalesPlanVersion(id: $id) { ${PLAN_FIELDS} }
+  }
+`
+const IMPORT_SHEET = `
+  mutation ImportProductSheet($markdown: String!) {
+    importProductSheet(markdown: $markdown) { ${SHEET_FIELDS} }
+  }
+`
+const ACTIVATE_SHEET = `
+  mutation ActivateProductSheetVersion($id: Int!) {
+    activateProductSheetVersion(id: $id) { ${SHEET_FIELDS} }
+  }
+`
+const DEACTIVATE_SHEET = `
+  mutation DeactivateProductSheet($slug: String!) {
+    deactivateProductSheet(slug: $slug)
   }
 `
 
@@ -407,7 +445,47 @@ export class CoachingService {
     }
   }
 
-  /** Fiches produit actives — onglet Produits en lecture seule. */
+  /*
+   * Référentiels (plan de vente, fiches produit). Les écritures sont réservées à
+   * l'admin côté serveur ; elles lèvent l'erreur pour que l'écran affiche le message
+   * du parseur tel quel.
+   */
+  static async salesPlanVersions(slug: string): Promise<any[]> {
+    const data = await graphqlClient.request(PLAN_VERSIONS, { slug })
+    return data?.salesPlanVersions || []
+  }
+
+  static async productSheetVersions(slug: string): Promise<any[]> {
+    const data = await graphqlClient.request(SHEET_VERSIONS, { slug })
+    return data?.productSheetVersions || []
+  }
+
+  static async importSalesPlan(markdown: string): Promise<any> {
+    const data = await graphqlClient.request(IMPORT_PLAN, { markdown })
+    return data.importSalesPlan
+  }
+
+  static async activateSalesPlanVersion(id: number): Promise<any> {
+    const data = await graphqlClient.request(ACTIVATE_PLAN, { id })
+    return data.activateSalesPlanVersion
+  }
+
+  static async importProductSheet(markdown: string): Promise<any> {
+    const data = await graphqlClient.request(IMPORT_SHEET, { markdown })
+    return data.importProductSheet
+  }
+
+  static async activateProductSheetVersion(id: number): Promise<any> {
+    const data = await graphqlClient.request(ACTIVATE_SHEET, { id })
+    return data.activateProductSheetVersion
+  }
+
+  static async deactivateProductSheet(slug: string): Promise<boolean> {
+    const data = await graphqlClient.request(DEACTIVATE_SHEET, { slug })
+    return data.deactivateProductSheet
+  }
+
+  /** Fiches produit actives — onglet Produits. */
   static async productSheets(): Promise<any[]> {
     try {
       const data = await graphqlClient.request(PRODUCT_SHEETS)

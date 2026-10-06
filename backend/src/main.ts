@@ -1,4 +1,5 @@
 import { NestFactory } from '@nestjs/core';
+import { NestExpressApplication } from '@nestjs/platform-express';
 import { AppModule } from './app.module';
 import { Logger } from '@nestjs/common';
 import * as fs from 'fs';
@@ -20,9 +21,12 @@ async function bootstrap() {
     logger.log('🌐 No SSL certificates - Starting in HTTP mode');
   }
 
-  const app = await NestFactory.create(AppModule, {
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     httpsOptions, // Sera 'undefined' en prod -> NestJS démarrera en HTTP simple
   });
+  // Limite explicite (défaut Express : 100 Ko) : un plan de vente importé depuis
+  // l'interface passe en entier dans le corps GraphQL et en fait déjà ~55 Ko.
+  app.useBodyParser('json', { limit: '1mb' });
   const allowedOrigins = process.env.VITE_FRONTEND_URL?.split(',') || [
     'https://localhost:5173',
     'https://192.168.1.107:5173',

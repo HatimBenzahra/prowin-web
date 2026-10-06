@@ -16,7 +16,8 @@ class FlowResolver {
 /** Local engine + mocked model, DB and GraphQL execution: no network or listener. */
 describe('product alerts compute → snapshot → GraphQL → frontend selection', () => {
   async function flow(mutate?: (result: any) => void, certified = false) {
-    const enginePath = resolve(process.cwd(), '../../coaching/src');
+    // Repo prowin-coaching, voisin de prowin_V1/ (PRO_WIN/coaching) ; surchargeable en CI.
+    const enginePath = process.env.COACHING_ENGINE_SRC ?? resolve(process.cwd(), '../../../../coaching/src');
     const { ComputeService } = require(`${enginePath}/compute/compute.service`);
     const { ScoringService } = require(`${enginePath}/analyse-porte/etape-5-scoring/scoring.service`);
     const { parseSalesPlanMarkdown } = require(`${enginePath}/referentiels/sales-plan.parser`);

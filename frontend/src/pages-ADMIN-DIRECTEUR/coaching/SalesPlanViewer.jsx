@@ -1,6 +1,11 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import CoachingService from '@/services/coaching/coaching.service'
+import { useRole } from '@/contexts/userole'
+import { ReferenceImportButton, ReferenceVersionHistory } from './ReferenceVersionsPanel'
+
+const IMPORT_DESCRIPTION =
+  'Le plan est validé puis activé : les prochaines analyses et relances seront notées avec lui. Les analyses déjà faites gardent leur version.'
 
 function stepWeightLabel(s) {
   if (s.appliesWhen?.startsWith('productDetected')) return 'module · si détecté'
@@ -11,6 +16,9 @@ function stepWeightLabel(s) {
 export default function SalesPlanViewer() {
   const [plan, setPlan] = useState(null)
   const [loading, setLoading] = useState(true)
+  const { isAdmin } = useRole()
+  const slug = plan?.slug
+  const loadVersions = useCallback(() => CoachingService.salesPlanVersions(slug), [slug])
 
   useEffect(() => {
     let active = true
@@ -30,17 +38,45 @@ export default function SalesPlanViewer() {
       </div>
     )
   }
+  const importButton = isAdmin && (
+    <ReferenceImportButton
+      label="Importer une version"
+      title="Importer un plan de vente ?"
+      description={IMPORT_DESCRIPTION}
+      onImport={CoachingService.importSalesPlan}
+      onImported={setPlan}
+    />
+  )
+
   if (!plan) {
-    return <p className="text-sm text-muted-foreground">Aucun plan de vente actif.</p>
+    return (
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="text-sm text-muted-foreground">Aucun plan de vente actif.</p>
+        {importButton}
+      </div>
+    )
   }
 
   return (
     <div>
-      <div className="mb-4 flex items-center justify-between gap-3">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <h3 className="text-lg font-semibold">{plan.title}</h3>
-        <span className="rounded-full bg-primary/10 px-2.5 py-0.5 font-mono text-xs text-primary">
-          v{plan.version} · actif
-        </span>
+        <div className="flex items-center gap-2">
+          <span className="rounded-full bg-primary/10 px-2.5 py-0.5 font-mono text-xs text-primary">
+            v{plan.version} · actif
+          </span>
+          {importButton}
+        </div>
+      </div>
+      <div className="mb-4 overflow-hidden rounded-xl border border-border/60">
+        <ReferenceVersionHistory
+          loadVersions={loadVersions}
+          onActivate={CoachingService.activateSalesPlanVersion}
+          canEdit={isAdmin}
+          activationDescription="Les prochaines analyses et relances seront notées avec cette version. Les analyses déjà faites gardent la leur."
+          refreshKey={plan.version}
+          onActivated={setPlan}
+        />
       </div>
       <div className="space-y-2.5">
         {(plan.steps || []).map(s => (
@@ -68,8 +104,8 @@ export default function SalesPlanViewer() {
         ))}
       </div>
       <p className="mt-4 rounded-lg border-l-[3px] border-primary bg-primary/5 px-4 py-3 text-sm text-muted-foreground">
-        Vue lecture seule : elle reflète le plan de vente markdown versionné qui pilote le scoring.
-        L'édition du plan viendra plus tard.
+        Le plan de vente actif pilote le scoring. Chaque import crée une version ; un contenu
+        identique à une version existante la réactive simplement.
       </p>
     </div>
   )

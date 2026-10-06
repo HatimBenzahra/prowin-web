@@ -5,6 +5,7 @@ import { UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { CoachingService } from './coaching.service';
 import { CoachingConfigService } from './coaching-config.service';
 import { CoachingQueryService } from './lecture/coaching-query.service';
@@ -23,7 +24,17 @@ import {
   PaginatedCoachingManagement,
   CoachableSubjectDto,
   ProductSheetDto,
+  ReferenceVersionDto,
 } from './coaching.dto';
+import { SalesPlanVersion, ProductSheetVersion } from '@prisma/client';
+
+type AuthenticatedUser = { id: number; role: string; email?: string | null };
+
+/** Auteur d'un import : l'e-mail Keycloak, sinon le rôle et l'id du compte. */
+const importAuthor = (user: AuthenticatedUser): string =>
+  user.email?.trim() || `${user.role}#${user.id}`;
+
+const SHORT_HASH = 12;
 
 @Resolver()
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -88,30 +99,12 @@ export class CoachingResolver {
     return this.query.coachableSubjects();
   }
 
-  /**
-   * Fiches produit actives — alimente l'onglet Produits en lecture seule.
-   * Même périmètre d'accès que le reste du coaching : admin + directeur.
-   */
+  /** Fiches produit actives — onglet Produits. Même accès que le reste du coaching. */
   @Query(() => [ProductSheetDto])
   @Roles('admin', 'directeur')
   async coachingProductSheets(): Promise<ProductSheetDto[]> {
     const rows = await this.productSheets.listActiveSheets();
-    return rows.map((row) => {
-      const sheet = this.productSheets.toParsedSheet(row);
-      return {
-        id: row.id,
-        slug: sheet.slug,
-        label: sheet.label,
-        productKey: sheet.productKey,
-        version: row.version,
-        facts: sheet.facts,
-        forbidden: sheet.forbidden.map((f) => ({
-          say: f.say,
-          severity: f.severity,
-        })),
-        rawMarkdown: row.rawMarkdown,
-      };
-    });
+    return rows.map((row) => this.toSheetDto(row));
   }
 
   @Query(() => ActiveSalesPlanDto, { nullable: true })
@@ -120,27 +113,69 @@ export class CoachingResolver {
     @Args('slug', { nullable: true }) slug?: string,
   ): Promise<ActiveSalesPlanDto | null> {
     const version = await this.salesPlans.getActiveVersion(slug);
-    if (!version) return null;
-    const plan = this.salesPlans.toParsedPlan(version);
-    return {
-      slug: version.slug,
-      title: version.title,
-      version: version.version,
-      scoringScale: plan.scoringScale,
-      steps: (plan.steps ?? []).map((s) => ({
-        key: s.key,
-        label: s.label,
-        weight: s.weight,
-        appliesWhen: s.appliesWhen,
-        criteria: (s.criteria ?? []).map((c) => ({
-          key: c.key,
-          label: c.label,
-          points: c.points,
-          evidenceRequired: c.evidenceRequired === true,
-          appliesWhen: c.appliesWhen ?? s.appliesWhen,
-        })),
-      })),
-    };
+    return version ? this.toPlanDto(version) : null;
+  }
+
+  @Query(() => [ReferenceVersionDto])
+  @Roles('admin', 'directeur')
+  async salesPlanVersions(
+    @Args('slug') slug: string,
+  ): Promise<ReferenceVersionDto[]> {
+    return (await this.salesPlans.listVersions(slug)).map(toVersionDto);
+  }
+
+  @Query(() => [ReferenceVersionDto])
+  @Roles('admin', 'directeur')
+  async productSheetVersions(
+    @Args('slug') slug: string,
+  ): Promise<ReferenceVersionDto[]> {
+    return (await this.productSheets.listVersions(slug)).map(toVersionDto);
+  }
+
+  /** Publie une nouvelle version du plan : les prochaines analyses seront notées avec. */
+  @Mutation(() => ActiveSalesPlanDto)
+  @Roles('admin')
+  async importSalesPlan(
+    @Args('markdown') markdown: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<ActiveSalesPlanDto> {
+    return this.toPlanDto(
+      await this.salesPlans.importPlan(markdown, importAuthor(user)),
+    );
+  }
+
+  @Mutation(() => ActiveSalesPlanDto)
+  @Roles('admin')
+  async activateSalesPlanVersion(
+    @Args('id', { type: () => Int }) id: number,
+  ): Promise<ActiveSalesPlanDto> {
+    return this.toPlanDto(await this.salesPlans.activateVersion(id));
+  }
+
+  @Mutation(() => ProductSheetDto)
+  @Roles('admin')
+  async importProductSheet(
+    @Args('markdown') markdown: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<ProductSheetDto> {
+    return this.toSheetDto(
+      await this.productSheets.importSheet(markdown, importAuthor(user)),
+    );
+  }
+
+  @Mutation(() => ProductSheetDto)
+  @Roles('admin')
+  async activateProductSheetVersion(
+    @Args('id', { type: () => Int }) id: number,
+  ): Promise<ProductSheetDto> {
+    return this.toSheetDto(await this.productSheets.activateVersion(id));
+  }
+
+  /** Retire une fiche : la conformité de ce produit n'est plus jugée. */
+  @Mutation(() => Boolean)
+  @Roles('admin')
+  deactivateProductSheet(@Args('slug') slug: string): Promise<boolean> {
+    return this.productSheets.deactivateSheet(slug);
   }
 
   @Query(() => CoachingConfigDto)
@@ -215,8 +250,62 @@ export class CoachingResolver {
   relaunchCoachingAnalysis(
     @Args('id', { type: () => Int }) id: number,
     @Context() context: BearerRequestContext,
-    @Args('retranscribe', { type: () => Boolean, nullable: true, defaultValue: false }) retranscribe = false,
+    @Args('retranscribe', {
+      type: () => Boolean,
+      nullable: true,
+      defaultValue: false,
+    })
+    retranscribe = false,
   ): Promise<CoachingAnalysisDto> {
     return this.coaching.relaunch(id, requestBearer(context), retranscribe);
   }
+
+  private toPlanDto(version: SalesPlanVersion): ActiveSalesPlanDto {
+    const plan = this.salesPlans.toParsedPlan(version);
+    return {
+      slug: version.slug,
+      title: version.title,
+      version: version.version,
+      scoringScale: plan.scoringScale,
+      steps: (plan.steps ?? []).map((s) => ({
+        key: s.key,
+        label: s.label,
+        weight: s.weight,
+        appliesWhen: s.appliesWhen,
+        criteria: (s.criteria ?? []).map((c) => ({
+          key: c.key,
+          label: c.label,
+          points: c.points,
+          evidenceRequired: c.evidenceRequired === true,
+          appliesWhen: c.appliesWhen ?? s.appliesWhen,
+        })),
+      })),
+    };
+  }
+
+  private toSheetDto(row: ProductSheetVersion): ProductSheetDto {
+    const sheet = this.productSheets.toParsedSheet(row);
+    return {
+      id: row.id,
+      slug: sheet.slug,
+      label: sheet.label,
+      productKey: sheet.productKey,
+      version: row.version,
+      facts: sheet.facts,
+      forbidden: sheet.forbidden.map((f) => ({
+        say: f.say,
+        severity: f.severity,
+      })),
+      rawMarkdown: row.rawMarkdown,
+    };
+  }
+}
+
+function toVersionDto(
+  row: Pick<
+    SalesPlanVersion,
+    'id' | 'version' | 'createdAt' | 'importedBy' | 'isActive' | 'contentHash'
+  >,
+): ReferenceVersionDto {
+  return { ...row, contentHash: row.contentHash.slice(0, SHORT_HASH) };
 }

@@ -1,9 +1,9 @@
-import { Injectable, Logger,  } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma.service';
 import {
   ForbiddenClaim,
   ParsedProductSheet,
-  ParsedProductSheetFile,
   WinLeadPlusBinding,
 } from './product-sheet.types';
 import { StepApplicability } from './sales-plan.types';
@@ -40,27 +40,85 @@ export interface ProductSheetDescriptor {
   sttTerms: string[];
 }
 
-/** Charge les fiches au boot et les versionne par sha256, comme SalesPlanService. */
+type SheetTx = Pick<Prisma.TransactionClient, '$executeRaw'>;
+
+/**
+ * Sérialise les écritures d'une fiche : par slug (versions) ET par produit (une seule
+ * fiche active par productKey). Toujours dans le même ordre, donc sans interblocage.
+ */
+async function lockSheet(tx: SheetTx, slug: string, productKey: string) {
+  for (const key of [`coaching-sheet:${CRM_TENANT}:${slug}`, `coaching-sheet-product:${CRM_TENANT}:${productKey}`]) {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${key}))`;
+  }
+}
+
+/**
+ * Les versions actives qu'une activation remplace : celles de la même fiche, et toute
+ * autre fiche du même produit — l'analyse joint sur productKey, deux fiches actives
+ * pour un produit feraient juger sa conformité deux fois.
+ */
+function competingSheets(row: { id: number; slug: string; productKey: string }): Prisma.ProductSheetVersionWhereInput {
+  return { tenantId: CRM_TENANT, isActive: true, NOT: { id: row.id }, OR: [{ slug: row.slug }, { productKey: row.productKey }] };
+}
+
+/** Ligne d'historique : de quoi choisir une version, sans son contenu. */
+const VERSION_SUMMARY = { id: true, version: true, createdAt: true, importedBy: true, isActive: true, contentHash: true } as const;
+
+/**
+ * Fiches produit de ce CRM, versionnées par sha256 comme les plans et importées
+ * depuis l'interface Coaching IA. Au plus une fiche active par slug et par produit.
+ */
 @Injectable()
 export class ProductSheetService {
-  private readonly logger = new Logger(ProductSheetService.name);
-
   constructor(private readonly prisma: PrismaService, private readonly api: CoachingApiClient) {}
 
-  async importSheet(markdown: string) {
+  async importSheet(markdown: string, importedBy?: string) {
     const parsed = await this.api.parseSheet(markdown);
     if (parsed.rawMarkdown !== markdown || parsed.contentHash !== createHash('sha256').update(markdown).digest('hex')) throw new Error('Fiche retournée incompatible');
     return this.prisma.$transaction(async tx => {
-      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`coaching-sheet:${CRM_TENANT}:${parsed.sheet.slug}`}))`;
+      await lockSheet(tx, parsed.sheet.slug, parsed.sheet.productKey);
       let row = await tx.productSheetVersion.findUnique({ where: { tenantId_contentHash: { tenantId: CRM_TENANT, contentHash: parsed.contentHash } } });
       if (!row) {
         const last = await tx.productSheetVersion.findFirst({ where: { tenantId: CRM_TENANT, slug: parsed.sheet.slug }, orderBy: { version: 'desc' } });
         const { slug, label, productKey, facts, identifiers, sttTerms, forbidden, winleadplus } = parsed.sheet;
-        row = await tx.productSheetVersion.create({ data: { tenantId: CRM_TENANT, slug, label, productKey, facts, identifiers, sttTerms, forbidden: JSON.parse(JSON.stringify(forbidden)), winleadplus: winleadplus ? JSON.parse(JSON.stringify(winleadplus)) : undefined, version: (last?.version ?? 0) + 1, contentHash: parsed.contentHash, rawMarkdown: markdown } });
+        row = await tx.productSheetVersion.create({ data: { tenantId: CRM_TENANT, slug, label, productKey, facts, identifiers, sttTerms, forbidden: JSON.parse(JSON.stringify(forbidden)), winleadplus: winleadplus ? JSON.parse(JSON.stringify(winleadplus)) : undefined, version: (last?.version ?? 0) + 1, contentHash: parsed.contentHash, rawMarkdown: markdown, importedBy } });
       }
-      await tx.productSheetVersion.updateMany({ where: { tenantId: CRM_TENANT, slug: row.slug, isActive: true, NOT: { id: row.id } }, data: { isActive: false } });
+      await tx.productSheetVersion.updateMany({ where: competingSheets(row), data: { isActive: false } });
       return tx.productSheetVersion.update({ where: { id: row.id }, data: { isActive: true } });
     });
+  }
+
+  /** Historique d'une fiche, la plus récente d'abord. */
+  listVersions(slug: string) {
+    return this.prisma.productSheetVersion.findMany({
+      where: { tenantId: CRM_TENANT, slug },
+      orderBy: { version: 'desc' },
+      select: VERSION_SUMMARY,
+    });
+  }
+
+  /** Réactive une version existante de la fiche. */
+  async activateVersion(id: number) {
+    return this.prisma.$transaction(async tx => {
+      const row = await tx.productSheetVersion.findFirst({ where: { id, tenantId: CRM_TENANT } });
+      if (!row) throw new NotFoundException('Version de fiche introuvable');
+      await lockSheet(tx, row.slug, row.productKey);
+      await tx.productSheetVersion.updateMany({ where: competingSheets(row), data: { isActive: false } });
+      return tx.productSheetVersion.update({ where: { id }, data: { isActive: true } });
+    });
+  }
+
+  /**
+   * Retire la fiche (offre sortie du plan) sans rien supprimer : plus aucune version
+   * active, donc plus de conformité jugée pour ce produit. Un nouvel import la réactive.
+   */
+  async deactivateSheet(slug: string): Promise<boolean> {
+    const { count } = await this.prisma.productSheetVersion.updateMany({
+      where: { tenantId: CRM_TENANT, slug, isActive: true },
+      data: { isActive: false },
+    });
+    if (count === 0) throw new NotFoundException('Aucune fiche active pour ce slug');
+    return true;
   }
 
   /** Un produit sans fiche est absent du résultat : la passe 2 ne l'invente pas. */

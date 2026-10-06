@@ -1,6 +1,7 @@
 # ProWin coaching ownership
 
-The external sibling `../../../../coaching` is a stateless synchronous calculator.
+The external engine (repo `prowin-coaching`, checked out at `PRO_WIN/coaching`, next to
+`prowin_V1/`) is a stateless synchronous calculator.
 See its README for the complete HTTP contract and V2 compatibility change.
 
 ProWin stores jobs and results in its own `CoachingAnalysis` table. The existing
@@ -50,9 +51,13 @@ Before deployment, the external engine must be configured with
 It accepts HTTPS only and does not follow redirects. No storage hostname is inferred
 or hardcoded, and no server configuration was changed during local implementation.
 
-`SalesPlanService.importPlan(markdown)` and `ProductSheetService.importSheet(markdown)`
-ask the stateless parser to validate, verify the returned hash/content locally, and
-version/activate only in ProWin's DB. Imports serialize per tenant/slug and dedup
+Admins import sales plans and product sheets from the Coaching IA screen (tabs *Plan
+de vente* and *Produits*): GraphQL `importSalesPlan` / `importProductSheet`, then
+`activate*Version` to reactivate a previous version and `deactivateProductSheet` to
+retire a sheet. Directors can only read. `SalesPlanService.importPlan` and
+`ProductSheetService.importSheet` ask the stateless parser to validate (its message is
+returned to the admin on a 400), verify the returned hash/content locally, record the
+importing admin (`importedBy`) and version/activate only in ProWin's DB. Imports serialize per tenant/slug and dedup
 identical content. Existing local reference rows are used directly; nothing is
 imported to a remote database. Manual launch, bulk launch and relaunch reuse the
 integration key when `WINLEADPLUS_INTEGRATION_API_KEY` is configured, through

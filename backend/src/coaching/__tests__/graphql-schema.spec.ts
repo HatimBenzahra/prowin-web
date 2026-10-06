@@ -75,4 +75,16 @@ describe('schéma GraphQL coaching', () => {
   it('expose la requête des fiches produit', () => {
     expect(sdl).toContain('coachingProductSheets');
   });
+
+  it.each([
+    'salesPlanVersions(slug: String!): [ReferenceVersionDto!]!',
+    'productSheetVersions(slug: String!): [ReferenceVersionDto!]!',
+    'importSalesPlan(markdown: String!): ActiveSalesPlanDto!',
+    'activateSalesPlanVersion(id: Int!): ActiveSalesPlanDto!',
+    'importProductSheet(markdown: String!): ProductSheetDto!',
+    'activateProductSheetVersion(id: Int!): ProductSheetDto!',
+    'deactivateProductSheet(slug: String!): Boolean!',
+  ])('expose %s', (operation) => {
+    expect(sdl).toContain(operation);
+  });
 });

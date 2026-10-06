@@ -621,6 +621,8 @@ model SalesPlanVersion {
   rawMarkdown String
   isActive    Boolean  @default(false)
   createdAt   DateTime @default(now())
+  // E-mail de l'admin qui a importé la version ; null pour les versions antérieures.
+  importedBy  String?
 
   analyses CoachingAnalysis[]
 
@@ -652,6 +654,8 @@ model ProductSheetVersion {
   rawMarkdown String
   isActive    Boolean  @default(false)
   createdAt   DateTime @default(now())
+  // E-mail de l'admin qui a importé la version ; null pour les versions antérieures.
+  importedBy  String?
 
   @@unique([tenantId, contentHash])
   @@unique([tenantId, slug, version])

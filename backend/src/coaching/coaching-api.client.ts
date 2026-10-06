@@ -1,4 +1,4 @@
-import { Injectable, ServiceUnavailableException } from '@nestjs/common';
+import { BadRequestException, Injectable, ServiceUnavailableException } from '@nestjs/common';
 import axios from 'axios';
 import { Prisma } from '@prisma/client';
 import { CRM_TENANT } from './shared/crm-scope';
@@ -51,7 +51,13 @@ export class CoachingApiClient {
   private async parse<T>(kind: string, markdown: string): Promise<T> {
     if (!this.isConfigured()) throw new ServiceUnavailableException('COACHING_API_URL absent');
     try { return (await axios.post<T>(`${this.baseUrl}/coaching/parse/${kind}`, { markdown }, { headers: { 'x-api-key': this.apiKey, 'x-tenant-id': CRM_TENANT }, timeout: 15_000 })).data; }
-    catch { throw new ServiceUnavailableException('Validation du référentiel indisponible ou contenu invalide'); }
+    catch (error) {
+      // 400 = contenu refusé par le parseur : son message dit à l'auteur quoi corriger.
+      const raw = axios.isAxiosError<{ message?: unknown }>(error) && error.response?.status === 400 ? error.response.data?.message : undefined;
+      const message = Array.isArray(raw) ? raw.filter((m): m is string => typeof m === 'string').join(' ; ') : raw;
+      if (typeof message === 'string' && message.trim()) throw new BadRequestException(message);
+      throw new ServiceUnavailableException('Validation du référentiel indisponible');
+    }
   }
   async compute(input: ComputeRequest): Promise<ComputeResult> {
     if (!this.isConfigured()) throw new ServiceUnavailableException('COACHING_API_URL absent');

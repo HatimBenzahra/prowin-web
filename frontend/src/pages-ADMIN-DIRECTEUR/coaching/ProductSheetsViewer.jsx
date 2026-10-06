@@ -1,16 +1,52 @@
-import { useEffect, useState } from 'react'
-import { Loader2 } from 'lucide-react'
+import { useCallback, useEffect, useState } from 'react'
+import { ChevronDown, Loader2 } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 import CoachingService from '@/services/coaching/coaching.service'
+import { useRole } from '@/contexts/userole'
+import { useErrorToast } from '@/hooks/utils/ui/use-error-toast'
 import { SeverityPill } from './CoachingComponents'
+import {
+  ConfirmDialog,
+  ReferenceImportButton,
+  ReferenceVersionHistory,
+} from './ReferenceVersionsPanel'
+
+const ACTIVATION_DESCRIPTION =
+  'Les prochaines analyses jugeront la conformité de ce produit avec cette version. Les analyses déjà faites gardent la leur.'
+
+/** Historique d'une fiche, chargé à l'ouverture seulement. */
+function SheetHistory({ sheet, canEdit, onChanged }) {
+  const loadVersions = useCallback(
+    () => CoachingService.productSheetVersions(sheet.slug),
+    [sheet.slug]
+  )
+  return (
+    <ReferenceVersionHistory
+      loadVersions={loadVersions}
+      onActivate={CoachingService.activateProductSheetVersion}
+      canEdit={canEdit}
+      activationDescription={ACTIVATION_DESCRIPTION}
+      refreshKey={sheet.version}
+      onActivated={onChanged}
+    />
+  )
+}
 
 /**
- * Fiches produit actives, en lecture seule. Ce sont elles que le LLM oppose au
- * discours du commercial en passe 2 — avec le plan de vente. Une affirmation ne
- * coûte des points que si elle contredit les deux.
+ * Fiches produit actives. Ce sont elles que le LLM oppose au discours du commercial
+ * en passe 2 — avec le plan de vente. Une affirmation ne coûte des points que si elle
+ * contredit les deux. L'admin importe, réactive ou retire une fiche.
  */
 export default function ProductSheetsViewer() {
   const [sheets, setSheets] = useState([])
   const [loading, setLoading] = useState(true)
+  const [openHistory, setOpenHistory] = useState(null)
+  const [retiring, setRetiring] = useState(null)
+  const [confirmingRetire, setConfirmingRetire] = useState(false)
+  const { isAdmin } = useRole()
+  const { showSuccess } = useErrorToast()
+
+  const reload = useCallback(() => CoachingService.productSheets().then(setSheets), [])
 
   useEffect(() => {
     let active = true
@@ -22,6 +58,22 @@ export default function ProductSheetsViewer() {
     }
   }, [])
 
+  const retire = async () => {
+    await CoachingService.deactivateProductSheet(retiring.slug)
+    showSuccess(`Fiche ${retiring.label} retirée.`)
+    await reload()
+  }
+
+  const importButton = isAdmin && (
+    <ReferenceImportButton
+      label="Importer une fiche"
+      title="Importer une fiche produit ?"
+      description="Nouvelle fiche, ou nouvelle version d'une fiche existante (même slug). Elle est validée puis activée pour les prochaines analyses."
+      onImport={CoachingService.importProductSheet}
+      onImported={reload}
+    />
+  )
+
   if (loading) {
     return (
       <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -32,20 +84,25 @@ export default function ProductSheetsViewer() {
   }
   if (sheets.length === 0) {
     return (
-      <p className="text-sm text-muted-foreground">
-        Aucune fiche produit active. Sans fiche, la conformité d'un produit n'est pas jugée.
-      </p>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="text-sm text-muted-foreground">
+          Aucune fiche produit active. Sans fiche, la conformité d'un produit n'est pas jugée.
+        </p>
+        {importButton}
+      </div>
     )
   }
 
   return (
     <div>
-      <div className="mb-4 flex items-center justify-between gap-3">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <h3 className="text-lg font-semibold">Fiches produit</h3>
-        <span className="shrink-0 font-mono text-xs text-muted-foreground">
-          {sheets.length} fiche{sheets.length > 1 ? 's' : ''}
-          {sheets.length > 1 ? 's' : ''}
-        </span>
+        <div className="flex items-center gap-2">
+          <span className="shrink-0 font-mono text-xs text-muted-foreground">
+            {sheets.length} fiche{sheets.length > 1 ? 's' : ''}
+          </span>
+          {importButton}
+        </div>
       </div>
 
       <div className="space-y-2.5">
@@ -83,14 +140,51 @@ export default function ProductSheetsViewer() {
                 </ul>
               </div>
             )}
+
+            <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border/60 px-4 py-2">
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => setOpenHistory(openHistory === sheet.slug ? null : sheet.slug)}
+              >
+                <ChevronDown className={openHistory === sheet.slug ? 'rotate-180' : ''} />
+                Historique
+              </Button>
+              {isAdmin && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    setRetiring(sheet)
+                    setConfirmingRetire(true)
+                  }}
+                >
+                  Retirer la fiche
+                </Button>
+              )}
+            </div>
+            {openHistory === sheet.slug && (
+              <div className="border-t border-dashed border-border/60">
+                <SheetHistory sheet={sheet} canEdit={isAdmin} onChanged={reload} />
+              </div>
+            )}
           </div>
         ))}
       </div>
 
+      <ConfirmDialog
+        open={confirmingRetire}
+        onOpenChange={setConfirmingRetire}
+        title={`Retirer la fiche ${retiring?.label} ?`}
+        description="Plus aucune version ne sera active : la conformité de ce produit ne sera plus jugée dans les prochaines analyses. La fiche reste réactivable depuis un nouvel import."
+        confirmLabel="Retirer"
+        destructive
+        onConfirm={retire}
+      />
+
       <p className="mt-4 rounded-lg border-l-[3px] border-primary bg-primary/5 px-4 py-3 text-sm text-muted-foreground">
-        Vue lecture seule : elle reflète les fiches produit versionnées. C'est ce référentiel que
-        l'analyse oppose au discours du commercial pour juger la conformité de ce qu'il a dit du
-        produit.
+        Ces fiches versionnées sont le référentiel que l'analyse oppose au discours du commercial
+        pour juger la conformité de ce qu'il a dit du produit.
       </p>
     </div>
   )
