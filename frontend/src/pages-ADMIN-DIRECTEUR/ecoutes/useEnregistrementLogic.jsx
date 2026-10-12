@@ -10,6 +10,7 @@ import {
   filterRecordings,
   sortRecordings,
 } from './ecoutes-utils'
+import { useRecordingsCoaching } from './useRecordingsCoaching'
 
 const RECENT_RECORDINGS_LIMIT = 60
 
@@ -33,10 +34,6 @@ export function useEnregistrementLogic() {
   const [selectedRecordingIds, setSelectedRecordingIds] = useState(new Set())
   const [bulkDownloading, setBulkDownloading] = useState(false)
   const [currentModalRecordingIndex, setCurrentModalRecordingIndex] = useState(null)
-  const [extractionQueue, setExtractionQueue] = useState([])
-  const [extractionDrawerOpen, setExtractionDrawerOpen] = useState(false)
-  const [selectedRecentIds, setSelectedRecentIds] = useState(new Set())
-  const [processedKeys, setProcessedKeys] = useState(new Set())
   const [speechScores, setSpeechScores] = useState(new Map())
   const speechScoresRef = useRef(speechScores)
   speechScoresRef.current = speechScores
@@ -72,7 +69,6 @@ export function useEnregistrementLogic() {
 
       setRecentRecordings(enriched)
       setRecentRecordingsTotalCount(totalCount)
-      setProcessedKeys(new Set(enriched.filter(r => r.hasConversation).map(r => r.key)))
       setRecentRecordingsError(null)
     } catch (loadError) {
       console.warn('Erreur chargement enregistrements récents:', loadError)
@@ -128,19 +124,6 @@ export function useEnregistrementLogic() {
       const userType = commercial.userType
       const recordingsData = await RecordingService.getRecordingsForUser(commercial.id, userType)
       setRecordings(recordingsData)
-      setProcessedKeys(prev => {
-        const next = new Set(prev)
-        let changed = false
-        recordingsData
-          .filter(recording => recording.hasConversation)
-          .forEach(recording => {
-            if (!next.has(recording.key)) {
-              next.add(recording.key)
-              changed = true
-            }
-          })
-        return changed ? next : prev
-      })
       showSuccess(
         `${recordingsData.length} enregistrement(s) chargé(s) pour ${commercial.prenom} ${commercial.nom}`
       )
@@ -175,35 +158,6 @@ export function useEnregistrementLogic() {
     hasNextPage,
     hasPreviousPage,
   } = usePagination(sortedRecordings, 20)
-
-  useEffect(() => {
-    const keys = currentRecordings
-      .filter(r => !r.hasConversation && !processedKeys.has(r.key))
-      .map(r => r.key)
-      .filter(Boolean)
-
-    if (!keys.length) return
-
-    let active = true
-
-    RecordingService.getProcessedKeys(keys).then(processed => {
-      if (!active) return
-      if (!processed.size) return
-      setProcessedKeys(prev => {
-        const next = new Set(prev)
-        let changed = false
-        processed.forEach(key => {
-          if (!next.has(key)) {
-            next.add(key)
-            changed = true
-          }
-        })
-        return changed ? next : prev
-      })
-    })
-
-    return () => { active = false }
-  }, [currentRecordings, processedKeys])
 
   useEffect(() => {
     const allKeys = [
@@ -262,18 +216,24 @@ export function useEnregistrementLogic() {
     }
   }, [recentRecordings, currentRecordings])
 
-  const selectableCurrentRecordings = useMemo(
-    () => currentRecordings.filter(recording => !processedKeys.has(recording.key)),
-    [currentRecordings, processedKeys]
+  const displayedRecordings = useMemo(
+    () => [...recentRecordings, ...currentRecordings],
+    [recentRecordings, currentRecordings]
   )
+  const {
+    analysesByKey,
+    coachingStatusOf,
+    retry: retryCoaching,
+    setAnalysis,
+  } = useRecordingsCoaching(displayedRecordings)
 
   const selectedCount = useMemo(
     () =>
-      selectableCurrentRecordings.reduce(
+      currentRecordings.reduce(
         (count, recording) => (selectedRecordingIds.has(recording.id) ? count + 1 : count),
         0
       ),
-    [selectableCurrentRecordings, selectedRecordingIds]
+    [currentRecordings, selectedRecordingIds]
   )
 
   const toggleRecordingSelection = useCallback(id => {
@@ -293,7 +253,7 @@ export function useEnregistrementLogic() {
   }, [])
 
   const toggleSelectAll = useCallback(() => {
-    const selectableIds = selectableCurrentRecordings.map(recording => recording.id)
+    const selectableIds = currentRecordings.map(recording => recording.id)
     if (!selectableIds.length) return
 
     const allCurrentSelected = selectableIds.every(id => selectedRecordingIds.has(id))
@@ -311,7 +271,7 @@ export function useEnregistrementLogic() {
       }
       return next
     })
-  }, [selectableCurrentRecordings, selectedRecordingIds])
+  }, [currentRecordings, selectedRecordingIds])
 
   useEffect(() => {
     if (!selectedCommercialForRecordings && currentPage === 1) {
@@ -326,11 +286,7 @@ export function useEnregistrementLogic() {
     setSelectedRecordingIds(prev => {
       if (!prev.size) return prev
 
-      const selectableIds = new Set(
-        currentRecordings
-          .filter(recording => !processedKeys.has(recording.key))
-          .map(recording => recording.id)
-      )
+      const selectableIds = new Set(currentRecordings.map(recording => recording.id))
 
       let changed = false
       const next = new Set()
@@ -345,7 +301,7 @@ export function useEnregistrementLogic() {
 
       return changed ? next : prev
     })
-  }, [currentRecordings, processedKeys])
+  }, [currentRecordings])
 
   const handleBulkDownload = useCallback(async () => {
     if (!selectedRecordingIds.size) return
@@ -416,117 +372,6 @@ export function useEnregistrementLogic() {
       setCurrentModalRecordingIndex(null)
     }
   }, [currentModalRecordingIndex, currentRecordings.length])
-
-  const hasActiveExtractions = extractionQueue.some(
-    item => item.step !== 'done' && item.step !== 'error'
-  )
-  const shouldPoll = extractionDrawerOpen || hasActiveExtractions
-
-  useEffect(() => {
-    if (!shouldPoll) return
-
-    let active = true
-    let timerId
-
-    const poll = async () => {
-      if (!active) return
-      try {
-        const queue = await RecordingService.getExtractionQueue()
-        if (active) setExtractionQueue(queue)
-      } catch (error) {
-        void error
-      }
-      if (active) timerId = setTimeout(poll, 2000)
-    }
-
-    timerId = setTimeout(poll, 2000)
-
-    return () => {
-      active = false
-      clearTimeout(timerId)
-    }
-  }, [shouldPoll])
-
-  const toggleRecentSelection = useCallback(id => {
-    setSelectedRecentIds(prev => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
-  }, [])
-
-  const clearRecentSelection = useCallback(() => {
-    setSelectedRecentIds(new Set())
-  }, [])
-
-  useEffect(() => {
-    setSelectedRecentIds(prev => {
-      if (!prev.size) return prev
-
-      const selectableIds = new Set(
-        recentRecordings
-          .filter(recording => !processedKeys.has(recording.key))
-          .map(recording => recording.id)
-      )
-
-      let changed = false
-      const next = new Set()
-
-      prev.forEach(id => {
-        if (selectableIds.has(id)) {
-          next.add(id)
-        } else {
-          changed = true
-        }
-      })
-
-      return changed ? next : prev
-    })
-  }, [recentRecordings, processedKeys])
-
-  const handleBatchExtraction = useCallback(async () => {
-    if (!selectedRecordingIds.size) return
-
-    const keys = currentRecordings
-      .filter(r => selectedRecordingIds.has(r.id) && !processedKeys.has(r.key))
-      .map(r => r.key)
-
-    if (!keys.length) return
-
-    try {
-      await RecordingService.triggerBatchExtraction(keys)
-      setExtractionDrawerOpen(true)
-      const queue = await RecordingService.getExtractionQueue()
-      setExtractionQueue(queue)
-      showSuccess(`${keys.length} extraction(s) lancée(s)`)
-    } catch (err) {
-      console.error('Erreur batch extraction:', err)
-      showError("Erreur lors du lancement des extractions")
-    }
-  }, [selectedRecordingIds, currentRecordings, processedKeys, showSuccess, showError])
-
-  const handleRecentBatchExtraction = useCallback(async (recentRecordings) => {
-    if (!selectedRecentIds.size) return
-
-    const keys = recentRecordings
-      .filter(r => selectedRecentIds.has(r.id) && !processedKeys.has(r.key))
-      .map(r => r.key)
-
-    if (!keys.length) return
-
-    try {
-      await RecordingService.triggerBatchExtraction(keys)
-      setExtractionDrawerOpen(true)
-      clearRecentSelection()
-      const queue = await RecordingService.getExtractionQueue()
-      setExtractionQueue(queue)
-      showSuccess(`${keys.length} extraction(s) lancée(s)`)
-    } catch (err) {
-      console.error('Erreur batch extraction:', err)
-      showError("Erreur lors du lancement des extractions")
-    }
-  }, [selectedRecentIds, processedKeys, clearRecentSelection, showSuccess, showError])
 
   const handleDownloadRecording = async recording => {
     try {
@@ -626,15 +471,10 @@ export function useEnregistrementLogic() {
     goToPreviousRecording,
     hasNextRecording,
     hasPreviousRecording,
-    extractionQueue,
-    extractionDrawerOpen,
-    setExtractionDrawerOpen,
-    handleBatchExtraction,
-    selectedRecentIds,
-    toggleRecentSelection,
-    clearRecentSelection,
-    handleRecentBatchExtraction,
-    processedKeys,
     speechScores,
+    analysesByKey,
+    coachingStatusOf,
+    retryCoaching,
+    setAnalysis,
   }
 }

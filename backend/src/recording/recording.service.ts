@@ -4,10 +4,6 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { execFile } from 'child_process';
-import * as fs from 'fs';
-import * as os from 'os';
-import * as path from 'path';
 import {
   S3Client,
   ListObjectsV2Command,
@@ -16,9 +12,6 @@ import {
   HeadObjectCommand,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
-import { promisify } from 'util';
-import { pipeline } from 'stream/promises';
-import { Readable } from 'stream';
 import {
   RecordingItem,
   RequestRecordingUploadInput,
@@ -30,8 +23,7 @@ import {
   RecordingSegmentDto,
 } from './recording.dto';
 import { PrismaService } from '../prisma.service';
-import { TranscriptionService, WhisperBusyError } from '../transcription/transcription.service';
-import { SpeechAnalysisService } from '../transcription/speech-analysis.service';
+import { SpeechAnalysisService } from '../speech-analysis/speech-analysis.service';
 import { S3DiagnosticsService } from '../s3-diagnostics/s3-diagnostics.service';
 import { CoachingService } from '../coaching/coaching.service';
 
@@ -39,9 +31,6 @@ type RoomTarget = {
   type: 'COMMERCIAL' | 'MANAGER';
   id: number;
 };
-
-const execFileAsync = promisify(execFile);
-const FFMPEG_MAX_BUFFER = 10 * 1024 * 1024;
 
 @Injectable()
 export class RecordingService {
@@ -74,7 +63,6 @@ export class RecordingService {
 
   constructor(
     private prisma: PrismaService,
-    private transcription: TranscriptionService,
     private speechAnalysis: SpeechAnalysisService,
     private s3Diagnostics: S3DiagnosticsService,
     private coaching: CoachingService,
@@ -221,7 +209,6 @@ export class RecordingService {
     metadata: {
       size?: number;
       lastModified?: Date;
-      hasConversation?: boolean;
     } = {},
   ): Promise<void> {
     const roomName = this.extractRoomFromKey(s3Key);
@@ -236,9 +223,6 @@ export class RecordingService {
       ...(metadata.lastModified === undefined
         ? {}
         : { lastModified: metadata.lastModified }),
-      ...(metadata.hasConversation === undefined
-        ? {}
-        : { hasConversation: metadata.hasConversation }),
     };
 
     const data = {
@@ -254,7 +238,6 @@ export class RecordingService {
       where: { s3Key },
       create: {
         s3Key,
-        hasConversation: metadata.hasConversation ?? false,
         ...data,
       },
       update: {
@@ -271,27 +254,15 @@ export class RecordingService {
     return Number.isFinite(value) ? value : undefined;
   }
 
-  private async markRecordingHasConversation(s3Key: string): Promise<void> {
-    try {
-      await this.prisma.recording.update({
-        where: { s3Key },
-        data: { hasConversation: true },
-      });
-    } catch {
-      await this.upsertRecordingIndex(s3Key, { hasConversation: true });
-    }
-  }
-
-  private buildSegmentKey(
-    originalKey: string,
-    porteId: number,
-    startTime: number,
-  ): string {
-    const originalWithoutExt = originalKey.replace(/\.[^/.]+$/u, '');
-    const safeStartTime = Number(startTime.toFixed(3))
-      .toString()
-      .replace(/\./g, '_');
-    return `${originalWithoutExt}_porte_${porteId}_${safeStartTime}s.mp4`;
+  /**
+   * Audio d'un segment : le fichier découpé des anciens enregistrements par
+   * immeuble, sinon l'audio original (1 audio = 1 porte).
+   */
+  private segmentAudioKey(segment: {
+    s3KeySegment: string | null;
+    s3KeyOriginal: string;
+  }): string {
+    return segment.s3KeySegment ?? segment.s3KeyOriginal;
   }
 
   private async signedUrlOrUndefined(key: string): Promise<string | undefined> {
@@ -348,8 +319,6 @@ export class RecordingService {
       startTime: segment.startTime,
       endTime: segment.endTime,
       durationSec: segment.durationSec,
-      transcription: segment.transcription ?? undefined,
-      speechScore: segment.speechScore ?? undefined,
       status: segment.status,
       createdAt: segment.createdAt,
       immeubleId: segment.immeubleId ?? segment.porte?.immeuble?.id,
@@ -484,7 +453,6 @@ export class RecordingService {
 
     if (validSegments.length > 0) {
       const roomTarget = roomName ? this.parseRoomIdentifier(roomName) : null;
-      const createdAfter = new Date();
       const commercialId =
         roomTarget?.type === 'COMMERCIAL' ? roomTarget.id : null;
       const managerId = roomTarget?.type === 'MANAGER' ? roomTarget.id : null;
@@ -510,24 +478,6 @@ export class RecordingService {
           durationSec: segment.endTime - segment.startTime,
         })),
       });
-
-      const createdSegments = await this.prisma.recordingSegment.findMany({
-        where: {
-          s3KeyOriginal: s3Key,
-          status: 'PENDING',
-          createdAt: { gte: createdAfter },
-          OR: validSegments.map((segment) => ({
-            porteId: segment.porteId,
-            startTime: segment.startTime,
-            endTime: segment.endTime,
-          })),
-        },
-        orderBy: { id: 'desc' },
-      });
-
-      if (createdSegments.length > 0) {
-        void this.processSegments(s3Key, createdSegments);
-      }
     }
 
     // Coaching IA : 1 audio = 1 porte. Analyse déclenchée automatiquement
@@ -602,65 +552,7 @@ export class RecordingService {
       startTime: segment.startTime,
       endTime: segment.endTime,
       durationSec: segment.durationSec,
-      transcription: segment.transcription ?? undefined,
-      speechScore: segment.speechScore ?? undefined,
       status: segment.status,
-      createdAt: segment.createdAt,
-    }));
-  }
-
-  async getSegmentsByKey(
-    s3Key: string,
-    currentUser: { id: number; role: string },
-  ): Promise<RecordingSegmentDto[]> {
-    if (currentUser.role !== 'admin' && currentUser.role !== 'directeur') {
-      throw new ForbiddenException('Access denied to recording segments');
-    }
-
-    const roomName = this.extractRoomFromKey(s3Key);
-    if (roomName) {
-      await this.ensureRoomAccess(roomName, currentUser.id, currentUser.role);
-    }
-
-    const segments = await this.prisma.recordingSegment.findMany({
-      where: { s3KeyOriginal: s3Key },
-      include: {
-        porte: {
-          select: {
-            numero: true,
-            etage: true,
-            immeuble: { select: { adresse: true } },
-          },
-        },
-      },
-      orderBy: { startTime: 'asc' },
-    });
-
-    const withUrls = await Promise.all(
-      segments.map(async (segment) => ({
-        ...segment,
-        streamingUrl: segment.s3KeySegment
-          ? await this.signedUrlOrUndefined(segment.s3KeySegment)
-          : undefined,
-      })),
-    );
-
-    return withUrls.map((segment) => ({
-      id: segment.id,
-      porteId: segment.porteId,
-      porteNumero: segment.porte.numero,
-      porteEtage: segment.porte.etage,
-      immeubleAdresse: segment.porte.immeuble.adresse,
-      s3KeyOriginal: segment.s3KeyOriginal,
-      s3KeySegment: segment.s3KeySegment ?? undefined,
-      statut: segment.statut ?? undefined,
-      startTime: segment.startTime,
-      endTime: segment.endTime,
-      durationSec: segment.durationSec,
-      transcription: segment.transcription ?? undefined,
-      speechScore: segment.speechScore ?? undefined,
-      status: segment.status,
-      streamingUrl: segment.streamingUrl,
       createdAt: segment.createdAt,
     }));
   }
@@ -816,9 +708,9 @@ export class RecordingService {
 
     const mapped = await Promise.all(
       segments.map(async (segment) => {
-        const streamingUrl = segment.s3KeySegment
-          ? await this.signedUrlOrUndefined(segment.s3KeySegment)
-          : undefined;
+        const streamingUrl = await this.signedUrlOrUndefined(
+          this.segmentAudioKey(segment),
+        );
 
         const comm = segment.porte.immeuble.commercial;
         const mgr = segment.porte.immeuble.manager;
@@ -841,8 +733,6 @@ export class RecordingService {
           startTime: segment.startTime,
           endTime: segment.endTime,
           durationSec: segment.durationSec,
-          transcription: segment.transcription ?? undefined,
-          speechScore: segment.speechScore ?? undefined,
           status: segment.status,
           streamingUrl,
           createdAt: segment.createdAt,
@@ -890,7 +780,7 @@ export class RecordingService {
     const segmentsToDelete = await this.prisma.recordingSegment.findMany({
       where,
       select: { id: true },
-      orderBy: { speechScore: 'desc' },
+      orderBy: { createdAt: 'desc' },
       take: safeLimit,
     });
 
@@ -932,9 +822,9 @@ export class RecordingService {
     const withUrls = await Promise.all(
       segments.map(async (segment) => ({
         ...segment,
-        streamingUrl: segment.s3KeySegment
-          ? await this.signedUrlOrUndefined(segment.s3KeySegment)
-          : undefined,
+        streamingUrl: await this.signedUrlOrUndefined(
+          this.segmentAudioKey(segment),
+        ),
       })),
     );
 
@@ -950,298 +840,10 @@ export class RecordingService {
       startTime: segment.startTime,
       endTime: segment.endTime,
       durationSec: segment.durationSec,
-      transcription: segment.transcription ?? undefined,
-      speechScore: segment.speechScore ?? undefined,
       status: segment.status,
       streamingUrl: segment.streamingUrl,
       createdAt: segment.createdAt,
     }));
-  }
-
-  private async processSegments(
-    originalS3Key: string,
-    segments: Array<{
-      id: number;
-      porteId: number;
-      startTime: number;
-      endTime: number;
-    }>,
-  ): Promise<void> {
-    const tmpDir = path.join(
-      os.tmpdir(),
-      `recording-segments-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-    );
-    const originalFilePath = path.join(tmpDir, 'original.mp4');
-
-    try {
-      fs.mkdirSync(tmpDir, { recursive: true });
-      const downloaded = await this.downloadFromS3(
-        originalS3Key,
-        originalFilePath,
-      );
-      if (!downloaded) {
-        for (const segment of segments) {
-          await this.prisma.recordingSegment.update({
-            where: { id: segment.id },
-            data: { status: 'FAILED' },
-          });
-        }
-        return;
-      }
-
-      // ── PASSE 1 : Découpage + upload en parallèle (audio jouable, max 3) ──
-      const MAX_CONCURRENT = 3;
-      let running = 0;
-      const queue: (() => void)[] = [];
-      const limitFn = <T>(fn: () => Promise<T>): Promise<T> =>
-        new Promise<T>((resolve, reject) => {
-          const run = () => {
-            running++;
-            fn().then(resolve, reject).finally(() => {
-              running--;
-              const next = queue.shift();
-              if (next) next();
-            });
-          };
-          if (running < MAX_CONCURRENT) run();
-          else queue.push(run);
-        });
-
-      const results = await Promise.allSettled(
-        segments.map((segment) =>
-          limitFn(async () => {
-            const segmentFilePath = path.join(tmpDir, `segment-${segment.id}.mp4`);
-            const segmentS3Key = this.buildSegmentKey(
-              originalS3Key,
-              segment.porteId,
-              segment.startTime,
-            );
-
-            await this.prisma.recordingSegment.update({
-              where: { id: segment.id },
-              data: { status: 'PROCESSING' },
-            });
-
-            await execFileAsync(
-              'ffmpeg',
-              [
-                '-y',
-                '-i',
-                originalFilePath,
-                '-ss',
-                String(segment.startTime),
-                '-to',
-                String(segment.endTime),
-                '-c',
-                'copy',
-                segmentFilePath,
-              ],
-              { maxBuffer: FFMPEG_MAX_BUFFER },
-            );
-
-            await this.uploadSegmentToS3(segmentFilePath, segmentS3Key);
-
-            await this.prisma.recordingSegment.update({
-              where: { id: segment.id },
-              data: {
-                s3KeySegment: segmentS3Key,
-                status: 'COMPLETED',
-              },
-            });
-
-            return { id: segment.id, s3Key: segmentS3Key };
-          }),
-        ),
-      );
-
-      // Marquer les échecs
-      for (let i = 0; i < results.length; i++) {
-        if (results[i].status === 'rejected') {
-          const seg = segments[i];
-          this.logger.error(
-            `Segment cut failed for segmentId=${seg.id}: ${(results[i] as PromiseRejectedResult).reason?.message || (results[i] as PromiseRejectedResult).reason}`,
-          );
-          await this.prisma.recordingSegment.update({
-            where: { id: seg.id },
-            data: { status: 'FAILED' },
-          });
-        }
-      }
-
-      // ── PASSE 2 : Enrichissement en arrière-plan (transcription + _conv.mp4) ──
-      void this.enrichSegments(originalS3Key, originalFilePath, segments);
-
-    } catch (error) {
-      this.logger.error(
-        `Unexpected error while processing segments for ${originalS3Key}: ${error?.message || error}`,
-      );
-      for (const segment of segments) {
-        await this.prisma.recordingSegment.update({
-          where: { id: segment.id },
-          data: { status: 'FAILED' },
-        });
-      }
-      this.cleanupDir(tmpDir);
-    }
-    // Note: tmpDir cleanup happens in enrichSegments after it finishes
-  }
-
-  /**
-   * Passe 2 : Enrichissement — 1 seul appel Whisper pour tout le fichier.
-   * Produit : transcription par segment, speech score, et _conv.mp4.
-   * Fire-and-forget — ne bloque jamais la passe 1.
-   */
-  private async enrichSegments(
-    originalS3Key: string,
-    originalFilePath: string,
-    segments: Array<{ id: number; startTime: number; endTime: number }>,
-  ): Promise<void> {
-    const tmpDir = path.dirname(originalFilePath);
-
-    try {
-      // 1. Un seul appel Whisper sur le fichier complet
-      const whisperResult = await this.transcription.transcribeFile(originalFilePath);
-      if (!whisperResult || whisperResult.segments.length === 0) {
-        this.logger.warn(`Whisper returned no segments for ${originalS3Key}`);
-        return;
-      }
-
-      const { segments: whisperSegments, duration: whisperDuration } = whisperResult;
-
-      // 2. Extraire la transcription par segment (match par timestamps)
-      for (const segment of segments) {
-        try {
-          const overlapping = whisperSegments.filter(
-            (ws) => ws.end > segment.startTime && ws.start < segment.endTime,
-          );
-          const transcription = overlapping.map((ws) => ws.text).join(' ').trim() || undefined;
-
-          // Speech score basé sur Whisper (ratio parole/durée du segment)
-          const segDuration = segment.endTime - segment.startTime;
-          const speechDuration = overlapping.reduce((sum, ws) => {
-            const overlapStart = Math.max(ws.start, segment.startTime);
-            const overlapEnd = Math.min(ws.end, segment.endTime);
-            return sum + Math.max(0, overlapEnd - overlapStart);
-          }, 0);
-          const speechScore = segDuration > 0
-            ? Math.round(Math.min(100, (speechDuration / segDuration) * 100))
-            : null;
-
-          await this.prisma.recordingSegment.update({
-            where: { id: segment.id },
-            data: { transcription, speechScore },
-          });
-        } catch (err) {
-          this.logger.warn(
-            `Enrichment failed for segmentId=${segment.id}: ${err?.message || err}`,
-          );
-        }
-      }
-
-      // 3. Générer _conv.mp4 (audio nettoyé — seulement la parole)
-      try {
-        const merged = this.transcription.mergeSegments(whisperSegments, 2.0);
-        if (merged.length > 0) {
-          const convFile = path.join(tmpDir, 'conversation.mp4');
-          const cut = await this.transcription.cutAudio(originalFilePath, convFile, merged);
-          if (cut) {
-            const convKey = originalS3Key.replace(/\.mp4$/i, '_conv.mp4');
-            await this.transcription.uploadToS3(convFile, convKey);
-            await this.markRecordingHasConversation(originalS3Key);
-            this.logger.log(`_conv.mp4 generated for ${originalS3Key}`);
-          }
-        }
-      } catch (convErr) {
-        this.logger.warn(
-          `_conv.mp4 generation failed for ${originalS3Key}: ${convErr?.message || convErr}`,
-        );
-      }
-
-      // 4. Cache le score global Whisper
-      if (whisperDuration > 0) {
-        this.speechAnalysis.cacheFromWhisperSegments(
-          originalS3Key,
-          whisperSegments,
-          whisperDuration,
-        );
-      }
-
-    } catch (error) {
-      if (error instanceof WhisperBusyError) {
-        this.logger.warn('Whisper occupé : enrichissement différé, segments conservés');
-        this.transcription.deferBusy(`enrich:${originalS3Key}`, async () => {
-          const retryDir = fs.mkdtempSync(path.join(os.tmpdir(), 'recording-enrich-'));
-          const retryFile = path.join(retryDir, 'original.mp4');
-          try {
-            if (await this.downloadFromS3(originalS3Key, retryFile)) await this.enrichSegments(originalS3Key, retryFile, segments);
-          } finally { this.cleanupDir(retryDir); }
-        });
-        return;
-      }
-      this.logger.error(
-        `Enrichment failed for ${originalS3Key}: ${error?.message || error}`,
-      );
-    } finally {
-      this.cleanupDir(tmpDir);
-    }
-  }
-
-  private async downloadFromS3(
-    s3Key: string,
-    outputPath: string,
-  ): Promise<boolean> {
-    try {
-      const resp = await this.s3Diagnostics.runWithOperation(
-        'RecordingService.downloadFromS3',
-        () =>
-          this.s3.send(
-            new GetObjectCommand({ Bucket: this.bucket, Key: s3Key }),
-          ),
-      );
-
-      if (!resp.Body) {
-        return false;
-      }
-
-      const writeStream = fs.createWriteStream(outputPath);
-      await pipeline(resp.Body as Readable, writeStream);
-      return true;
-    } catch (error) {
-      this.logger.error(
-        `Unable to download ${s3Key}: ${error?.message || error}`,
-      );
-      return false;
-    }
-  }
-
-  private async uploadSegmentToS3(
-    filePath: string,
-    s3Key: string,
-  ): Promise<void> {
-    const stat = fs.statSync(filePath);
-    const stream = fs.createReadStream(filePath);
-
-    await this.s3Diagnostics.runWithOperation(
-      'RecordingService.uploadSegmentToS3',
-      () =>
-        this.s3.send(
-          new PutObjectCommand({
-            Bucket: this.bucket,
-            Key: s3Key,
-            Body: stream,
-            ContentType: 'audio/mp4',
-            ContentLength: stat.size,
-          }),
-        ),
-    );
-  }
-
-  private cleanupDir(dirPath: string): void {
-    try {
-      if (fs.existsSync(dirPath)) {
-        fs.rmSync(dirPath, { recursive: true, force: true });
-      }
-    } catch {}
   }
 
   async getStreamingUrl(
@@ -1269,153 +871,6 @@ export class RecordingService {
     } catch (error) {
       this.logger.error(`Erreur génération URL streaming: ${error.message}`);
       throw error;
-    }
-  }
-
-  async triggerConversationExtraction(
-    key: string,
-    currentUser: { id: number; role: string },
-  ): Promise<boolean> {
-    const roomName = this.extractRoomFromKey(key);
-    if (roomName) {
-      await this.ensureRoomAccess(roomName, currentUser.id, currentUser.role);
-    } else if (currentUser.role !== 'admin') {
-      throw new ForbiddenException('Unknown recording key');
-    }
-
-    const convKey = key.replace(/\.mp4$/i, '_conv.mp4');
-
-    try {
-      await this.s3Diagnostics.runWithOperation(
-        'RecordingService.triggerConversationExtraction',
-        () =>
-          this.s3.send(
-            new HeadObjectCommand({ Bucket: this.bucket, Key: convKey }),
-          ),
-      );
-      return false;
-    } catch {
-      // Intentionally swallowed — file may not exist yet
-    }
-
-    if (this.transcription.isProcessing(key)) {
-      return false;
-    }
-
-    void this.transcription.processRecording(key);
-    return true;
-  }
-
-  getExtractionProgress(
-    key: string,
-  ): { step: string; current: number; total: number } | null {
-    return this.transcription.getProgress(key);
-  }
-
-  async triggerBatchExtraction(
-    keys: string[],
-    currentUser: { id: number; role: string },
-  ): Promise<number> {
-    let started = 0;
-
-    for (const key of keys) {
-      const roomName = this.extractRoomFromKey(key);
-      if (roomName) {
-        try {
-          await this.ensureRoomAccess(
-            roomName,
-            currentUser.id,
-            currentUser.role,
-          );
-        } catch {
-          continue;
-        }
-      } else if (currentUser.role !== 'admin') {
-        continue;
-      }
-
-      if (this.transcription.isProcessing(key)) continue;
-
-      const convKey = key.replace(/\.mp4$/i, '_conv.mp4');
-      try {
-        await this.s3Diagnostics.runWithOperation(
-          'RecordingService.triggerBatchExtraction',
-          () =>
-            this.s3.send(
-              new HeadObjectCommand({ Bucket: this.bucket, Key: convKey }),
-            ),
-        );
-        continue;
-      } catch {
-        // falls through — file doesn't exist yet
-      }
-
-      void this.transcription.processRecording(key);
-      started++;
-    }
-
-    return started;
-  }
-
-  getExtractionQueue(): {
-    key: string;
-    step: string;
-    current: number;
-    total: number;
-  }[] {
-    return this.transcription.getQueueState();
-  }
-
-  async getProcessedKeys(keys: string[]): Promise<string[]> {
-    const uniqueKeys = [...new Set(keys.filter(Boolean))];
-    if (!uniqueKeys.length) return [];
-
-    const recordings = await this.prisma.recording.findMany({
-      where: {
-        s3Key: { in: uniqueKeys },
-        hasConversation: true,
-      },
-      select: { s3Key: true },
-    });
-
-    return recordings.map((recording) => recording.s3Key);
-  }
-
-  async getConversationStreamingUrl(
-    key: string,
-    currentUser: { id: number; role: string },
-  ): Promise<string | null> {
-    const roomName = this.extractRoomFromKey(key);
-    if (roomName) {
-      await this.ensureRoomAccess(roomName, currentUser.id, currentUser.role);
-    } else if (currentUser.role !== 'admin') {
-      throw new ForbiddenException('Unknown recording key');
-    }
-
-    const recording = await this.prisma.recording.findUnique({
-      where: { s3Key: key },
-      select: { hasConversation: true },
-    });
-
-    if (!recording?.hasConversation) {
-      return null;
-    }
-
-    const convKey = key.replace(/\.mp4$/i, '_conv.mp4');
-
-    try {
-      const command = new GetObjectCommand({
-        Bucket: this.bucket,
-        Key: convKey,
-        ResponseContentType: 'audio/mp4',
-        ResponseContentDisposition: 'inline',
-      });
-
-      return await getSignedUrl(this.s3, command, {
-        expiresIn: 7200,
-      });
-    } catch {
-      return null;
     }
   }
 
@@ -1456,7 +911,6 @@ export class RecordingService {
         key: item.s3Key,
         size: this.toRecordingItemSize(item.size),
         lastModified: item.lastModified ?? undefined,
-        hasConversation: item.hasConversation,
       })),
       totalCount,
     };
@@ -1591,7 +1045,6 @@ export class RecordingService {
         key: item.s3Key,
         size: this.toRecordingItemSize(item.size),
         lastModified: item.lastModified ?? undefined,
-        hasConversation: item.hasConversation,
       })),
       totalCount,
     };

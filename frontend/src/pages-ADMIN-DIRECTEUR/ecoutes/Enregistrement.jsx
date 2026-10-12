@@ -30,11 +30,10 @@ import {
 } from '@/components/ui/select'
 import { Pagination } from '@/components/Pagination'
 import { TableSkeleton } from '@/components/LoadingSkeletons'
-import { Clock, Mic, Download, X, Loader2, Play, User, ChevronDown, XCircle, Sparkles, Check, Minus } from 'lucide-react'
+import { Clock, Mic, Download, X, Loader2, Play, User, ChevronDown, XCircle, Check, Minus } from 'lucide-react'
 import { usePagination } from '@/hooks/utils/data/usePagination'
 import { useEnregistrementLogic } from './useEnregistrementLogic'
 import RecordingDetailModal from './RecordingDetailModal'
-import ExtractionQueueDrawer from './ExtractionQueueDrawer'
 import {
   UserAvatar,
   RecordingStatusBadge,
@@ -100,16 +99,11 @@ export default function Enregistrement() {
     goToPreviousRecording,
     hasNextRecording,
     hasPreviousRecording,
-    extractionQueue,
-    extractionDrawerOpen,
-    setExtractionDrawerOpen,
-    handleBatchExtraction,
-    selectedRecentIds,
-    toggleRecentSelection,
-    clearRecentSelection,
-    handleRecentBatchExtraction,
-    processedKeys,
     speechScores,
+    analysesByKey,
+    coachingStatusOf,
+    retryCoaching,
+    setAnalysis,
   } = useEnregistrementLogic()
 
   const [recentModalRecording, setRecentModalRecording] = useState(null)
@@ -341,29 +335,6 @@ export default function Enregistrement() {
             </div>
           ) : filteredRecentRecordings.length > 0 ? (
             <div className="space-y-4">
-              {selectedRecentIds.size > 0 && (
-                <div className="flex flex-col gap-2 px-3 py-2 bg-muted/60 border border-border/60 rounded-lg sm:flex-row sm:items-center sm:justify-between">
-                  <span className="text-sm font-medium">{selectedRecentIds.size} sélectionné(s)</span>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={clearRecentSelection}
-                      className="h-7 text-xs gap-1"
-                    >
-                      <X className="w-3 h-3" /> Désélectionner
-                    </Button>
-                    <Button
-                      size="sm"
-                      onClick={() => handleRecentBatchExtraction(filteredRecentRecordings)}
-                      className="h-7 text-xs gap-1"
-                    >
-                      <Sparkles className="w-3 h-3" />
-                      Extraire
-                    </Button>
-                  </div>
-                </div>
-              )}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                 {currentRecentRecordings.map(recording => (
                   <RecordingCard
@@ -371,9 +342,6 @@ export default function Enregistrement() {
                     recording={recording}
                     onPlay={openRecentModal}
                     onDownload={handleDownloadRecording}
-                    isSelected={selectedRecentIds.has(recording.id)}
-                    onToggleSelect={toggleRecentSelection}
-                    isProcessed={processedKeys.has(recording.key)}
                     speechScore={speechScores.get(recording.key)}
                   />
                 ))}
@@ -577,15 +545,6 @@ export default function Enregistrement() {
                 </Button>
                 <Button
                   size="sm"
-                  variant="outline"
-                  onClick={handleBatchExtraction}
-                  className="h-7 text-xs gap-1"
-                >
-                  <Sparkles className="w-3 h-3" />
-                  Extraire
-                </Button>
-                <Button
-                  size="sm"
                   onClick={handleBulkDownload}
                   disabled={bulkDownloading}
                   className="h-7 text-xs gap-1"
@@ -621,11 +580,10 @@ export default function Enregistrement() {
                     <TableRow>
                       <TableHead className="w-10">
                         {(() => {
-                          const selectableRecordings = currentRecordings.filter(r => !processedKeys.has(r.key))
-                          if (!selectableRecordings.length) return null
+                          if (!currentRecordings.length) return null
 
                           const allSelected =
-                            selectableRecordings.every(r => selectedRecordingIds.has(r.id))
+                            currentRecordings.every(r => selectedRecordingIds.has(r.id))
                           const someSelected = selectedCount > 0 && !allSelected
                           return (
                             <button
@@ -694,24 +652,22 @@ export default function Enregistrement() {
                           className="cursor-pointer"
                         >
                           <TableCell onClick={e => e.stopPropagation()}>
-                            {processedKeys.has(recording.key) ? null : (
-                              <button
-                                type="button"
-                                onClick={e => {
-                                  e.stopPropagation();
-                                  toggleRecordingSelection(recording.id);
-                                }}
-                                className={`w-4.5 h-4.5 rounded-md border flex items-center justify-center transition-all duration-150 cursor-pointer ${
-                                  selectedRecordingIds.has(recording.id)
-                                    ? 'bg-primary border-primary text-primary-foreground scale-105'
-                                    : 'border-border/80 bg-background hover:border-primary/50'
-                                }`}
-                              >
-                                {selectedRecordingIds.has(recording.id) && (
-                                  <Check className="w-3 h-3" strokeWidth={3} />
-                                )}
-                              </button>
-                            )}
+                            <button
+                              type="button"
+                              onClick={e => {
+                                e.stopPropagation();
+                                toggleRecordingSelection(recording.id);
+                              }}
+                              className={`w-4.5 h-4.5 rounded-md border flex items-center justify-center transition-all duration-150 cursor-pointer ${
+                                selectedRecordingIds.has(recording.id)
+                                  ? 'bg-primary border-primary text-primary-foreground scale-105'
+                                  : 'border-border/80 bg-background hover:border-primary/50'
+                              }`}
+                            >
+                              {selectedRecordingIds.has(recording.id) && (
+                                <Check className="w-3 h-3" strokeWidth={3} />
+                              )}
+                            </button>
                           </TableCell>
                           <TableCell className="font-medium">
                             <div className="flex flex-col gap-1">
@@ -798,6 +754,10 @@ export default function Enregistrement() {
           if (!o) closeRecordingModal()
         }}
         recording={currentModalRecording}
+        analysis={analysesByKey.get(currentModalRecording?.key)}
+        coachingStatus={coachingStatusOf(currentModalRecording?.key)}
+        onRetryCoaching={retryCoaching}
+        onAnalysisLaunched={setAnalysis}
         currentIndex={currentModalRecording ? currentRecordings.indexOf(currentModalRecording) : 0}
         totalCount={currentRecordings.length}
         hasNext={hasNextRecording}
@@ -816,6 +776,10 @@ export default function Enregistrement() {
           }
         }}
         recording={recentModalRecording}
+        analysis={analysesByKey.get(recentModalRecording?.key)}
+        coachingStatus={coachingStatusOf(recentModalRecording?.key)}
+        onRetryCoaching={retryCoaching}
+        onAnalysisLaunched={setAnalysis}
         currentIndex={recentModalIndex ?? 0}
         totalCount={filteredRecentRecordings.length}
         hasNext={recentModalIndex !== null && recentModalIndex < filteredRecentRecordings.length - 1}
@@ -831,12 +795,6 @@ export default function Enregistrement() {
           setRecentModalRecording(filteredRecentRecordings[prev])
         }}
         onDownload={handleDownloadRecording}
-      />
-
-      <ExtractionQueueDrawer
-        queue={extractionQueue}
-        open={extractionDrawerOpen}
-        onOpenChange={setExtractionDrawerOpen}
       />
     </div>
   )

@@ -79,26 +79,6 @@ export class SpeechAnalysisService implements OnModuleDestroy {
   // Public API
   // ---------------------------------------------------------------------------
 
-  async computeScore(filePath: string): Promise<number | null> {
-    try {
-      const [totalDuration, silences] = await Promise.all([
-        this.getMediaDuration(filePath),
-        this.detectSilences(filePath),
-      ]);
-      if (totalDuration <= 0) return null;
-      const silenceDuration = silences.reduce((sum, s) => sum + (s.end - s.start), 0);
-      const speechDurationSec = Math.max(0, totalDuration - silenceDuration);
-      return Math.round(Math.min(100, (speechDurationSec / totalDuration) * 100));
-    } catch (error) {
-      this.logger.warn(`computeScore failed: ${error?.message || error}`);
-      return null;
-    }
-  }
-
-  getCachedScore(key: string): SpeechScore | null {
-    return this.cache.get(key) ?? null;
-  }
-
   /** Return all cached scores for the given keys */
   getCachedScores(keys: string[]): Map<string, SpeechScore> {
     const result = new Map<string, SpeechScore>();
@@ -149,39 +129,6 @@ export class SpeechAnalysisService implements OnModuleDestroy {
   /** Check if analysis is currently running for a key */
   isAnalyzing(key: string): boolean {
     return this.analyzing.has(key);
-  }
-
-  /**
-   * Cache a speech score derived from Whisper segments (free — no extra processing).
-   * Called by TranscriptionService after successful transcription.
-   */
-  cacheFromWhisperSegments(
-    key: string,
-    segments: { start: number; end: number }[],
-    totalDurationSec: number,
-  ): void {
-    if (totalDurationSec <= 0 || segments.length === 0) return;
-
-    const speechDurationSec = segments.reduce(
-      (sum, s) => sum + (s.end - s.start),
-      0,
-    );
-
-    const score = Math.round(
-      Math.min(100, (speechDurationSec / totalDurationSec) * 100),
-    );
-
-    this.cache.set(key, { score, totalDurationSec, speechDurationSec });
-    void this.persistAnalysisResult(
-      key,
-      score,
-      totalDurationSec,
-      speechDurationSec,
-    );
-
-    this.logger.debug(
-      `Score Whisper pour ${key}: ${score}% (${speechDurationSec.toFixed(1)}s / ${totalDurationSec.toFixed(1)}s)`,
-    );
   }
 
   /**
@@ -328,7 +275,6 @@ export class SpeechAnalysisService implements OnModuleDestroy {
         totalDuration,
         speechDurationSec,
       );
-      await this.persistScore(s3Key, score);
 
       this.logger.debug(
         `Score silencedetect pour ${s3Key}: ${score}% (${speechDurationSec.toFixed(1)}s parole / ${totalDuration.toFixed(1)}s total)`,
@@ -345,17 +291,6 @@ export class SpeechAnalysisService implements OnModuleDestroy {
       this.cleanupDir(tmpDir);
       this.analyzing.delete(s3Key);
       this.releaseSlot();
-    }
-  }
-
-  private async persistScore(s3Key: string, score: number): Promise<void> {
-    try {
-      await this.prisma.recordingSegment.updateMany({
-        where: { s3KeySegment: s3Key, speechScore: null },
-        data: { speechScore: score },
-      });
-    } catch {
-      // Best-effort — segment may not exist for full recordings
     }
   }
 

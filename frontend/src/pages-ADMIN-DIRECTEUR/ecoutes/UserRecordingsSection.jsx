@@ -11,6 +11,7 @@ import {
 } from '@/components/ui/table'
 import { RecordingService } from '@/services/audio'
 import RecordingDetailModal from './RecordingDetailModal'
+import { useRecordingsCoaching } from './useRecordingsCoaching'
 import { Download, Loader2, Mic, Play, RefreshCw } from 'lucide-react'
 
 const INITIAL_VISIBLE_COUNT = 6
@@ -37,6 +38,7 @@ export default function UserRecordingsSection({ userId, userType, userName }) {
   const [showAll, setShowAll] = useState(false)
   const [selectedIndex, setSelectedIndex] = useState(null)
   const [downloadingKey, setDownloadingKey] = useState(null)
+  const { analysesByKey, coachingStatusOf, retry, setAnalysis } = useRecordingsCoaching(recordings)
 
   const normalizedUserType = userType?.toLowerCase()
 
@@ -227,6 +229,10 @@ export default function UserRecordingsSection({ userId, userType, userName }) {
           if (!open) setSelectedIndex(null)
         }}
         recording={selectedRecording}
+        analysis={analysesByKey.get(selectedRecording?.key)}
+        coachingStatus={coachingStatusOf(selectedRecording?.key)}
+        onRetryCoaching={retry}
+        onAnalysisLaunched={setAnalysis}
         onNext={() => {
           if (hasNext) setSelectedIndex(prev => prev + 1)
         }}

@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -11,25 +10,18 @@ import {
   MessageSquare,
   Mic,
   DoorOpen,
-  ChevronDown,
-  ChevronUp,
   PlayCircle,
 } from 'lucide-react'
 import { getStatusLabel, getStatusColor } from '@/constants/domain/porte-status'
 import { usePorte, useRecordingSegmentsByPorte } from '@/hooks/metier/use-api'
 import PorteHistoriqueTimeline from '../immeubles/components/PorteHistoriqueTimeline'
-import {
-  SpeechScoreBar,
-  formatDuration,
-} from '@/pages-ADMIN-DIRECTEUR/ecoutes/EnregistrementComponents'
+import { formatDuration } from '@/pages-ADMIN-DIRECTEUR/ecoutes/EnregistrementComponents'
 import AudioPlayer from '@/components/AudioPlayer'
-import { RecordingService } from '@/services/audio'
+import { useSegmentAudio } from '@/hooks/ecoutes/useSegmentAudio'
 
 function SegmentCard({ segment }) {
-  const [expanded, setExpanded] = useState(false)
-  const [segmentUrl, setSegmentUrl] = useState(null)
-  const [loadingSegment, setLoadingSegment] = useState(false)
-  const [audioError, setAudioError] = useState(null)
+  const { audioKey, audioUrl, loadingAudio, audioError, loadAudio, onWavesurferReady } =
+    useSegmentAudio(segment)
   const date = new Date(segment.createdAt)
   const dateStr = date.toLocaleDateString('fr-FR', {
     day: '2-digit',
@@ -38,28 +30,6 @@ function SegmentCard({ segment }) {
   })
   const timeStr = date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
   const duration = formatDuration(segment.durationSec)
-
-  const truncateLimit = 180
-  const hasLongTranscription = segment.transcription && segment.transcription.length > truncateLimit
-  const displayedTranscription =
-    hasLongTranscription && !expanded
-      ? segment.transcription.slice(0, truncateLimit) + '\u2026'
-      : segment.transcription
-
-  const handleLoadSegment = async () => {
-    if (!segment.s3KeySegment || loadingSegment) return
-
-    setLoadingSegment(true)
-    setAudioError(null)
-    try {
-      const url = await RecordingService.getStreamingUrl(segment.s3KeySegment)
-      setSegmentUrl(url)
-    } catch {
-      setAudioError("Impossible de charger l'audio.")
-    } finally {
-      setLoadingSegment(false)
-    }
-  }
 
   return (
     <div className="rounded-xl border border-border/60 hover:border-border hover:shadow-sm transition-all duration-200 bg-card p-3">
@@ -82,22 +52,21 @@ function SegmentCard({ segment }) {
               {getStatusLabel(segment.statut)}
             </Badge>
           )}
-          {segment.speechScore != null && <SpeechScoreBar score={segment.speechScore} />}
         </div>
       </div>
 
-      {segmentUrl ? (
-        <AudioPlayer src={segmentUrl} />
-      ) : segment.s3KeySegment ? (
+      {audioUrl ? (
+        <AudioPlayer src={audioUrl} onWavesurferReady={onWavesurferReady} />
+      ) : audioKey ? (
         <Button
           type="button"
           size="sm"
           variant="outline"
-          onClick={handleLoadSegment}
-          disabled={loadingSegment}
+          onClick={loadAudio}
+          disabled={loadingAudio}
           className="mb-2 h-8 gap-1.5"
         >
-          {loadingSegment ? (
+          {loadingAudio ? (
             <Loader2 className="h-3.5 w-3.5 animate-spin" />
           ) : (
             <PlayCircle className="h-3.5 w-3.5" />
@@ -106,36 +75,6 @@ function SegmentCard({ segment }) {
         </Button>
       ) : null}
       {audioError && <p className="mb-2 text-[11px] text-red-600">{audioError}</p>}
-
-      {segment.transcription && (
-        <div className="bg-muted/40 rounded-lg p-2.5 border border-border/40">
-          <div className="flex items-start gap-1.5">
-            <MessageSquare className="h-3 w-3 mt-0.5 shrink-0 text-muted-foreground/60" />
-            <div>
-              <p className="text-[11px] italic text-muted-foreground leading-relaxed">
-                {displayedTranscription}
-              </p>
-              {hasLongTranscription && (
-                <button
-                  type="button"
-                  onClick={() => setExpanded(v => !v)}
-                  className="mt-1 text-[11px] text-primary hover:underline flex items-center gap-0.5"
-                >
-                  {expanded ? (
-                    <>
-                      Voir moins <ChevronUp className="h-3 w-3" />
-                    </>
-                  ) : (
-                    <>
-                      Voir plus <ChevronDown className="h-3 w-3" />
-                    </>
-                  )}
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   )
 }

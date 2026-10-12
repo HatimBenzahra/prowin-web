@@ -193,8 +193,6 @@ export const GET_RECORDING_SEGMENTS_BY_IMMEUBLE = `
       startTime
       endTime
       durationSec
-      transcription
-      speechScore
       status
       streamingUrl
       createdAt
@@ -219,8 +217,6 @@ export const GET_RECORDING_SEGMENTS_BY_COMMERCIAL = `
       startTime
       endTime
       durationSec
-      transcription
-      speechScore
       status
       createdAt
     }
@@ -244,8 +240,6 @@ export const GET_RECORDING_SEGMENTS_BY_MANAGER = `
       startTime
       endTime
       durationSec
-      transcription
-      speechScore
       status
       createdAt
     }
@@ -263,8 +257,6 @@ export const GET_RECORDING_SEGMENTS_BY_PORTE = `
       startTime
       endTime
       durationSec
-      transcription
-      speechScore
       status
       createdAt
     }

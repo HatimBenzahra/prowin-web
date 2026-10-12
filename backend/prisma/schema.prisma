@@ -539,9 +539,7 @@ model RecordingSegment {
   startTime     Float
   endTime       Float
   durationSec   Float
-  transcription String?
-  speechScore   Int?
-  status        SegmentStatus @default(PENDING)
+  status        SegmentStatus @default(COMPLETED)
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
 
@@ -555,18 +553,17 @@ model RecordingSegment {
 }
 
 model Recording {
-  id              Int       @id @default(autoincrement())
-  s3Key           String    @unique
-  roomName        String
-  userType        UserType
-  commercialId    Int?
-  managerId       Int?
-  immeubleId      Int?
-  size            BigInt?
-  lastModified    DateTime?
-  hasConversation Boolean   @default(false)
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  id           Int       @id @default(autoincrement())
+  s3Key        String    @unique
+  roomName     String
+  userType     UserType
+  commercialId Int?
+  managerId    Int?
+  immeubleId   Int?
+  size         BigInt?
+  lastModified DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
   commercial       Commercial?        @relation(fields: [commercialId], references: [id], onDelete: SetNull)
   manager          Manager?           @relation(fields: [managerId], references: [id], onDelete: SetNull)
@@ -577,7 +574,6 @@ model Recording {
   @@index([roomName])
   @@index([commercialId])
   @@index([managerId])
-  @@index([hasConversation])
   @@index([userType, lastModified])
 }
 

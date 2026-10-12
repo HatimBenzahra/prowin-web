@@ -6,7 +6,6 @@ export class RecordingItem {
   @Field({ nullable: true }) url?: string;
   @Field({ nullable: true }) size?: number;
   @Field({ nullable: true }) lastModified?: Date;
-  @Field({ nullable: true }) hasConversation?: boolean;
 }
 
 @InputType()
@@ -91,29 +90,12 @@ export class RecordingSegmentDto {
   @Field(() => Float) startTime: number;
   @Field(() => Float) endTime: number;
   @Field(() => Float) durationSec: number;
-  @Field({ nullable: true }) transcription?: string;
-  @Field(() => Int, { nullable: true }) speechScore?: number;
   @Field() status: string;
   @Field({ nullable: true }) streamingUrl?: string;
   @Field(() => Int, { nullable: true }) immeubleId?: number;
   @Field(() => Int, { nullable: true }) commercialId?: number;
   @Field(() => Int, { nullable: true }) managerId?: number;
   @Field() createdAt: Date;
-}
-
-@ObjectType()
-export class ExtractionProgressDto {
-  @Field() step: string;
-  @Field(() => Int) current: number;
-  @Field(() => Int) total: number;
-}
-
-@ObjectType()
-export class ExtractionQueueItemDto {
-  @Field() key: string;
-  @Field() step: string;
-  @Field(() => Int) current: number;
-  @Field(() => Int) total: number;
 }
 
 @ObjectType()

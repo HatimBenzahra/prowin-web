@@ -4,7 +4,6 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { DoorOpen, Loader2, Mic, X, Star, Sparkles } from 'lucide-react'
 import { getStatusColor, getStatusLabel } from '@/constants/domain/porte-status'
-import { SpeechScoreBar } from '@/pages-ADMIN-DIRECTEUR/ecoutes/EnregistrementComponents'
 import { useRecordingSegmentsByPorte } from '@/hooks/metier/api/portes'
 import RecordingSegmentPlayer from '@/components/RecordingSegmentPlayer'
 import CoachingService from '@/services/coaching/coaching.service'
@@ -116,14 +115,9 @@ export default function PorteDetailModal({ door, open, onOpenChange, address = '
       )}
 
       <div>
-        <div className="mb-3 flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
-            <Mic className="h-4 w-4 text-primary" />
-            <h4 className="text-sm font-semibold">Enregistrement</h4>
-          </div>
-          {!loading && primarySegment?.speechScore != null && (
-            <SpeechScoreBar score={primarySegment.speechScore} />
-          )}
+        <div className="mb-3 flex items-center gap-2">
+          <Mic className="h-4 w-4 text-primary" />
+          <h4 className="text-sm font-semibold">Enregistrement</h4>
         </div>
 
         {loading ? (

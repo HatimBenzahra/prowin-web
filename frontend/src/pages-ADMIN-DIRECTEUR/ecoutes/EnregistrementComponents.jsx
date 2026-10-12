@@ -8,7 +8,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from '@/components/ui/dialog'
-import { ChevronUp, ChevronDown, ChevronsUpDown, Download, CalendarDays, X, Search, HelpCircle, User, Keyboard, FileText, MessageSquare, Check } from 'lucide-react'
+import { ChevronUp, ChevronDown, ChevronsUpDown, Download, CalendarDays, X, Search, HelpCircle, User, Keyboard, FileText } from 'lucide-react'
 
 export function formatDuration(seconds) {
   if (!seconds || seconds <= 0) return null
@@ -88,32 +88,13 @@ export function RecordingStatusBadge({ lastModified }) {
   return null
 }
 
-export const RecordingCard = React.memo(function RecordingCard({ recording, onPlay, onDownload, isSelected, onToggleSelect, isProcessed, speechScore }) {
+export const RecordingCard = React.memo(function RecordingCard({ recording, onPlay, onDownload, speechScore }) {
   return (
     <div
-      className={`border rounded-xl p-3 hover:border-border hover:shadow-sm transition-all duration-200 cursor-pointer bg-card ${
-        isSelected ? 'border-primary/50 bg-primary/5' : 'border-border/60'
-      }`}
+      className="border border-border/60 rounded-xl p-3 hover:border-border hover:shadow-sm transition-all duration-200 cursor-pointer bg-card"
       onClick={() => onPlay?.(recording)}
     >
       <div className="flex items-start gap-2.5">
-        {onToggleSelect && !isProcessed && (
-          <button
-            type="button"
-            onClick={e => {
-              e.stopPropagation()
-              onToggleSelect(recording.id)
-            }}
-            className={`w-4.5 h-4.5 mt-0.5 rounded-md border flex items-center justify-center shrink-0 transition-all duration-150 ${
-              isSelected
-                ? 'bg-primary border-primary text-primary-foreground scale-105'
-                : 'border-border/80 bg-background hover:border-primary/50'
-            }`}
-            aria-label={isSelected ? 'Désélectionner' : 'Sélectionner'}
-          >
-            {isSelected && <Check className="w-3 h-3" strokeWidth={3} />}
-          </button>
-        )}
         <UserAvatar
           prenom={recording.userPrenom}
           nom={recording.userNom}
@@ -145,12 +126,6 @@ export const RecordingCard = React.memo(function RecordingCard({ recording, onPl
               <SpeechScoreBar score={speechScore.score} />
             )}
             <RecordingStatusBadge lastModified={recording.lastModified} />
-            {isProcessed && (
-              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-500/10 text-emerald-600">
-                <MessageSquare className="w-2.5 h-2.5" />
-                Conversation
-              </span>
-            )}
           </div>
         </div>
         <Button
