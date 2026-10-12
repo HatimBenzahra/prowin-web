@@ -33,15 +33,20 @@ export function useActorDirectory() {
     return { byId, byName }
   }, [kioskDevices])
 
-  const resolveActorName = useCallback(
+  const findPerson = useCallback(
     (userId, userType) => {
-      const type = normalizeUserType(userType)
-      const id = Number(userId)
-      const list = type === 'MANAGER' ? allManagers : allCommercials
-      const person = (list ?? []).find(p => Number(p.id) === id)
-      return person ? `${person.prenom} ${person.nom}`.trim() : `#${userId}`
+      const list = normalizeUserType(userType) === 'MANAGER' ? allManagers : allCommercials
+      return (list ?? []).find(p => Number(p.id) === Number(userId)) ?? null
     },
     [allCommercials, allManagers]
+  )
+
+  const resolveActorName = useCallback(
+    (userId, userType) => {
+      const person = findPerson(userId, userType)
+      return person ? `${person.prenom} ${person.nom}`.trim() : `#${userId}`
+    },
+    [findPerson]
   )
 
   const buildActors = useCallback(
@@ -56,6 +61,8 @@ export function useActorDirectory() {
         if (seen.has(key)) continue
         seen.add(key)
         const name = resolveActorName(userId, userType)
+        // Statut du compte (actif, contrat fini, test) : les écrans filtrent dessus.
+        const status = findPerson(userId, userType)?.status ?? null
         // Pour un commercial, la batterie fiable vient de sa tablette kiosk
         // (identique aux pages Kiosk) ; sinon on garde la valeur de la position GPS.
         // L'état de charge (batteryCharging) n'existe que côté kiosk : il reste
@@ -75,6 +82,7 @@ export function useActorDirectory() {
           userId,
           userType,
           name,
+          status,
           latitude: pos.latitude,
           longitude: pos.longitude,
           accuracy: pos.accuracy,
@@ -86,7 +94,7 @@ export function useActorDirectory() {
       }
       return result
     },
-    [resolveActorName, kioskBatteryByCommercial]
+    [resolveActorName, findPerson, kioskBatteryByCommercial]
   )
 
   return { resolveActorName, buildActors }

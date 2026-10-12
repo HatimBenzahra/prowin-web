@@ -17,16 +17,18 @@ export class OffreService {
   // ============================================================================
 
   async syncOffres(
-    token: string,
+    token?: string,
   ): Promise<{ created: number; updated: number; total: number }> {
-    const items = await this.winleadPlusApi.getOffres(token);
+    const items = this.winleadPlusApi.isIntegrationConfigured()
+      ? await this.winleadPlusApi.getIntegrationOffres()
+      : await this.winleadPlusApi.getOffres(token ?? '');
 
     let created = 0;
     let updated = 0;
 
     for (const item of items) {
       if (!item.id || !item.nom || !item.categorie || !item.fournisseur) {
-        this.logger.warn(`Offre ignorée (champs manquants): ${JSON.stringify(item).slice(0, 100)}`);
+        this.logger.warn('Offre ignorée : champs catalogue manquants');
         continue;
       }
 

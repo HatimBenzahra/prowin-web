@@ -57,6 +57,29 @@ export function zoneToGeoJSON(zone) {
   return null
 }
 
+const ZONE_COLORS = [
+  '#3388ff', // Blue
+  '#ff6b6b', // Red
+  '#51cf66', // Green
+  '#ffd93d', // Yellow
+  '#a78bfa', // Purple
+  '#f59e0b', // Orange
+  '#ec4899', // Pink
+  '#06b6d4', // Cyan
+  '#84cc16', // Lime
+  '#f97316', // Dark Orange
+]
+
+/**
+ * Couleur déterministe d'une zone, dérivée de son identifiant : une même zone
+ * garde la même couleur partout (carte de zone assignée, création, dashboard).
+ * @param {number} zoneId
+ * @returns {string} Couleur hex
+ */
+export function getZoneColor(zoneId) {
+  return ZONE_COLORS[zoneId % ZONE_COLORS.length]
+}
+
 /**
  * Calcule la superficie (km²) d'un anneau polygonal fermé `[[lng,lat], ...]`
  * via la formule du lacet (shoelace) appliquée sur une projection

@@ -1,29 +1,27 @@
-import { AdvancedDataTable } from '@/components/tableau'
 import { TableSkeleton } from '@/components/LoadingSkeletons'
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
+import PeopleListToolbar from '@/components/people/PeopleListToolbar'
+import PeopleCardsView from '@/components/people/PeopleCardsView'
+import { filterPeople } from '@/components/people/people-filters'
+import { UserStatus } from '@/constants/domain/user-status'
 import { useDirecteursLogic } from './useDirecteursLogic'
 
 export default function Directeurs() {
   const {
     tableData,
-    columns,
     permissions,
     description,
     directeursLoading,
     directeursEditFields,
     handleEditDirecteur,
-    statusOptions,
   } = useDirecteursLogic()
 
-  const statusFilterOptions = useMemo(
-    () => [
-      { value: 'all', label: 'Tous' },
-      ...statusOptions.map(option => ({
-        value: option.value,
-        label: option.label,
-      })),
-    ],
-    [statusOptions]
+  const [search, setSearch] = useState('')
+  const [status, setStatus] = useState(UserStatus.ACTIF)
+
+  const cardsPeople = useMemo(
+    () => filterPeople(tableData, { search, status }),
+    [tableData, search, status]
   )
 
   if (directeursLoading) {
@@ -39,18 +37,27 @@ export default function Directeurs() {
   }
 
   return (
-    <div>
-      <AdvancedDataTable
-        showStatusColumn
-        title="Liste des Directeurs"
-        data={tableData}
-        columns={columns}
-        searchKey="nom"
+    <div className="space-y-6">
+      <PeopleListToolbar
+        search={search}
+        onSearchChange={setSearch}
+        status={status}
+        onStatusChange={setStatus}
+      />
+
+      <PeopleCardsView
+        people={cardsPeople}
         detailsPath="/directeurs"
+        factsOf={person => [
+          { label: 'Email', value: person.email },
+          { label: 'Téléphone', value: person.numTelephone },
+        ]}
+        showRanking={false}
+        canEdit={permissions.canEdit}
         editFields={directeursEditFields}
-        onEdit={permissions.canEdit ? handleEditDirecteur : undefined}
-        customStatusFilter={statusFilterOptions}
-        defaultStatusFilter="ACTIF"
+        onSave={handleEditDirecteur}
+        editTitle="Modifier le directeur"
+        emptyLabel="Aucun directeur pour ces filtres"
       />
     </div>
   )

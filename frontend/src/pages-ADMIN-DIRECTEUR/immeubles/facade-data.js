@@ -40,6 +40,7 @@ export function buildFacadeFloors(immeuble, portes, segmentMap = new Map()) {
       floorLabel,
       audioDurationSec: segment?.durationSec ?? null,
       hasAudio: Boolean(segment),
+      coachingFavori: porte.coachingFavori ?? false,
     }
   }
 

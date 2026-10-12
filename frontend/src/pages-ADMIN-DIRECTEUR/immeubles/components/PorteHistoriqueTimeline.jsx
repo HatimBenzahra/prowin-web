@@ -26,8 +26,8 @@ export default function PorteHistoriqueTimeline({ porteId, porteNumero }) {
       const acteur = entry.commercial
         ? `${entry.commercial.prenom} ${entry.commercial.nom} (Commercial)`
         : entry.manager
-        ? `${entry.manager.prenom} ${entry.manager.nom} (Manager)`
-        : 'Système'
+          ? `${entry.manager.prenom} ${entry.manager.nom} (Manager)`
+          : 'Système'
 
       // Calculer le numéro de passage pour les absents (en parcourant de la fin vers le début)
       let passageNumber = null
@@ -99,7 +99,9 @@ export default function PorteHistoriqueTimeline({ porteId, porteNumero }) {
           return (
             <div key={item.id} className="relative pl-6 sm:pl-8">
               {/* Timeline dot */}
-              <div className={`absolute left-0 top-2 w-5 h-5 sm:w-6 sm:h-6 rounded-full border-3 sm:border-4 border-background ${statusColor.split(' ')[0]} shadow-md flex items-center justify-center`}>
+              <div
+                className={`absolute left-0 top-2 w-5 h-5 sm:w-6 sm:h-6 rounded-full border-3 sm:border-4 border-background ${statusColor.split(' ')[0]} shadow-md flex items-center justify-center`}
+              >
                 {index === 0 && (
                   <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-background rounded-full"></div>
                 )}
@@ -110,12 +112,12 @@ export default function PorteHistoriqueTimeline({ porteId, porteNumero }) {
                 <CardContent className="p-3 sm:p-4">
                   {/* Header: Status + Date/Time */}
                   <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 mb-2">
-                    <Badge className={statusColor}>
-                      {statusLabel}
-                    </Badge>
+                    <Badge className={statusColor}>{statusLabel}</Badge>
                     <div className="text-xs text-muted-foreground flex items-center gap-1">
                       <Clock className="h-3 w-3" />
-                      <span className="whitespace-nowrap">{item.date} à {item.time}</span>
+                      <span className="whitespace-nowrap">
+                        {item.date} à {item.time}
+                      </span>
                     </div>
                   </div>
 
@@ -140,9 +142,11 @@ export default function PorteHistoriqueTimeline({ porteId, porteNumero }) {
                     <div className="flex items-center gap-2 text-xs sm:text-sm text-muted-foreground bg-muted/50 p-2 rounded mb-2 border border-muted">
                       <User className="h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0" />
                       <span className="font-medium">
-                        {item.passageNumber === 1 ? '1er passage' :
-                         item.passageNumber === 2 ? '2ème passage' :
-                         `${item.passageNumber}ème passage`}
+                        {item.passageNumber === 1
+                          ? '1er passage'
+                          : item.passageNumber === 2
+                            ? '2ème passage'
+                            : `${item.passageNumber}ème passage`}
                       </span>
                     </div>
                   )}
@@ -163,7 +167,9 @@ export default function PorteHistoriqueTimeline({ porteId, porteNumero }) {
 
       {/* Summary footer */}
       <div className="mt-3 sm:mt-4 pt-3 sm:pt-4 border-t border-border flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 text-xs text-muted-foreground">
-        <span>{timelineItems.length} changement{timelineItems.length > 1 ? 's' : ''} de statut</span>
+        <span>
+          {timelineItems.length} changement{timelineItems.length > 1 ? 's' : ''} de statut
+        </span>
         <span className="flex items-center gap-1">
           Première action: {timelineItems[timelineItems.length - 1]?.date}
         </span>

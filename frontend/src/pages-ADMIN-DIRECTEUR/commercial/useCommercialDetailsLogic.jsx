@@ -7,18 +7,12 @@ import {
 } from '@/services'
 import { useEffect, useMemo, useState } from 'react'
 import { aggregateStats } from '@/utils/business/ranks'
-import { useCommercialRankings } from '@/hooks/metier/api/gamification'
+import { useCommercialRankings, useContratsByCommercial } from '@/hooks/metier/api/gamification'
 import { pickMonthlySnapshot, toRankInfo } from '@/lib/rank-wps'
-import { Badge } from '@/components/ui/badge'
-import { BuildingTypeBadge } from '@/components/BuildingTypeBadge'
-import DateRangeFilter from '@/components/DateRangeFilter'
-import { useDateFilter } from '@/hooks/utils/filters/useDateFilter'
 import { buildingDoorCount } from '@/constants/domain/habitat'
 import { porteApi } from '@/services/api/portes/porte.service'
 import { buildFacadeFloors } from '@/pages-ADMIN-DIRECTEUR/immeubles/facade-data'
-import CommercialTrajetsSection from './components/CommercialTrajetsSection'
-import CommercialZoneHistorySection from './components/CommercialZoneHistorySection'
-import CommercialContratsSection from './components/CommercialContratsSection'
+import { useDateFilter } from '@/hooks/utils/filters/useDateFilter'
 import {
   usePersonalStats,
   useImmeublesTableData,
@@ -74,17 +68,10 @@ export function useCommercialDetailsLogic() {
   const { data: currentZone } = useCurrentZoneAssignment(parseInt(id), 'COMMERCIAL')
   const { data: lastStatusActivities } = useTeamLastStatusActivities()
 
-  // Hook pour gérer les filtres de date (pour les stats et portes)
+  // Filtre de période UNIQUE (stats + prospection + bâtiments).
   const dateFilter = useDateFilter()
   const { appliedStartDate, appliedEndDate } = dateFilter
 
-  // États pour le filtre des immeubles
-  const immeubleDateFilter = useDateFilter()
-  const { appliedStartDate: appliedImmeubleStartDate, appliedEndDate: appliedImmeubleEndDate } =
-    immeubleDateFilter
-
-  // État pour le type de date à filtrer (création ou modification)
-  const [immeubleDateType, setImmeubleDateType] = useState('created')
   const [recordingSegments, setRecordingSegments] = useState([])
 
   useEffect(() => {
@@ -107,10 +94,9 @@ export function useCommercialDetailsLogic() {
     }
   }, [id])
 
-  // Utiliser le hook pour calculer les stats personnelles du commercial
   const { personalStats } = usePersonalStats(commercial, appliedStartDate, appliedEndDate)
 
-  // Calculer les stats globales depuis le backend (source de vérité)
+  // Stats globales backend (source de vérité quand aucun filtre de date).
   const backendStats = useMemo(() => {
     if (!commercial?.statistics) return null
 
@@ -135,10 +121,28 @@ export function useCommercialDetailsLogic() {
     }
   }, [commercial?.statistics])
 
-  // Rang = classement mensuel WinLeadPlus (source de vérité gamification),
-  // aligné sur le mobile. Repli Bronze/0 si non classé ce mois.
+  // Rang = classement mensuel WinLeadPlus (aligné mobile). Repli Bronze/0 si non classé.
   const { data: rankings } = useCommercialRankings(parseInt(id))
   const rankInfo = useMemo(() => toRankInfo(pickMonthlySnapshot(rankings)), [rankings])
+
+  // Contrats VALIDÉS = confirmés back-office (WinLeadPlus `ContratValide`), à distinguer
+  // des contrats SIGNÉS déclarés sur le terrain (stats ProWin). On compte par période
+  // (date de validation) pour rester cohérent avec le filtre unique.
+  const { data: contratsValidesData } = useContratsByCommercial(parseInt(id))
+  const contratsValidesCount = useMemo(() => {
+    const list = contratsValidesData || []
+    if (!appliedStartDate && !appliedEndDate) return list.length
+    const start = appliedStartDate ? new Date(appliedStartDate).setHours(0, 0, 0, 0) : null
+    const end = appliedEndDate ? new Date(appliedEndDate).setHours(23, 59, 59, 999) : null
+    return list.filter(contrat => {
+      const raw = contrat.dateValidation || contrat.dateSignature
+      if (!raw) return false
+      const t = new Date(raw).getTime()
+      if (start != null && t < start) return false
+      if (end != null && t > end) return false
+      return true
+    }).length
+  }, [contratsValidesData, appliedStartDate, appliedEndDate])
 
   const lastStatusActivity = useMemo(() => {
     return (lastStatusActivities || []).find(
@@ -146,14 +150,12 @@ export function useCommercialDetailsLogic() {
     )
   }, [id, lastStatusActivities])
 
-  // Préparer les données pour l'affichage
   const commercialData = useMemo(() => {
     if (!commercial) return null
 
     const manager = managers?.find(m => m.id === commercial.managerId)
     const managerName = manager ? `${manager.prenom} ${manager.nom}` : 'Aucun manager assigné'
 
-    // Utiliser les stats du backend par défaut, sauf si un filtre de date est appliqué
     const hasDateFilter = appliedStartDate || appliedEndDate
     const statsSource = !hasDateFilter && backendStats ? backendStats : personalStats
 
@@ -187,7 +189,7 @@ export function useCommercialDetailsLogic() {
     lastStatusActivity,
   ])
 
-  // Préparer les zones
+  // Zone active (+ immeubles créés par ce commercial dans la zone).
   const assignedZones = useMemo(() => {
     if (!currentZone) return []
 
@@ -204,49 +206,29 @@ export function useCommercialDetailsLogic() {
     ]
   }, [currentZone, commercial?.id])
 
-  // Données des immeubles
-  const allImmeublesTableData = useImmeublesTableData(
+  // Lignes de la table bâtiments (filtrées par le filtre de période unique).
+  const buildingRows = useImmeublesTableData(
     commercial?.immeubles,
     appliedStartDate,
     appliedEndDate
   )
 
-  const immeublesTableData = useMemo(() => {
-    if (!allImmeublesTableData) return []
-    if (!appliedImmeubleStartDate && !appliedImmeubleEndDate) return allImmeublesTableData
-
-    return allImmeublesTableData.filter(immeuble => {
-      const dateToCompare =
-        immeubleDateType === 'created'
-          ? new Date(immeuble.createdAt)
-          : new Date(immeuble.visitedAt || immeuble.createdAt)
-
-      if (appliedImmeubleStartDate) {
-        const startDateObj = new Date(appliedImmeubleStartDate)
-        startDateObj.setHours(0, 0, 0, 0)
-        if (dateToCompare < startDateObj) return false
-      }
-
-      if (appliedImmeubleEndDate) {
-        const endDateObj = new Date(appliedImmeubleEndDate)
-        endDateObj.setHours(23, 59, 59, 999)
-        if (dateToCompare > endDateObj) return false
-      }
-
-      return true
-    })
-  }, [allImmeublesTableData, appliedImmeubleStartDate, appliedImmeubleEndDate, immeubleDateType])
-
-  // Données des portes
+  // Portes filtrées + capacité déclarée (grille) = dénominateur de la couverture.
   const allPortes = useFilteredPortes(commercial?.immeubles, appliedStartDate, appliedEndDate)
-  // Capacité déclarée (grille) = dénominateur de la couverture (Option A).
   const totalDoorsGrid = (commercial?.immeubles || []).reduce(
     (sum, immeuble) => sum + buildingDoorCount(immeuble),
     0
   )
 
-  // 1 enregistrement par porte : on garde le segment le plus long si plusieurs
-  // remontent (robustesse), c'est celui qui porte le vrai signal.
+  // Couverture globale (prospectées / capacité déclarée).
+  const couverture = useMemo(() => {
+    const prospectees = (allPortes || []).filter(
+      porte => String(porte.statut || '').toUpperCase() !== 'NON_VISITE'
+    ).length
+    return totalDoorsGrid > 0 ? Math.round((prospectees / totalDoorsGrid) * 100) : 0
+  }, [allPortes, totalDoorsGrid])
+
+  // 1 enregistrement par porte (le plus long) pour la modal façade.
   const porteSegmentMap = useMemo(() => {
     const map = new Map()
     recordingSegments.forEach(segment => {
@@ -259,7 +241,6 @@ export function useCommercialDetailsLogic() {
     return map
   }, [recordingSegments])
 
-  // Bâtiment sélectionné → façade affichée en modal (clic sur une ligne du tableau).
   const rawImmeublesById = useMemo(() => {
     const map = new Map()
     ;(commercial?.immeubles || []).forEach(imm => map.set(imm.id, imm))
@@ -274,308 +255,105 @@ export function useCommercialDetailsLogic() {
     return buildFacadeFloors(imm, imm.portes || [], porteSegmentMap)
   }, [rawImmeublesById, selectedImmeubleId, porteSegmentMap])
 
-  const handleImmeubleClick = row => setSelectedImmeubleId(row.id)
+  // Vue d'ensemble : 4 chiffres clés lisibles immédiatement.
+  const overview = commercialData
+    ? {
+        contratsSignes: commercialData.totalContratsSignes,
+        contratsValides: contratsValidesCount,
+        couverture,
+        points: commercialData.points,
+        lastActivityLabel: formatRelativeActivityDate(commercialData.lastStatusActivity?.changedAt),
+        lastActivityDesc: getActivityDescription(commercialData.lastStatusActivity),
+      }
+    : null
 
-  // Colonnes des immeubles
-  const immeublesColumns = [
-    {
-      header: 'Adresse',
-      accessor: 'address',
-      sortable: true,
-      className: 'font-medium',
-    },
-    {
-      header: 'Type',
-      accessor: 'type',
-      sortable: true,
-      className: 'hidden md:table-cell',
-      cell: row => <BuildingTypeBadge type={row.type} className="text-[10px]" />,
-    },
-    {
-      header: 'Étages',
-      accessor: 'floors',
-      className: 'hidden md:table-cell text-center',
-      cell: row => `${row.floors} étages`,
-    },
-    {
-      header: 'Total Portes',
-      accessor: 'total_doors',
-      className: 'hidden lg:table-cell text-center',
-    },
-    {
-      header: 'Couverture',
-      accessor: 'couverture',
-      sortable: true,
-      className: 'hidden lg:table-cell text-center',
-      cell: row => {
-        const couverture = row.couverture || 0
-        const colorClass =
-          couverture >= 80
-            ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-300'
-            : couverture >= 50
-              ? 'bg-amber-100 text-amber-800 dark:bg-amber-500/15 dark:text-amber-300'
-              : 'bg-red-100 text-red-800 dark:bg-red-500/15 dark:text-red-300'
-        return <Badge className={colorClass}>{couverture}%</Badge>
-      },
-    },
-    {
-      header: 'Contrats signés',
-      accessor: 'contrats_signes',
-      sortable: true,
-      className: 'text-center',
-      cell: row => (
-        <Badge className="bg-green-100 text-green-800">{row.contrats_signes || 0}</Badge>
-      ),
-    },
-    {
-      header: 'RDV pris',
-      accessor: 'rdv_pris',
-      sortable: true,
-      className: 'hidden xl:table-cell text-center',
-      cell: row => <Badge className="bg-blue-100 text-blue-800">{row.rdv_pris || 0}</Badge>,
-    },
-    {
-      header: 'Refus',
-      accessor: 'refus',
-      sortable: true,
-      className: 'hidden xl:table-cell text-center',
-      cell: row => <Badge className="bg-red-100 text-red-800">{row.refus || 0}</Badge>,
-    },
-    {
-      header: 'Absents',
-      accessor: 'absent',
-      sortable: true,
-      className: 'hidden xl:table-cell text-center',
-      cell: row => <Badge className="bg-blue-100 text-blue-800">{row.absent || 0}</Badge>,
-    },
-    {
-      header: 'Argumentés',
-      accessor: 'argumente',
-      sortable: true,
-      className: 'hidden xl:table-cell text-center',
-      cell: row => <Badge className="bg-orange-100 text-orange-800">{row.argumente || 0}</Badge>,
-    },
-  ]
-
-  // Construction des objets props pour la vue
-  const personalInfo = commercialData
+  // Performance : jeu de KPI resserré (5 au lieu de 10).
+  const perfStats = commercialData
     ? [
         {
-          label: 'Email',
-          value: commercialData.email,
-          icon: 'mail',
+          label: 'Contrats signés',
+          value: commercialData.totalContratsSignes,
+          hint: 'Déclarés terrain',
         },
         {
-          label: 'Téléphone',
-          value: commercialData.numTel || 'Non renseigné',
-          icon: 'phone',
+          label: 'Contrats validés',
+          value: contratsValidesCount,
+          hint: 'Confirmés back-office',
         },
+        { label: 'Rendez-vous pris', value: commercialData.totalRendezVousPris },
+        { label: 'Argumentés', value: commercialData.totalArgumentes },
+        { label: 'Refus', value: commercialData.totalRefus },
+        { label: 'Absents', value: commercialData.totalAbsents },
+      ]
+    : []
+
+  // Infos de contact (repli discret ; le directeur ne les regarde qu'occasionnellement).
+  const personalInfo = commercialData
+    ? [
+        { label: 'Email', value: commercialData.email, icon: 'mail' },
+        { label: 'Téléphone', value: commercialData.numTel || 'Non renseigné', icon: 'phone' },
         {
-          label: 'Age',
+          label: 'Âge',
           value: commercialData.age == null ? 'Non renseigné' : `${commercialData.age} ans`,
           icon: 'user',
         },
+        { label: 'Manager', value: commercialData.managerName, icon: 'users' },
         {
-          label: 'Manager',
-          value: commercialData.managerName,
-          icon: 'users',
-        },
-        {
-          label: 'Rang',
-          value: (
-            <span
-              className={`inline-flex items-center gap-2 px-3 py-1 rounded-full border font-semibold ${commercialData.rank.badgeClasses}`}
-            >
-              <span className="text-lg">🏆</span>
-              {commercialData.rank.name}
-              <span className="text-xs opacity-75">({commercialData.points} pts)</span>
-            </span>
-          ),
-          icon: 'award',
-        },
-        {
-          label: 'Date de création de compte',
+          label: 'Date de création',
           value: new Date(commercialData.createdAt).toLocaleDateString('fr-FR'),
           icon: 'calendar',
         },
       ]
     : []
 
-  const statsCards = commercialData
-    ? [
-        {
-          title: 'Points totaux',
-          value: commercialData.points,
-          description: 'Score personnel',
-          icon: 'trendingUp',
-          fullWidth: true,
+  // Config prospection (mêmes graphiques qu'avant, section réutilisable).
+  const prospection = {
+    totalDoors: totalDoorsGrid,
+    charts: [
+      {
+        type: 'PortesStatusChart',
+        props: {
+          portes: allPortes || [],
+          title: 'Répartition des statuts',
+          description: 'État actuel de toutes les portes',
+          showNonVisited: true,
         },
-        {
-          title: 'Dernière activité terrain',
-          value: formatRelativeActivityDate(commercialData.lastStatusActivity?.changedAt),
-          description: getActivityDescription(commercialData.lastStatusActivity),
-          icon: 'shieldCheck',
-          fullWidth: true,
-        },
-        {
-          title: 'Contrats signés',
-          value: commercialData.totalContratsSignes,
-          description: 'Total des contrats signés',
-          icon: 'fileText',
-        },
-        {
-          title: 'Rendez-vous pris',
-          value: commercialData.totalRendezVousPris,
-          description: 'Total des rendez-vous',
-          icon: 'calendar',
-        },
-        {
-          title: 'Bâtiments visités',
-          value: commercialData.totalImmeublesVisites,
-          description: 'Total des bâtiments visités',
-          icon: 'building',
-        },
-        {
-          title: 'Refus',
-          value: commercialData.totalRefus,
-          description: 'Total des refus',
-          icon: 'x',
-        },
-        {
-          title: 'Absents',
-          value: commercialData.totalAbsents,
-          description: "Portes où personne n'était présent",
-          icon: 'userX',
-        },
-        {
-          title: 'Argumentés',
-          value: commercialData.totalArgumentes,
-          description: 'Refus après argumentation',
-          icon: 'messageCircle',
-        },
-        {
-          title: 'Portes prospectées',
-          value: commercialData.totalPortesProspectes,
-          description: 'Total des portes prospectées',
-          icon: 'fileText',
-        },
-        {
-          title: 'Bâtiments prospectés',
-          value: commercialData.totalImmeublesProspectes,
-          description: 'Total des bâtiments prospectés',
-          icon: 'building',
-        },
-      ]
-    : []
-
-  const additionalSections = [
-    {
-      title: 'Historique des zones',
-      description: 'Zones précédemment attribuées à ce commercial',
-      type: 'custom',
-      render: () =>
-        commercialData?.id ? (
-          <CommercialZoneHistorySection commercialId={commercialData.id} />
-        ) : null,
-    },
-    {
-      title: 'Statistiques de prospection',
-      description: "Analyse de l'activité de prospection",
-      type: 'custom',
-      component: 'ChartsSection',
-      data: {
-        totalDoors: totalDoorsGrid,
-        charts: [
-          {
-            type: 'PortesStatusChart',
-            props: {
-              portes: allPortes || [],
-              title: 'Répartition des statuts',
-              description: 'État actuel de toutes les portes',
-              showNonVisited: true,
-            },
-          },
-          {
-            type: 'PortesProspectionChart',
-            props: {
-              portes: allPortes || [],
-              title: 'Portes prospectées par jour',
-              description: 'Activité quotidienne des 7 derniers jours',
-              daysToShow: 7,
-            },
-          },
-          {
-            type: 'PortesWeeklyChart',
-            props: {
-              portes: allPortes || [],
-              title: 'Évolution hebdomadaire',
-              description: 'Tendance sur les 4 dernières semaines',
-              weeksToShow: 4,
-            },
-          },
-        ],
       },
-    },
-    {
-      title: 'Trajets',
-      description: 'Trajet GPS du commercial (par jour)',
-      type: 'custom',
-      bare: true,
-      render: () =>
-        commercialData?.id ? (
-          <CommercialTrajetsSection
-            commercialId={commercialData.id}
-            commercialName={commercialData.name}
-          />
-        ) : null,
-    },
-    {
-      title: 'Bâtiments prospectés',
-      description: 'Liste des bâtiments prospectés par ce commercial avec leurs statistiques',
-      type: 'custom',
-      component: 'ImmeublesTable',
-      data: {
-        immeubles: immeublesTableData,
-        columns: immeublesColumns,
-        showFilters: false,
-        onImmeubleClick: handleImmeubleClick,
+      {
+        type: 'PortesProspectionChart',
+        props: {
+          portes: allPortes || [],
+          title: 'Portes prospectées par jour',
+          description: 'Activité quotidienne des 7 derniers jours',
+          daysToShow: 7,
+        },
       },
-      customFilter: (
-        <DateRangeFilter
-          className="h-fit"
-          startDate={immeubleDateFilter.startDate}
-          endDate={immeubleDateFilter.endDate}
-          appliedStartDate={appliedImmeubleStartDate}
-          appliedEndDate={appliedImmeubleEndDate}
-          onChangeStart={immeubleDateFilter.setStartDate}
-          onChangeEnd={immeubleDateFilter.setEndDate}
-          onApply={immeubleDateFilter.handleApplyFilters}
-          onReset={immeubleDateFilter.handleResetFilters}
-          title="Filtrer les bâtiments"
-          showDateTypeSelector={true}
-          dateType={immeubleDateType}
-          onDateTypeChange={setImmeubleDateType}
-        />
-      ),
-    },
-    {
-      title: 'Contrats signés (WinLeadPlus)',
-      description: 'Contrats confirmés côté CRM (source fiable) — offre, date, points',
-      type: 'custom',
-      render: () =>
-        commercialData?.id ? <CommercialContratsSection commercialId={commercialData.id} /> : null,
-    },
-  ]
+      {
+        type: 'PortesWeeklyChart',
+        props: {
+          portes: allPortes || [],
+          title: 'Évolution hebdomadaire',
+          description: 'Tendance sur les 4 dernières semaines',
+          weeksToShow: 4,
+        },
+      },
+    ],
+  }
 
   return {
     commercialData,
     loading,
     error,
-    assignedZones,
+    dateFilter,
+    overview,
+    perfStats,
     personalInfo,
-    statsCards,
-    additionalSections,
-    dateFilter, // To be destructured in view for main filter
+    prospection,
+    assignedZones,
+    buildings: {
+      rows: buildingRows || [],
+      onRowClick: row => setSelectedImmeubleId(row.id),
+    },
     buildingModal: {
       facade: selectedFacade,
       open: Boolean(selectedFacade),

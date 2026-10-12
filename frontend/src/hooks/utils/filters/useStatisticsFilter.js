@@ -59,17 +59,13 @@ export function usePersonalStats(user, appliedStartDate, appliedEndDate) {
 
     // Compter les immeubles uniques visités
     const immeublesVisitesSet = new Set(
-      filteredPortes
-        .filter(p => p.statut !== 'NON_VISITE')
-        .map(p => p.immeubleId)
+      filteredPortes.filter(p => p.statut !== 'NON_VISITE').map(p => p.immeubleId)
     )
     const totalImmeublesVisites = immeublesVisitesSet.size
 
     // Compter les immeubles uniques prospectés
     const immeublesProspectesSet = new Set(
-      filteredPortes
-        .filter(p => p.statut !== 'NON_VISITE')
-        .map(p => p.immeubleId)
+      filteredPortes.filter(p => p.statut !== 'NON_VISITE').map(p => p.immeubleId)
     )
     const totalImmeublesProspectes = immeublesProspectesSet.size
 
@@ -89,6 +85,30 @@ export function usePersonalStats(user, appliedStartDate, appliedEndDate) {
 }
 
 /**
+ * Restreint et ordonne les lignes de la table bâtiments.
+ *
+ * Deux règles, extraites du hook pour être testables :
+ *
+ * 1. **Avec une période active**, un bâtiment sans aucune porte concernée n'a rien à
+ *    dire sur cette période. Le garder noyait la liste sous des lignes à zéro, ce qui
+ *    donnait l'impression que le filtre ne touchait que les KPI.
+ * 2. **Le tri suit la dernière activité**, pas la date de création : un bâtiment créé
+ *    il y a trois mois mais prospecté aujourd'hui doit remonter en tête.
+ *
+ * @param {Array} rows - Lignes déjà calculées (avec `portesInRange` et `lastActivityAt`)
+ * @param {boolean} hasDateFilter
+ */
+export function scopeAndSortImmeubleRows(rows, hasDateFilter) {
+  const scoped = hasDateFilter ? (rows || []).filter(row => row.portesInRange > 0) : rows || []
+
+  return [...scoped].sort((a, b) => {
+    const aTime = a.lastActivityAt ? new Date(a.lastActivityAt).getTime() : 0
+    const bTime = b.lastActivityAt ? new Date(b.lastActivityAt).getTime() : 0
+    return bTime - aTime
+  })
+}
+
+/**
  * Hook pour préparer les données des immeubles avec statistiques calculées
  * @param {Array} immeubles - Tableau des immeubles
  * @param {string} appliedStartDate - Date de début appliquée
@@ -99,12 +119,9 @@ export function useImmeublesTableData(immeubles, appliedStartDate, appliedEndDat
   return useMemo(() => {
     if (!immeubles) return []
 
-    // Trier les immeubles du plus récent au plus ancien
-    const sortedImmeubles = [...immeubles].sort((a, b) => {
-      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-    })
+    const hasDateFilter = Boolean(appliedStartDate || appliedEndDate)
 
-    return sortedImmeubles.map(immeuble => {
+    const rows = immeubles.map(immeuble => {
       // Utiliser les portes de l'immeuble directement (chargées avec l'immeuble)
       const portesImmeubleUnfiltered = immeuble.portes || []
       // Filtrer les portes par date
@@ -144,8 +161,8 @@ export function useImmeublesTableData(immeubles, appliedStartDate, appliedEndDat
           year: 'numeric',
           hour: '2-digit',
           minute: '2-digit',
-  })
-}
+        })
+      }
 
       const doors = sortPortesByRecentCreation(portesImmeuble).map(porte => {
         const porteVisit = porte.derniereVisite || porte.updatedAt || null
@@ -185,8 +202,14 @@ export function useImmeublesTableData(immeubles, appliedStartDate, appliedEndDat
         createdAt: immeuble.createdAt,
         visitedAt: formatDateTime(visitedAt),
         doors, // Liste des portes pour l'affichage imbriqué
+        // Champs internes de tri / filtrage, non affichés :
+        // dernière activité réelle dans la période, et volume de portes concernées.
+        lastActivityAt: visitedAt || immeuble.createdAt || null,
+        portesInRange: portesImmeuble.length,
       }
     })
+
+    return scopeAndSortImmeubleRows(rows, hasDateFilter)
   }, [immeubles, appliedStartDate, appliedEndDate])
 }
 

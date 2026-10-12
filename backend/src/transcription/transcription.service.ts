@@ -11,6 +11,8 @@ import * as path from 'path';
 import * as os from 'os';
 import { pipeline } from 'stream/promises';
 import { Readable } from 'stream';
+import axios from 'axios';
+import { sttBudget } from './stt-budget';
 
 const execFileAsync = promisify(execFile);
 
@@ -19,6 +21,7 @@ import { S3DiagnosticsService } from '../s3-diagnostics/s3-diagnostics.service';
 import { PrismaService } from '../prisma.service';
 
 const FFMPEG_MAX_BUFFER = 10 * 1024 * 1024;
+export class WhisperBusyError extends Error { constructor() { super('STT_BUSY'); } }
 
 interface WhisperSegment {
   start: number;
@@ -53,11 +56,25 @@ export class TranscriptionService implements OnModuleDestroy {
   }
 
   private readonly whisperUrl = process.env.WHISPER_API_URL;
-  private readonly whisperTimeoutMs = this.resolveWhisperTimeout();
+  // Public : utilisé par le coaching pour dériver le seuil de requeue d'un job
+  // bloqué (doit dépasser ce timeout, sinon on re-claime un job encore vivant).
+  readonly whisperTimeoutMs = this.resolveWhisperTimeout();
 
   /** In-memory progress tracking per s3Key */
   private readonly progress = new Map<string, ExtractionProgress>();
   private readonly inFlight = new Set<string>();
+  private readonly busyRetries = new Map<string, ReturnType<typeof setTimeout>>();
+  private destroyed = false;
+
+  deferBusy(key: string, work: () => Promise<void>): void {
+    if (this.destroyed || this.busyRetries.has(key)) return;
+    const timer = setTimeout(() => {
+      this.busyRetries.delete(key);
+      if (!this.destroyed) void work().catch(() => this.logger.warn('Reprise STT différée indisponible'));
+    }, 60_000 + Math.floor(Math.random() * 15_000));
+    timer.unref();
+    this.busyRetries.set(key, timer);
+  }
 
   /** Concurrency limiter — max N simultaneous processRecording jobs */
   private readonly maxConcurrency = 2;
@@ -73,6 +90,9 @@ export class TranscriptionService implements OnModuleDestroy {
   }
 
   onModuleDestroy(): void {
+    this.destroyed = true;
+    for (const timer of this.busyRetries.values()) clearTimeout(timer);
+    this.busyRetries.clear();
     this.progress.clear();
     this.inFlight.clear();
     this.waitQueue.length = 0;
@@ -131,8 +151,8 @@ export class TranscriptionService implements OnModuleDestroy {
 
   private resolveWhisperTimeout(): number {
     const raw = Number(process.env.WHISPER_TIMEOUT_MS);
-    if (!Number.isFinite(raw) || raw < 10_000) {
-      return 1_200_000;
+    if (!Number.isFinite(raw) || raw < 10_000 || raw > 5_400_000) {
+      return 5_400_000;
     }
     return raw;
   }
@@ -240,6 +260,12 @@ export class TranscriptionService implements OnModuleDestroy {
       );
       this.clearProgress(s3Key);
     } catch (error) {
+      if (error instanceof WhisperBusyError) {
+        this.setProgress(s3Key, 'pending', 0);
+        this.deferBusy(s3Key, () => this.processRecording(s3Key));
+        this.logger.warn('Whisper occupé : extraction différée, audio original conservé');
+        return;
+      }
       this.logger.error(
         `Erreur inattendue lors du traitement de ${s3Key}: ${error?.message || error}`,
       );
@@ -288,9 +314,27 @@ export class TranscriptionService implements OnModuleDestroy {
     }
   }
 
-  async transcribeFile(filePath: string): Promise<{ segments: WhisperSegment[]; duration: number } | null> {
+  /**
+   * Appelle Whisper. Sans `opts`, on passe par `/transcribe/prospection`, le
+   * raccourci historique qui pré-remplit les réglages ET le vocabulaire côté
+   * service STT — c'est ce que font encore le pipeline `_conv` et
+   * `recording.service.ts`.
+   *
+   * Avec `opts`, l'appelant porte son propre profil : on vise l'endpoint
+   * générique `/transcribe` en passant tous les réglages explicitement. C'est ce
+   * qui permet au coaching de rester un connecteur autonome, sans connaissance
+   * métier stockée dans Whisper.
+   */
+  async transcribeFile(
+    filePath: string,
+  ): Promise<{ segments: WhisperSegment[]; duration: number; text: string } | null> {
     try {
       const fileBuffer = fs.readFileSync(filePath);
+      let durationSec = 0;
+      try {
+        const { stdout } = await execFileAsync('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'default=noprint_wrappers=1:nokey=1', filePath], { timeout: 60_000, killSignal: 'SIGKILL', maxBuffer: FFMPEG_MAX_BUFFER });
+        durationSec = Number(stdout.trim());
+      } catch { /* Unknown duration uses the bounded ceiling. */ }
 
       // Node.js 20+ : FormData et Blob natifs
       const formData = new FormData();
@@ -300,30 +344,19 @@ export class TranscriptionService implements OnModuleDestroy {
         'audio.mp4',
       );
 
-      const url = `${this.whisperUrl}/transcribe/prospection?language=auto`;
+      const url = `${this.whisperUrl}/transcribe/prospection?language=fr`;
 
-      const controller = new AbortController();
-      const timeout = setTimeout(
-        () => controller.abort(),
-        this.whisperTimeoutMs,
-      );
-
-      const resp = await fetch(url, {
-        method: 'POST',
-        body: formData,
-        signal: controller.signal,
+      // axios (et NON le fetch natif) : le fetch d'undici impose un
+      // `headersTimeout` par défaut de 5 min, indépendant de notre timeout, qui
+      // coupait les transcriptions longues (audio > ~5 min de traitement) avec
+      // « fetch failed ». axios respecte `timeout` de bout en bout.
+      const resp = await axios.post<WhisperResponse>(url, formData, {
+        timeout: sttBudget(durationSec),
+        maxBodyLength: Infinity,
+        maxContentLength: Infinity,
       });
 
-      clearTimeout(timeout);
-
-      if (!resp.ok) {
-        this.logger.error(
-          `Whisper a répondu ${resp.status} ${resp.statusText}`,
-        );
-        return null;
-      }
-
-      const data = (await resp.json()) as WhisperResponse;
+      const data = resp.data;
 
       this.logger.debug(
         `Whisper : ${data.segments?.length || 0} segments en ${data.processing_time?.toFixed(1)}s`,
@@ -331,18 +364,38 @@ export class TranscriptionService implements OnModuleDestroy {
 
       if (!data.segments || data.segments.length === 0) return null;
 
-      return { segments: data.segments, duration: data.duration || 0 };
+      return {
+        segments: data.segments,
+        duration: data.duration || 0,
+        text: data.text || '',
+      };
     } catch (error) {
-      if (error?.name === 'AbortError') {
-        this.logger.error(
-          `Whisper timeout (> ${this.whisperTimeoutMs}ms) — abandon`,
-        );
+      if (axios.isAxiosError(error)) {
+        if (error.response?.status === 429 || (error.response?.status === 503 && error.response?.data?.detail === 'STT_BUSY')) throw new WhisperBusyError();
+        if (error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT') {
+          this.logger.error(
+            `Whisper timeout (> ${this.whisperTimeoutMs}ms) — abandon`,
+          );
+        } else if (error.response) {
+          this.logger.error(
+            `Whisper a répondu HTTP ${error.response.status}`,
+          );
+        } else {
+          this.logger.error('STT_TRANSPORT_FAILED');
+        }
       } else {
-        this.logger.error(`Échec appel Whisper: ${error?.message || error}`);
+        this.logger.error('STT_FAILED');
       }
       return null;
     }
   }
+
+  /**
+   * Transcription complète d'un objet S3 pour le coaching IA.
+   * Télécharge l'audio depuis S3, appelle Whisper et renvoie le texte + la durée.
+   * Indépendant du pipeline conversation (_conv) : ni découpe ni ré-upload.
+   */
+
 
   /**
    * Fusionne les segments proches pour éviter les micro-coupures.

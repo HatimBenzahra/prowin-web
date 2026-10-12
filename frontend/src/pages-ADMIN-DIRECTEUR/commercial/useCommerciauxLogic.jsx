@@ -12,7 +12,11 @@ import {
   useEntityDescription,
 } from '@/hooks/metier/permissions/useRoleBasedData'
 import { useErrorToast } from '@/hooks/utils/ui/use-error-toast'
-import { USER_STATUS_CONFIG, getStatusFilterOptions } from '@/constants/domain/user-status'
+import {
+  USER_STATUS_CONFIG,
+  UserStatus,
+  getStatusFilterOptions,
+} from '@/constants/domain/user-status'
 import { useStatusBadge } from '@/hooks/utils/ui/useStatusBadge'
 import { useRanking } from '@/hooks/metier/api/gamification'
 import { currentMonthlyPeriodKey, indexRankingByUser, toRankInfo } from '@/lib/rank-wps'
@@ -171,7 +175,8 @@ export function useCommerciauxLogic() {
         const directeur = directeurs?.find(d => d.id === commercial.directeurId)
         const directeurName = directeur ? `${directeur.prenom} ${directeur.nom}` : 'N/A'
 
-        const rankInfo = toRankInfo(rankByCommercial.get(commercial.id))
+        const rankSnapshot = rankByCommercial.get(commercial.id)
+        const rankInfo = toRankInfo(rankSnapshot)
         const lastActivity = activityByCommercial.get(commercial.id) || null
         const lastActivityAt = getActivityTime(lastActivity)
 
@@ -193,6 +198,11 @@ export function useCommerciauxLogic() {
           status: commercial.status,
           columns,
           rankBadge,
+          // Le rang exposé EN DONNÉE, en plus du badge JSX historique : le tableau de
+          // classement a besoin de l'information, pas d'un rendu déjà figé.
+          rankInfo,
+          // Contrats retenus par le classement backend (statut VALIDE par défaut).
+          contratsRetenus: rankSnapshot?.contratsSignes ?? 0,
           lastActivity,
           lastActivityAt,
           lastActivityLabel: formatRelativeActivityDate(lastActivity?.changedAt),
@@ -264,6 +274,22 @@ export function useCommerciauxLogic() {
     },
   ]
 
+  /**
+   * Archiver = passer le commercial au statut « Contrat fini ».
+   * Mise à jour partielle `{ id, status }` : `UpdateCommercialInput` n'a que `id`
+   * d'obligatoire, donc aucun autre champ n'est réécrit ni risqué.
+   */
+  const handleArchiveCommercial = async id => {
+    try {
+      await updateCommercial({ id, status: UserStatus.CONTRAT_FINIE })
+      await refetch()
+      showSuccess('Commercial archivé (contrat fini)')
+    } catch (error) {
+      showError(error, 'Commerciaux.handleArchiveCommercial')
+      throw error
+    }
+  }
+
   const handleEditCommercial = async editedData => {
     try {
       await updateCommercial({
@@ -294,6 +320,7 @@ export function useCommerciauxLogic() {
     refetch,
     commerciauxEditFields,
     handleEditCommercial,
+    handleArchiveCommercial,
     statusOptions: getStatusFilterOptions(),
   }
 }

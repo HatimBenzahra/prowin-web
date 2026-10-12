@@ -15,6 +15,7 @@ import { ImmeubleModule } from './immeuble/immeuble.module';
 import { StatisticModule } from './statistic/statistic.module';
 import { PorteModule } from './porte/porte.module';
 import { RecordingModule } from './recording/recording.module';
+import { CoachingModule } from './coaching/coaching.module';
 import { CreationCompteModule } from './creation_compte/creation_compte.module';
 import { GamificationModule } from './gamification/gamification.module';
 import { SearchModule } from './search/search.module';
@@ -42,6 +43,7 @@ import { NotificationsModule } from './notifications/notifications.module';
     StatisticModule,
     PorteModule,
     RecordingModule,
+    CoachingModule,
     CreationCompteModule,
     GamificationModule,
     SearchModule,

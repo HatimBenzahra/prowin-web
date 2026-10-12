@@ -26,12 +26,6 @@ export default function CommercialContratsSection({ commercialId }) {
     [sorted]
   )
 
-  // ID WinLeadPlus mappé du commercial (clé de jointure portée par chaque contrat).
-  const wpsId = useMemo(
-    () => sorted.find(c => c.commercialWinleadPlusId)?.commercialWinleadPlusId || null,
-    [sorted]
-  )
-
   if (loading) {
     return (
       <div className="flex items-center gap-2 rounded-lg bg-muted/30 px-3 py-3 text-xs text-muted-foreground">
@@ -57,14 +51,6 @@ export default function CommercialContratsSection({ commercialId }) {
           {sorted.length > 1 ? 's' : ''} confirmé{sorted.length > 1 ? 's' : ''}
         </span>
         <div className="flex items-center gap-3">
-          {wpsId && (
-            <span className="inline-flex items-center gap-1">
-              ID WPS
-              <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-foreground">
-                {wpsId}
-              </code>
-            </span>
-          )}
           {totalPoints > 0 && (
             <span>
               <span className="font-semibold text-foreground">{totalPoints}</span> pts

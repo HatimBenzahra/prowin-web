@@ -5,7 +5,11 @@ test.describe('Permissions — Admin vs Directeur', () => {
     await page.goto('/directeurs')
     await waitForPageLoad(page)
 
-    const hasAccess = await page.getByRole('table').first().isVisible({ timeout: 5_000 }).catch(() => false)
+    const hasAccess = await page
+      .getByRole('table')
+      .first()
+      .isVisible({ timeout: 5_000 })
+      .catch(() => false)
 
     if (hasAccess) {
       await expect(page.getByRole('table').first()).toBeVisible()
@@ -13,8 +17,8 @@ test.describe('Permissions — Admin vs Directeur', () => {
       const bodyText = await page.locator('body').textContent()
       expect(
         bodyText.match(/non autorisé|accès refusé|unauthorized|aucun/i) ||
-        page.url().includes('/unauthorized') ||
-        page.url().includes('/dashboard')
+          page.url().includes('/unauthorized') ||
+          page.url().includes('/dashboard')
       ).toBeTruthy()
     }
   })
@@ -28,7 +32,13 @@ test.describe('Permissions — Admin vs Directeur', () => {
       return
     }
 
-    const actionButton = page.locator('tbody tr').first().locator('td').last().locator('button').first()
+    const actionButton = page
+      .locator('tbody tr')
+      .first()
+      .locator('td')
+      .last()
+      .locator('button')
+      .first()
     await actionButton.click()
 
     await expect(page.getByRole('menuitem', { name: /voir détails/i })).toBeVisible()
@@ -44,7 +54,13 @@ test.describe('Permissions — Admin vs Directeur', () => {
       return
     }
 
-    const actionButton = page.locator('tbody tr').first().locator('td').last().locator('button').first()
+    const actionButton = page
+      .locator('tbody tr')
+      .first()
+      .locator('td')
+      .last()
+      .locator('button')
+      .first()
     await actionButton.click()
 
     await expect(page.getByRole('menuitem', { name: /voir détails/i })).toBeVisible()
@@ -60,7 +76,13 @@ test.describe('Permissions — Admin vs Directeur', () => {
       return
     }
 
-    const actionButton = page.locator('tbody tr').first().locator('td').last().locator('button').first()
+    const actionButton = page
+      .locator('tbody tr')
+      .first()
+      .locator('td')
+      .last()
+      .locator('button')
+      .first()
     await actionButton.click()
 
     await expect(page.getByRole('menuitem', { name: /voir détails/i })).toBeVisible()

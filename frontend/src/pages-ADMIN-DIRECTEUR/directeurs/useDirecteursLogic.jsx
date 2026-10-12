@@ -1,4 +1,4 @@
-import { useMemo, useCallback } from 'react'
+import { useMemo } from 'react'
 import { useDirecteurs, useUpdateDirecteur } from '@/services'
 import { useEntityPage } from '@/hooks/metier/permissions/useRoleBasedData'
 import { useErrorToast } from '@/hooks/utils/ui/use-error-toast'
@@ -111,17 +111,17 @@ export function useDirecteursLogic() {
         fullWidth: true,
         placeholder: 'Adresse complète',
       },
-       {
-         key: 'status',
-         label: 'Statut',
-         type: 'select',
-         section: 'Statut',
-         options: USER_STATUS_CONFIG.map(option => ({
-           value: option.value,
-           label: option.label,
-         })),
-         hint: 'Actif par défaut pour les nouveaux comptes.',
-       },
+      {
+        key: 'status',
+        label: 'Statut',
+        type: 'select',
+        section: 'Statut',
+        options: USER_STATUS_CONFIG.map(option => ({
+          value: option.value,
+          label: option.label,
+        })),
+        hint: 'Actif par défaut pour les nouveaux comptes.',
+      },
     ],
     []
   )

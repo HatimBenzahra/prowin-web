@@ -82,19 +82,19 @@ model Commercial {
 }
 
 model Zone {
-  id          Int      @id @default(autoincrement())
-  nom         String
-  xOrigin     Float
-  yOrigin     Float
-  rayon       Float
-  polygon     Json? // GeoJSON anneau fermé [[lng,lat],...], null = zone cercle héritée
-  directeurId Int?
-  managerId   Int?
+  id            Int       @id @default(autoincrement())
+  nom           String
+  xOrigin       Float
+  yOrigin       Float
+  rayon         Float
+  polygon       Json? // GeoJSON anneau fermé [[lng,lat],...], null = zone cercle héritée
+  directeurId   Int?
+  managerId     Int?
   createdById   Int? // Id de l'utilisateur créateur (null si admin ou inconnu)
   createdByType UserType? // Type du créateur (null pour un admin : pas de valeur ADMIN dans l'enum)
   createdByName String? // Snapshot du nom du créateur à la création (dénormalisé, cf. commercialNom)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
   directeur        Directeur?            @relation(fields: [directeurId], references: [id])
   manager          Manager?              @relation(fields: [managerId], references: [id])
@@ -260,12 +260,14 @@ model Porte {
   commentaire     String?
   duree           Int? // Durée de la dernière prospection chronométrée, en secondes
   derniereVisite  DateTime?
+  coachingFavori  Boolean     @default(false) // porte/enregistrement/coaching marqué favori
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
 
   immeuble          Immeuble           @relation(fields: [immeubleId], references: [id])
   statusHistorique  StatusHistorique[]
   recordingSegments RecordingSegment[]
+  coachingAnalyses  CoachingAnalysis[]
 
   @@unique([immeubleId, numero])
 }
@@ -566,9 +568,10 @@ model Recording {
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
-  commercial Commercial?        @relation(fields: [commercialId], references: [id], onDelete: SetNull)
-  manager    Manager?           @relation(fields: [managerId], references: [id], onDelete: SetNull)
-  analysis   RecordingAnalysis?
+  commercial       Commercial?        @relation(fields: [commercialId], references: [id], onDelete: SetNull)
+  manager          Manager?           @relation(fields: [managerId], references: [id], onDelete: SetNull)
+  analysis         RecordingAnalysis?
+  coachingAnalyses CoachingAnalysis[]
 
   @@index([lastModified])
   @@index([roomName])
@@ -597,8 +600,293 @@ model RecordingAnalysis {
   @@index([s3Key])
 }
 
+// Référentiel coaching d'un CRM : son plan de vente et son catalogue de produits,
+// publiés ensemble. Un brouillon (au plus un par tenant) se modifie puis se publie ;
+// une version publiée est figée et une seule est active (index partiels SQL). Chaque
+// analyse fige le référentiel entier. La cohérence plan ↔ catalogue et l'empreinte
+// (contentHash) sont calculées par le moteur (POST /coaching/parse/reference).
+model CoachingReference {
+  id              Int                     @id @default(autoincrement())
+  tenantId        String                  @default("")
+  status          CoachingReferenceStatus @default(DRAFT)
+  // Numéro attribué à la publication ; null tant que brouillon.
+  version         Int?
+  isActive        Boolean                 @default(false)
+  contentHash     String?
+  // Le plan de vente : markdown source et grille telle que le moteur l'a lue.
+  planMarkdown    String?
+  planContentHash String?
+  planSlug        String?
+  planTitle       String?
+  planCriteria    Json?
+  createdBy       String?
+  createdAt       DateTime                @default(now())
+  updatedAt       DateTime                @updatedAt
+  publishedBy     String?
+  publishedAt     DateTime?
+
+  products CoachingReferenceProduct[]
+  analyses CoachingAnalysis[]
+
+  @@unique([tenantId, version])
+  @@index([tenantId, status])
+}
+
+enum CoachingReferenceStatus {
+  DRAFT
+  PUBLISHED
+}
+
+// Un produit du catalogue d'un référentiel : son identité (clé stable, nom,
+// reconnaissance, termes STT), ses offres WinLead+ (prix) et sa fiche facultative.
+// Sans fiche, la conformité de ce produit n'est pas jugée.
+model CoachingReferenceProduct {
+  id               Int      @id @default(autoincrement())
+  referenceId      Int
+  // Ordre d'affichage dans le catalogue.
+  position         Int
+  key              String
+  label            String
+  identifiers      String[]
+  sttTerms         String[]
+  // Offres WinLead+ liées, par identifiant (Offre.externalId) ou par fournisseur.
+  offreExternalIds Int[]
+  offreFournisseur String?
+  sheetMarkdown    String?
+  sheetContentHash String?
+  // Contenu jugeable de la fiche, tel que le moteur l'a lu : { facts, forbidden }.
+  sheetContent     Json?
+
+  reference CoachingReference @relation(fields: [referenceId], references: [id], onDelete: Cascade)
+
+  @@unique([referenceId, key])
+}
+
+// Version figée d'un plan de vente, dérivée d'un fichier markdown
+// (frontmatter = grille de scoring). Chaque analyse coaching épingle la version
+// utilisée. Une seule version active par slug. contentHash = sha256 du markdown
+// source → déduplication / versioning automatique au boot.
+model SalesPlanVersion {
+  id          Int      @id @default(autoincrement())
+  // Organisation proprietaire de la ligne. "" = aucun tenant : c'est le CRM v1, qui
+  // n'en a qu'un seul et implicite. Chaine vide et non NULL, parce qu'un NULL rendrait
+  // les contraintes d'unicite ci-dessous inoperantes sur ces lignes-la : en SQL, NULL
+  // n'est jamais egal a NULL, donc deux doublons a tenant NULL passeraient tous les deux.
+  tenantId    String   @default("")
+  slug        String
+  title       String
+  version     Int
+  // Le hash ne vaut plus comme identite globale : deux organisations peuvent importer
+  // le meme plan sans que l'une herite des versions de l'autre.
+  contentHash String
+  criteria    Json // barème structuré parsé (steps → criteria, poids, points)
+  rawMarkdown String
+  isActive    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  // E-mail de l'admin qui a importé la version ; null pour les versions antérieures.
+  importedBy  String?
+
+  analyses CoachingAnalysis[]
+
+  @@unique([tenantId, contentHash])
+  @@unique([tenantId, slug, version])
+  @@index([tenantId, slug, isActive])
+}
+
+// Fiche produit versionnée (clé = sha256 du markdown), même contrat que
+// SalesPlanVersion. Porte ce que la FORMATION autorise à affirmer ; ce que dit le
+// plan de vente vient de SalesPlanVersion.criteria (steps[].pitchText).
+model ProductSheetVersion {
+  id          Int      @id @default(autoincrement())
+  // Organisation proprietaire de la ligne. "" = aucun tenant : c'est le CRM v1, qui
+  // n'en a qu'un seul et implicite. Chaine vide et non NULL, parce qu'un NULL rendrait
+  // les contraintes d'unicite ci-dessous inoperantes sur ces lignes-la : en SQL, NULL
+  // n'est jamais egal a NULL, donc deux doublons a tenant NULL passeraient tous les deux.
+  tenantId    String   @default("")
+  slug        String
+  label       String
+  productKey  String // slug produit, ex. "depanssur" — jointure avec detectedProducts
+  version     Int
+  contentHash String
+  facts       Json // affirmations autorisées
+  identifiers Json     @default("[]") // signaux de reconnaissance de l'offre (passe 0, mapping)
+  sttTerms    Json     @default("[]") // termes à orthographier juste (initial_prompt Whisper)
+  forbidden   Json // affirmations sensibles + gravité
+  winleadplus Json? // résolution du prix depuis la table Offre (jamais de prix en dur)
+  rawMarkdown String
+  isActive    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  // E-mail de l'admin qui a importé la version ; null pour les versions antérieures.
+  importedBy  String?
+
+  @@unique([tenantId, contentHash])
+  @@unique([tenantId, slug, version])
+  @@index([tenantId, slug, isActive])
+  @@index([tenantId, productKey, isActive])
+}
+
+// Analyse coaching d'un enregistrement : 1 audio = 1 porte = 1 analyse.
+// Source = Recording.s3Key (re-transcrit via Whisper), indépendante de
+// RecordingSegment. Le LLM juge les critères, le backend calcule le score.
+model CoachingAnalysis {
+  id                    Int              @id @default(autoincrement())
+  remoteManaged         Boolean          @default(false)
+  remoteAnalysisId      Int?
+  remoteRequestKey      String?
+  remoteRelaunch        Boolean          @default(false)
+  remoteSyncAttempts    Int              @default(0)
+  remoteNextSyncAt      DateTime?
+  remoteLeaseToken      String?
+  remoteLeaseUntil      DateTime?
+  remoteSyncError        String?
+  remotePlanSnapshot    Json?
+  remoteResultSnapshot  Json?
+  // Appelant : renseigne depuis la CLÉ D'API, jamais depuis la requête.
+  source                String   @default("prowin")
+  // Organisation proprietaire de la ligne. "" = aucun tenant : c'est le CRM v1, qui
+  // n'en a qu'un seul et implicite. Chaine vide et non NULL, parce qu'un NULL rendrait
+  // les contraintes d'unicite ci-dessous inoperantes sur ces lignes-la : en SQL, NULL
+  // n'est jamais egal a NULL, donc deux doublons a tenant NULL passeraient tous les deux.
+  tenantId              String   @default("")
+  // Optionnels : une app tierce n'a ni enregistrement ni porte au sens du CRM.
+  recordingId           Int?
+  porteId               Int?
+  userId                Int?
+  managerId             Int?
+  // Les memes references, telles que l'appelant les nomme. Une app qui identifie ses
+  // commerciaux par UUID ne peut pas remplir les colonnes entieres ci-dessus, qui sont
+  // des cles etrangeres du CRM : elle depose ses propres references ici, opaques pour
+  // le moteur, qui les rend telles quelles.
+  externalUserRef       String?
+  externalPorteRef      String?
+  s3KeyOriginal         String
+  statutPorte           StatutPorte? // snapshot du statut porte au moment de l'échange
+  // Avant le référentiel unique : la version de plan seule. Null pour les analyses
+  // lancées depuis, qui figent le référentiel entier (referenceId).
+  salesPlanVersionId    Int?
+  referenceId           Int?
+  status                CoachingStatus   @default(PENDING)
+  quality               CoachingQuality?
+  score                 Float? // 0-100, calculé par le backend (source de vérité)
+  subScores             Json? // score par étape
+  confidence            Float?
+  summary               String?
+  strengths             Json?
+  improvements          Json?
+  recommendations       Json?
+  criterionResults      Json? // détail par critère (status/preuve/reco)
+  // Conformité produit (passe 2). `score` reste le score FINAL (après malus) pour
+  // que tous les agrégats existants restent justes ; scoreBeforeMalus garde le brut.
+  scoreBeforeMalus      Float? // moyenne pondérée des étapes, avant malus
+  malus                 Float? // points retirés (valeur positive), 0 si aucune violation
+  violations            Json? // violations de conformité produit (quote/sheetSays/planSays/gravité)
+  detectedProducts      Json? // clés des offres PRÉSENTÉES par le commercial (passe 0)
+  productMapping        Json? // trace complète de la passe 0, offres non présentées incluses
+  productSheetVersions  Json? // ids des versions de fiche utilisées en passe 2 (traçabilité)
+  transcript            String?
+  transcriptDurationSec Float?
+  transcriptMetadata    Json?
+  transcriptionAttempts Int              @default(0)
+  evaluationAttempts    Int              @default(0)
+  stageStartedAt        DateTime?
+  transcriptionStartedAt DateTime?
+  transcriptionCompletedAt DateTime?
+  evaluationStartedAt   DateTime?
+  evaluationCompletedAt DateTime?
+  error                 String?
+  attempts              Int              @default(0) // file : nb de tentatives
+  nextRetryAt           DateTime? // file : prochaine tentative (backoff)
+  manual                Boolean          @default(false) // lancé manuellement : ignore le gating durée
+  createdAt             DateTime         @default(now())
+  updatedAt             DateTime         @updatedAt
+
+  recording        Recording?       @relation(fields: [recordingId], references: [id], onDelete: Cascade)
+  porte            Porte?           @relation(fields: [porteId], references: [id], onDelete: SetNull)
+  salesPlanVersion SalesPlanVersion?  @relation(fields: [salesPlanVersionId], references: [id], onDelete: Restrict)
+  reference        CoachingReference? @relation(fields: [referenceId], references: [id], onDelete: Restrict)
+
+  // Idempotence : 1 analyse par audio × version de plan, POUR UN APPELANT DONNE. Deux
+  // organisations qui analysent le meme audio contre leur propre plan sont deux
+  // jugements distincts, pas un doublon.
+  // Nom explicite : le nom derive par defaut depasse les 63 caracteres que Postgres
+  // accepte, et se ferait tronquer differemment ici et dans la migration.
+  @@unique([source, tenantId, s3KeyOriginal, salesPlanVersionId], map: "CoachingAnalysis_appelant_audio_plan_key")
+  // Idempotence depuis le référentiel unique : 1 analyse par audio × version de référentiel.
+  @@unique([source, tenantId, s3KeyOriginal, referenceId], map: "CoachingAnalysis_appelant_audio_referentiel_key")
+  @@index([status])
+  @@index([remoteManaged, remoteNextSyncAt])
+  @@index([source, tenantId]) // toutes les lectures filtrent sur le couple
+  @@index([externalUserRef])
+  @@index([userId])
+  @@index([managerId])
+  @@index([porteId])
+  @@index([recordingId])
+}
+
+enum CoachingStatus {
+  PENDING
+  TRANSCRIBING
+  MAPPING // passe 0 : quelles offres ont été abordées, et par qui
+  ANALYZING // passes 1 et 2 en parallèle : jugement du plan + conformité produit
+  CONFORMITY // legacy : plus jamais écrit, encore porté par des lignes antérieures
+  READY
+  FAILED
+}
+
+// Config singleton du coaching (éditable depuis la page de gestion).
+model CoachingConfig {
+  id                     Int       @id @default(1)
+  coachableStatuts       Json // liste des StatutPorte qui déclenchent l'analyse auto
+  minAutoDurationSec     Int       @default(120) // durée min (s) d'un audio pour l'analyse auto
+  // Seuils d'ÉTIQUETAGE, appliqués après coup sur les faits rendus par le module.
+  minDurationSec         Int       @default(45) // en dessous : INEXPLOITABLE
+  minTranscriptChars     Int       @default(400) // en dessous : INEXPLOITABLE
+  lowConfidenceBelowSec  Int       @default(90) // en dessous : LOW_CONFIDENCE
+  // Planif configurable de la régénération auto des synthèses.
+  synthesisCronFrequency String    @default("daily") // 'daily' | 'weekly' | 'off'
+  synthesisCronHour      Int       @default(3) // 0-23
+  synthesisCronMinute    Int       @default(0) // 0-59
+  synthesisCronWeekday   Int       @default(1) // 0=dim..6=sam (si weekly)
+  synthesisCronLastRunAt DateTime? // dernière exécution du cron de synthèse
+  updatedAt              DateTime  @updatedAt
+}
+
+// Synthèse globale (hors pipeline audio) : bilan LLM par commercial / manager,
+// basé sur ses sessions de coaching + statuts + contrats + zone de terrain.
+model CoachingSynthesis {
+  id           Int            @id @default(autoincrement())
+  subjectType  String // 'commercial' | 'manager'
+  subjectKey   String         @unique // "commercial:12" — 1 synthèse (la + récente) par sujet
+  commercialId Int?
+  managerId    Int?
+  status       CoachingStatus @default(PENDING) // réutilise l'enum (PENDING/ANALYZING/READY/FAILED)
+  summary      String? // legacy (ancienne sortie plate) — conservé, non utilisé
+  strengths    Json? // legacy
+  improvements Json? // legacy
+  priorities   Json? // legacy
+  sections     Json? // sortie structurée : { bilan, performanceTerrain, contrats, forces, axes, planAction }
+  trend        String? // 'progresse' | 'stagne' | 'regresse'
+  scoreMoyen   Float? // source de vérité (calculé backend)
+  nbAnalyses   Int            @default(0)
+  stats        Json? // snapshot agrégé passé au LLM (traçabilité)
+  error        String?
+  generatedAt  DateTime?
+  updatedAt    DateTime       @updatedAt
+  createdAt    DateTime       @default(now())
+
+  @@index([commercialId])
+  @@index([managerId])
+}
+
+enum CoachingQuality {
+  ANALYZED // échange exploitable, score fiable
+  LOW_CONFIDENCE // échange court/bruité, score indicatif
+  INEXPLOITABLE // audio trop court / transcript vide → pas de score
+  FAILED // erreur technique
+}
+
 model GpsPosition {
-  id           Int      @id @default(autoincrement())
+  id           Int       @id @default(autoincrement())
   // deviceId reste nullable pour lecture des anciennes lignes kiosk ;
   // les positions mobiles sont désormais rattachées à un acteur polymorphe.
   deviceId     String?
@@ -611,9 +899,9 @@ model GpsPosition {
   longitude    Float
   accuracy     Float?
   batteryLevel Int?
-  isOnline     Boolean  @default(true)
-  recordedAt   DateTime @default(now())
-  createdAt    DateTime @default(now())
+  isOnline     Boolean   @default(true)
+  recordedAt   DateTime  @default(now())
+  createdAt    DateTime  @default(now())
 
   @@index([deviceId])
   @@index([recordedAt])

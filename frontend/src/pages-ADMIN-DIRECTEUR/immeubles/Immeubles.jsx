@@ -1,9 +1,7 @@
-import { lazy, Suspense, useState } from 'react'
 import { AdvancedDataTable } from '@/components/tableau'
-import { MapSkeleton, TableSkeleton } from '@/components/LoadingSkeletons'
+import { TableSkeleton } from '@/components/LoadingSkeletons'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import {
   Select,
@@ -14,62 +12,23 @@ import {
 } from '@/components/ui/select'
 import {
   LayoutList,
-  Map as MapIcon,
+  LayoutGrid,
   Building,
   FileText,
   Percent,
-  SlidersHorizontal,
   Calendar,
   User,
   CalendarCheck,
   EyeOff,
   MapPin,
-  Layers,
-  ChevronDown,
-  ChevronRight,
+  BadgeCheck,
+  ArrowDownWideNarrow,
 } from 'lucide-react'
+import { USER_STATUS_CONFIG } from '@/constants/domain/user-status'
+import ExpandableSearch from '@/components/ExpandableSearch'
 import { useImmeublesLogic, AUTONOMES_KEY } from './useImmeublesLogic'
-
-const AssignedZoneCard = lazy(() => import('@/components/AssignedZoneCard'))
-
-function QuartierGroupSection({ group, columns, description, permissions, onDelete }) {
-  const [open, setOpen] = useState(true)
-  const label = group.isAutonomes ? 'Autonomes' : group.label
-
-  return (
-    <div className="space-y-2">
-      <button
-        type="button"
-        onClick={() => setOpen(prev => !prev)}
-        className="flex w-full items-center justify-between rounded-lg border bg-muted/30 px-4 py-2.5 text-left transition-colors hover:bg-muted/50"
-      >
-        <div className="flex items-center gap-2">
-          {open ? (
-            <ChevronDown className="h-4 w-4 text-muted-foreground" />
-          ) : (
-            <ChevronRight className="h-4 w-4 text-muted-foreground" />
-          )}
-          <span className="text-sm font-semibold">{label}</span>
-        </div>
-        <Badge variant="secondary" className="text-xs tabular-nums">
-          {group.data.length} bâtiment{group.data.length > 1 ? 's' : ''}
-        </Badge>
-      </button>
-      {open && (
-        <AdvancedDataTable
-          showStatusColumn={false}
-          title={label}
-          description={description}
-          data={group.data}
-          columns={columns}
-          searchKey="address"
-          detailsPath="/immeubles"
-          onDelete={permissions.canDelete ? onDelete : undefined}
-        />
-      )}
-    </div>
-  )
-}
+import { CARD_SORT_OPTIONS } from './immeubles-display'
+import ImmeublesCardGrid from './components/ImmeublesCardGrid'
 
 export default function Immeubles() {
   const {
@@ -81,15 +40,18 @@ export default function Immeubles() {
     immeublesColumns,
     permissions,
     handleDeleteImmeuble,
-    filteredImmeubles,
     stats,
     filterCommercial,
     setFilterCommercial,
     filterQuartier,
     setFilterQuartier,
-    groupByQuartier,
-    setGroupByQuartier,
-    groupedByQuartier,
+    cardsGroupedByDate,
+    filterOwnerStatus,
+    setFilterOwnerStatus,
+    cardSearch,
+    setCardSearch,
+    cardSort,
+    setCardSort,
     dateFilterMode,
     setDateFilterMode,
     createdDate,
@@ -207,12 +169,15 @@ export default function Immeubles() {
         </Card>
       </div>
 
-      <div className="flex flex-col sm:flex-row justify-between gap-4">
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="flex items-center gap-2">
-            <SlidersHorizontal className="h-4 w-4 text-muted-foreground" />
-            <span className="text-sm font-medium text-muted-foreground">Filtres:</span>
-          </div>
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex flex-wrap items-center gap-2 lg:flex-1">
+          {viewMode === 'cards' && (
+            <ExpandableSearch
+              value={cardSearch}
+              onChange={setCardSearch}
+              placeholder="Rechercher une adresse…"
+            />
+          )}
 
           <Select value={dateFilterMode} onValueChange={setDateFilterMode}>
             <SelectTrigger className="w-auto">
@@ -269,81 +234,89 @@ export default function Immeubles() {
               <SelectItem value={AUTONOMES_KEY}>Autonomes</SelectItem>
             </SelectContent>
           </Select>
+
+          {/* Le filtre de statut du propriétaire permet aussi de consulter les
+              bâtiments des utilisateurs test et les comptes terminés. */}
+          <Select value={filterOwnerStatus} onValueChange={setFilterOwnerStatus}>
+            <SelectTrigger className="w-auto">
+              <BadgeCheck className="mr-2 h-4 w-4" />
+              <SelectValue placeholder="Statut..." />
+            </SelectTrigger>
+            <SelectContent>
+              {USER_STATUS_CONFIG.map(status => (
+                <SelectItem key={status.value} value={status.value}>
+                  {status.label}
+                </SelectItem>
+              ))}
+              <SelectItem value="all">Tous les statuts</SelectItem>
+            </SelectContent>
+          </Select>
+
+          {/* Le tri ferme la liste : c'est le seul contrôle qui apparaît et disparaît
+              selon la vue, donc rien ne se déplace quand il change d'état. */}
+          {viewMode === 'cards' && (
+            <Select value={cardSort} onValueChange={setCardSort}>
+              <SelectTrigger className="w-auto">
+                <ArrowDownWideNarrow className="mr-2 h-4 w-4" />
+                <SelectValue placeholder="Trier..." />
+              </SelectTrigger>
+              <SelectContent>
+                {CARD_SORT_OPTIONS.map(option => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
         </div>
 
-        <div className="flex items-center gap-3">
-          <Badge variant="secondary" className="text-xs tabular-nums">
-            {filteredImmeubles.length} immeuble{filteredImmeubles.length > 1 ? 's' : ''}
-          </Badge>
-          <div className="flex gap-1">
-            {viewMode === 'list' && (
-              <Button
-                variant={groupByQuartier ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => setGroupByQuartier(prev => !prev)}
-                className="gap-2"
-              >
-                <Layers className="h-4 w-4" />
-                Grouper par quartier
-              </Button>
-            )}
+        <div className="flex items-center gap-2 lg:shrink-0">
+          {/* Contrôle segmenté : un seul conteneur bordé pour deux vues exclusives,
+              au lieu de bordures concurrentes. */}
+          <div className="inline-flex items-center rounded-md border border-input p-0.5">
             <Button
-              variant={viewMode === 'list' ? 'default' : 'outline'}
+              variant={viewMode === 'cards' ? 'default' : 'ghost'}
+              size="sm"
+              onClick={() => setViewMode('cards')}
+              className="h-7 gap-1.5"
+            >
+              <LayoutGrid className="h-4 w-4" />
+              Grille
+            </Button>
+            <Button
+              variant={viewMode === 'list' ? 'default' : 'ghost'}
               size="sm"
               onClick={() => setViewMode('list')}
-              className="gap-2"
+              className="h-7 gap-1.5"
             >
               <LayoutList className="h-4 w-4" />
               Liste
-            </Button>
-            <Button
-              variant={viewMode === 'map' ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setViewMode('map')}
-              className="gap-2"
-            >
-              <MapIcon className="h-4 w-4" />
-              Carte
             </Button>
           </div>
         </div>
       </div>
 
-      {/* Affichage conditionnel basé sur viewMode */}
-      {viewMode === 'list' ? (
-        groupByQuartier ? (
-          <div className="space-y-4">
-            {groupedByQuartier.map(group => (
-              <QuartierGroupSection
-                key={group.key}
-                group={group}
-                columns={immeublesColumns}
-                description={description}
-                permissions={permissions}
-                onDelete={handleDeleteImmeuble}
-              />
-            ))}
-          </div>
-        ) : (
-          <AdvancedDataTable
-            showStatusColumn={false}
-            title="Liste des bâtiments"
-            description={description}
-            data={tableData}
-            columns={immeublesColumns}
-            searchKey="address"
-            detailsPath="/immeubles"
-            onDelete={permissions.canDelete ? handleDeleteImmeuble : undefined}
-          />
-        )
+      {/* La vue Grille est toujours groupée par quartier, la vue Liste toujours à
+          plat : un tableau par quartier réinstancierait une recherche et une
+          pagination à chaque section. */}
+      {viewMode === 'cards' ? (
+        <ImmeublesCardGrid
+          groups={cardsGroupedByDate}
+          canDelete={permissions.canDelete}
+          onDelete={handleDeleteImmeuble}
+        />
       ) : (
-        <Suspense fallback={<MapSkeleton />}>
-          <AssignedZoneCard
-            showAllImmeubles={true}
-            allImmeubles={filteredImmeubles}
-            fullWidth={true}
-          />
-        </Suspense>
+        <AdvancedDataTable
+          showStatusColumn={false}
+          title="Liste des bâtiments"
+          description={description}
+          data={tableData}
+          columns={immeublesColumns}
+          searchKey="address"
+          detailsPath="/immeubles"
+          onDelete={permissions.canDelete ? handleDeleteImmeuble : undefined}
+        />
       )}
     </div>
   )

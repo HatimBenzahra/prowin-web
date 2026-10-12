@@ -6,14 +6,32 @@ import {
 import { PrismaService } from '../prisma.service';
 import { calculateStatsForStatus } from '../porte/porte-status.constants';
 import {
+  ContratsValidesAggregate,
+  ContratsValidesPoint,
   CreateStatisticInput,
   OwnerActivityStatistic,
+  ProspectionPipeline,
+  RepriseStats,
+  StatsEffort,
+  StatsPeriodComparison,
+  StatsPeriodTotals,
   UpdateStatisticInput,
   ZoneStatistic,
   TimelinePoint,
   TeamLastStatusActivity,
 } from './statistic.dto';
 import { UserStatus } from '../enumeration-Status/user-status.enum';
+import {
+  AGE_BUCKETS,
+  ageBucketIndex,
+  declaredDoorCount,
+  effectiveTypeHabitat,
+  median,
+  periodKeyFor,
+  previousRange,
+  roundRate,
+  type PeriodGranularity,
+} from './statistic.metrics';
 
 type StatsScopeType = 'all' | 'commercials' | 'managers';
 type StatsOwnerType = 'commercial' | 'manager';
@@ -30,7 +48,7 @@ export class StatisticService {
   constructor(private prisma: PrismaService) {}
 
   private productionUserWhere() {
-    return { status: { not: UserStatus.UTILISATEUR_TEST } };
+    return {};
   }
 
   private mergeWhere(...conditions: any[]) {
@@ -1513,5 +1531,643 @@ export class StatisticService {
           b.contratsSignes - a.contratsSignes ||
           b.rendezVousPris - a.rendezVousPris,
       );
+  }
+
+  // ==========================================================================
+  // Pilotage : comparaison de périodes, effort, contrats validés
+  // ==========================================================================
+
+  private emptyPeriodTotals(
+    startDate?: Date,
+    endDate?: Date,
+  ): StatsPeriodTotals {
+    return {
+      startDate,
+      endDate,
+      contratsSignes: 0,
+      rendezVousPris: 0,
+      refus: 0,
+      absents: 0,
+      argumentes: 0,
+      repassages: 0,
+      nbPortesProspectes: 0,
+      nbPortesDistinctes: 0,
+      nbIntervenants: 0,
+      nbJoursActifs: 0,
+      tauxConversion: 0,
+      tauxContact: 0,
+      tauxRdv: 0,
+    };
+  }
+
+  private roundRate(value: number) {
+    return roundRate(value);
+  }
+
+  /**
+   * Agrège les évènements `StatusHistorique` d'une plage en totaux comparables.
+   *
+   * Les taux sont dérivés ici et nulle part ailleurs : `tauxConversion` sur les
+   * opportunités (signé + RDV + refus), `tauxContact` et `tauxRdv` sur les portes
+   * prospectées. `nbPortesDistinctes` distingue « 40 passages » de « 40 portes ».
+   */
+  private async aggregatePeriodTotals(
+    ownerWhere: any,
+    startDate?: Date,
+    endDate?: Date,
+  ): Promise<StatsPeriodTotals> {
+    const history = await this.prisma.statusHistorique.findMany({
+      where: {
+        ...ownerWhere,
+        ...this.buildStatusHistoryDateWhere(startDate, endDate),
+      },
+      select: {
+        statut: true,
+        createdAt: true,
+        porteId: true,
+        commercialId: true,
+        managerId: true,
+        porte: { select: { nbContrats: true } },
+      },
+    });
+
+    const totals = this.emptyPeriodTotals(startDate, endDate);
+    const portes = new Set<number>();
+    const owners = new Set<string>();
+    const jours = new Set<string>();
+
+    history.forEach((entry) => {
+      const count =
+        entry.statut === 'CONTRAT_SIGNE' ? entry.porte?.nbContrats || 1 : 1;
+      this.accumulateStatusStats(totals, entry.statut, count);
+
+      portes.add(entry.porteId);
+      jours.add(entry.createdAt.toISOString().slice(0, 10));
+      if (entry.commercialId != null) {
+        owners.add(`commercial:${entry.commercialId}`);
+      } else if (entry.managerId != null) {
+        owners.add(`manager:${entry.managerId}`);
+      }
+    });
+
+    totals.nbPortesDistinctes = portes.size;
+    totals.nbIntervenants = owners.size;
+    totals.nbJoursActifs = jours.size;
+
+    const opportunites =
+      totals.contratsSignes + totals.rendezVousPris + totals.refus;
+    const contactes = opportunites + totals.argumentes;
+
+    totals.tauxConversion =
+      opportunites > 0
+        ? this.roundRate((totals.contratsSignes / opportunites) * 100)
+        : 0;
+    totals.tauxContact =
+      totals.nbPortesProspectes > 0
+        ? this.roundRate((contactes / totals.nbPortesProspectes) * 100)
+        : 0;
+    totals.tauxRdv =
+      totals.nbPortesProspectes > 0
+        ? this.roundRate(
+            (totals.rendezVousPris / totals.nbPortesProspectes) * 100,
+          )
+        : 0;
+
+    return totals;
+  }
+
+  /** Cf. `statistic.metrics.ts` — logique et tests y vivent. */
+  private previousRange(startDate?: Date, endDate?: Date) {
+    return previousRange(startDate, endDate);
+  }
+
+  async statsPeriodComparison(
+    userId: number,
+    userRole: string,
+    scopeType?: string,
+    ownerType?: string,
+    ownerId?: number,
+    startDate?: Date,
+    endDate?: Date,
+  ): Promise<StatsPeriodComparison> {
+    const accessibleOwners = await this.getAccessibleActivityOwners(
+      userId,
+      userRole,
+    );
+    const ownerWhere = this.buildStatusHistoryOwnerWhere(
+      accessibleOwners,
+      scopeType,
+      ownerType,
+      ownerId,
+    );
+
+    const previous = this.previousRange(startDate, endDate);
+    const [current, previousTotals] = await Promise.all([
+      this.aggregatePeriodTotals(ownerWhere, startDate, endDate),
+      previous
+        ? this.aggregatePeriodTotals(
+            ownerWhere,
+            previous.startDate,
+            previous.endDate,
+          )
+        : Promise.resolve(undefined),
+    ]);
+
+    return { current, previous: previousTotals };
+  }
+
+  private median(values: number[]): number {
+    return median(values);
+  }
+
+  /**
+   * Effort terrain mesuré, depuis `StatusHistorique.duree` (renseignée par le
+   * mobile). `nbPassagesSansDuree` est exposé pour que l'UI puisse dire sur
+   * quelle part de l'activité la mesure porte réellement — un temps moyen
+   * calculé sur 10 % des passages ne vaut pas un temps moyen sur 90 %.
+   */
+  async statsEffort(
+    userId: number,
+    userRole: string,
+    scopeType?: string,
+    ownerType?: string,
+    ownerId?: number,
+    startDate?: Date,
+    endDate?: Date,
+  ): Promise<StatsEffort> {
+    const accessibleOwners = await this.getAccessibleActivityOwners(
+      userId,
+      userRole,
+    );
+    const ownerWhere = this.buildStatusHistoryOwnerWhere(
+      accessibleOwners,
+      scopeType,
+      ownerType,
+      ownerId,
+    );
+
+    const history = await this.prisma.statusHistorique.findMany({
+      where: {
+        ...ownerWhere,
+        ...this.buildStatusHistoryDateWhere(startDate, endDate),
+      },
+      select: {
+        duree: true,
+        statut: true,
+        porte: { select: { nbContrats: true } },
+      },
+    });
+
+    const durees: number[] = [];
+    let nbPassagesSansDuree = 0;
+    let contratsSignes = 0;
+    let rendezVousPris = 0;
+
+    history.forEach((entry) => {
+      if (entry.duree != null && entry.duree > 0) {
+        durees.push(entry.duree);
+      } else {
+        nbPassagesSansDuree += 1;
+      }
+
+      if (entry.statut === 'CONTRAT_SIGNE') {
+        contratsSignes += entry.porte?.nbContrats || 1;
+      } else if (entry.statut === 'RENDEZ_VOUS_PRIS') {
+        rendezVousPris += 1;
+      }
+    });
+
+    const dureeTotaleSec = durees.reduce((sum, value) => sum + value, 0);
+    const nbPassagesMesures = durees.length;
+
+    return {
+      nbPassagesMesures,
+      nbPassagesSansDuree,
+      dureeTotaleSec,
+      dureeMoyenneParPassageSec: nbPassagesMesures
+        ? Math.round((dureeTotaleSec / nbPassagesMesures) * 10) / 10
+        : 0,
+      dureeMedianeParPassageSec:
+        Math.round(this.median(durees) * 10) / 10,
+      dureeParContratSignesSec: contratsSignes
+        ? Math.round((dureeTotaleSec / contratsSignes) * 10) / 10
+        : undefined,
+      dureeParRdvSec: rendezVousPris
+        ? Math.round((dureeTotaleSec / rendezVousPris) * 10) / 10
+        : undefined,
+      passagesParHeure: dureeTotaleSec
+        ? Math.round((nbPassagesMesures / (dureeTotaleSec / 3600)) * 10) / 10
+        : 0,
+    };
+  }
+
+  /**
+   * Contrats validés back-office (`ContratValide`) agrégés sur la plage.
+   *
+   * On filtre sur `dateValidation` (le fait générateur côté back-office) et on
+   * regroupe via les clés de période déjà stockées, pour ne pas recalculer un
+   * découpage calendaire côté applicatif.
+   *
+   * `buildStatusHistoryOwnerWhere` est réutilisé tel quel : il ne produit que des
+   * clauses sur `id` / `commercialId` / `managerId`, trois champs que
+   * `ContratValide` porte aussi. Le périmètre de visibilité est donc identique à
+   * celui de l'activité terrain, ce qui est la condition pour comparer les deux.
+   */
+  async contratsValidesAggregate(
+    userId: number,
+    userRole: string,
+    scopeType?: string,
+    ownerType?: string,
+    ownerId?: number,
+    startDate?: Date,
+    endDate?: Date,
+    granularity?: string,
+  ): Promise<ContratsValidesAggregate> {
+    const accessibleOwners = await this.getAccessibleActivityOwners(
+      userId,
+      userRole,
+    );
+    const ownerWhere = this.buildStatusHistoryOwnerWhere(
+      accessibleOwners,
+      scopeType,
+      ownerType,
+      ownerId,
+    );
+
+    const validStart = this.normalizeDate(startDate);
+    const validEnd = this.normalizeDate(endDate);
+    const dateWhere =
+      validStart || validEnd
+        ? {
+            dateValidation: {
+              ...(validStart ? { gte: validStart } : {}),
+              ...(validEnd ? { lte: validEnd } : {}),
+            },
+          }
+        : {};
+
+    const normalizedGranularity: PeriodGranularity =
+      granularity === 'month' || granularity === 'week' ? granularity : 'day';
+
+    // Les colonnes `periodDay/Week/Month` de `ContratValide` ne sont pas utilisées
+    // pour le regroupement : `periodWeek` est fausse aux bords d'année (cf.
+    // `isoWeekKey` dans `statistic.metrics.ts`). On regroupe donc depuis
+    // `dateValidation`, avec le même helper que le reste du pilotage. Le filtrage
+    // reste sur `dateValidation`, qui est indexée.
+    const rows = await this.prisma.contratValide.findMany({
+      where: { ...ownerWhere, ...dateWhere },
+      select: {
+        dateValidation: true,
+        dateSignature: true,
+      },
+    });
+
+    const byPeriod = new Map<string, number>();
+    const delais: number[] = [];
+    let nbSansDateSignature = 0;
+
+    rows.forEach((row) => {
+      const key = periodKeyFor(row.dateValidation, normalizedGranularity);
+      byPeriod.set(key, (byPeriod.get(key) || 0) + 1);
+
+      if (!row.dateSignature) {
+        nbSansDateSignature += 1;
+        return;
+      }
+      const delaiMs =
+        row.dateValidation.getTime() - row.dateSignature.getTime();
+      // Un délai négatif signale une donnée incohérente côté source : on
+      // l'écarte plutôt que de tirer la médiane vers le bas.
+      if (delaiMs >= 0) delais.push(delaiMs / 86400000);
+    });
+
+    const series: ContratsValidesPoint[] = Array.from(byPeriod.entries())
+      .map(([periodKey, contratsValides]) => ({ periodKey, contratsValides }))
+      .sort((a, b) => a.periodKey.localeCompare(b.periodKey));
+
+    const previous = this.previousRange(startDate, endDate);
+    const totalPrevious = previous
+      ? await this.prisma.contratValide.count({
+          where: {
+            ...ownerWhere,
+            dateValidation: {
+              gte: previous.startDate,
+              lte: previous.endDate,
+            },
+          },
+        })
+      : undefined;
+
+    return {
+      total: rows.length,
+      totalPrevious,
+      series,
+      delaiMedianValidationJours: delais.length
+        ? Math.round(this.median(delais) * 10) / 10
+        : undefined,
+      nbSansDateSignature,
+    };
+  }
+
+  // ==========================================================================
+  // Pipeline : le stock de travail en cours
+  // ==========================================================================
+
+  /**
+   * Restreint les bâtiments au périmètre visible par l'appelant.
+   *
+   * `Porte` ne porte pas de propriétaire : c'est l'`Immeuble` qui référence le
+   * commercial ou le manager. On traverse donc la relation plutôt que de dupliquer
+   * une notion de propriété sur la porte.
+   */
+  private buildImmeubleOwnerWhere(
+    accessibleOwners: AccessibleActivityOwners,
+    scopeType?: string,
+    ownerType?: string,
+    ownerId?: number,
+  ) {
+    const normalizedScope = this.normalizeScopeType(scopeType);
+    const normalizedOwnerType = this.normalizeOwnerType(ownerType);
+
+    if (normalizedOwnerType && ownerId) {
+      if (
+        normalizedOwnerType === 'commercial' &&
+        accessibleOwners.commercialIds.includes(ownerId)
+      ) {
+        return { commercialId: ownerId };
+      }
+      if (
+        normalizedOwnerType === 'manager' &&
+        accessibleOwners.managerIds.includes(ownerId)
+      ) {
+        return { managerId: ownerId };
+      }
+      return { id: -1 };
+    }
+
+    if (normalizedScope === 'commercials') {
+      return accessibleOwners.commercialIds.length
+        ? { commercialId: { in: accessibleOwners.commercialIds } }
+        : { id: -1 };
+    }
+
+    if (normalizedScope === 'managers') {
+      return accessibleOwners.managerIds.length
+        ? { managerId: { in: accessibleOwners.managerIds } }
+        : { id: -1 };
+    }
+
+    const filters: any[] = [];
+    if (accessibleOwners.commercialIds.length) {
+      filters.push({ commercialId: { in: accessibleOwners.commercialIds } });
+    }
+    if (accessibleOwners.managerIds.length) {
+      filters.push({ managerId: { in: accessibleOwners.managerIds } });
+    }
+
+    if (filters.length === 0) return { id: -1 };
+    return filters.length === 1 ? filters[0] : { OR: filters };
+  }
+
+  /**
+   * État courant du travail de prospection.
+   *
+   * Volontairement **sans filtre de période** : un stock se lit à l'instant présent.
+   * « Combien de portes attendent un repassage » n'a pas de sens sur les 30 derniers
+   * jours — la question est combien il en reste maintenant.
+   */
+  async prospectionPipeline(
+    userId: number,
+    userRole: string,
+    scopeType?: string,
+    ownerType?: string,
+    ownerId?: number,
+  ): Promise<ProspectionPipeline> {
+    const accessibleOwners = await this.getAccessibleActivityOwners(
+      userId,
+      userRole,
+    );
+    const immeubleWhere = this.buildImmeubleOwnerWhere(
+      accessibleOwners,
+      scopeType,
+      ownerType,
+      ownerId,
+    );
+
+    const immeubles = await this.prisma.immeuble.findMany({
+      where: immeubleWhere,
+      select: {
+        id: true,
+        typeHabitat: true,
+        nbEtages: true,
+        nbPortesParEtage: true,
+        nbMaisonsPrevu: true,
+        portes: {
+          select: {
+            id: true,
+            statut: true,
+            rdvDate: true,
+            derniereVisite: true,
+          },
+        },
+      },
+    });
+
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+    const endOfToday = new Date();
+    endOfToday.setHours(23, 59, 59, 999);
+
+    const bucketCounts = AGE_BUCKETS.map((bucket) => ({
+      label: bucket.label,
+      count: 0,
+    }));
+
+    const repassages = { total: 0, plusAncienJours: undefined as number | undefined };
+    const rdv = {
+      total: 0,
+      aujourdhui: 0,
+      aVenir: 0,
+      enRetard: 0,
+      sansDate: 0,
+      plusEnRetardJours: undefined as number | undefined,
+    };
+    const conclusions = {
+      contratsSignes: 0,
+      argumentes: 0,
+      refus: 0,
+      total: 0,
+    };
+    let nonVisitees = 0;
+
+    const habitatMap = new Map<
+      string,
+      {
+        batiments: number;
+        portesCreees: number;
+        capaciteDeclaree: number;
+        prospectees: number;
+        aTraiter: number;
+      }
+    >();
+
+    for (const immeuble of immeubles) {
+      const effectif = effectiveTypeHabitat(immeuble);
+
+      const habitat =
+        habitatMap.get(effectif) ??
+        {
+          batiments: 0,
+          portesCreees: 0,
+          capaciteDeclaree: 0,
+          prospectees: 0,
+          aTraiter: 0,
+        };
+      habitat.batiments += 1;
+      habitat.capaciteDeclaree += declaredDoorCount(immeuble);
+
+      for (const porte of immeuble.portes) {
+        habitat.portesCreees += 1;
+        if (porte.statut !== 'NON_VISITE') habitat.prospectees += 1;
+
+        switch (porte.statut) {
+          case 'NON_VISITE':
+            nonVisitees += 1;
+            break;
+
+          case 'ABSENT':
+          case 'NECESSITE_REPASSAGE': {
+            repassages.total += 1;
+            habitat.aTraiter += 1;
+
+            const reference = porte.derniereVisite;
+            if (reference) {
+              const days = Math.floor(
+                (Date.now() - reference.getTime()) / 86400000,
+              );
+              bucketCounts[ageBucketIndex(days)].count += 1;
+              if (
+                repassages.plusAncienJours === undefined ||
+                days > repassages.plusAncienJours
+              ) {
+                repassages.plusAncienJours = days;
+              }
+            }
+            break;
+          }
+
+          case 'RENDEZ_VOUS_PRIS': {
+            rdv.total += 1;
+            habitat.aTraiter += 1;
+
+            if (!porte.rdvDate) {
+              rdv.sansDate += 1;
+              break;
+            }
+            if (porte.rdvDate < startOfToday) {
+              rdv.enRetard += 1;
+              const days = Math.floor(
+                (startOfToday.getTime() - porte.rdvDate.getTime()) / 86400000,
+              );
+              if (
+                rdv.plusEnRetardJours === undefined ||
+                days > rdv.plusEnRetardJours
+              ) {
+                rdv.plusEnRetardJours = days;
+              }
+            } else if (porte.rdvDate <= endOfToday) {
+              rdv.aujourdhui += 1;
+            } else {
+              rdv.aVenir += 1;
+            }
+            break;
+          }
+
+          case 'CONTRAT_SIGNE':
+            conclusions.contratsSignes += 1;
+            conclusions.total += 1;
+            break;
+
+          case 'ARGUMENTE':
+            conclusions.argumentes += 1;
+            conclusions.total += 1;
+            break;
+
+          case 'REFUS':
+            conclusions.refus += 1;
+            conclusions.total += 1;
+            break;
+        }
+      }
+
+      habitatMap.set(effectif, habitat);
+    }
+
+    const habitat = [...habitatMap.entries()]
+      .map(([typeHabitat, stock]) => ({
+        typeHabitat,
+        ...stock,
+        couverture: stock.capaciteDeclaree
+          ? this.roundRate((stock.prospectees / stock.capaciteDeclaree) * 100)
+          : 0,
+      }))
+      .sort((a, b) => b.capaciteDeclaree - a.capaciteDeclaree);
+
+    return {
+      repassages: { ...repassages, buckets: bucketCounts },
+      rdv,
+      conclusions,
+      nonVisitees,
+      habitat,
+      reprise: await this.repriseStats(immeubleWhere),
+    };
+  }
+
+  /**
+   * Devenir des portes déjà passées par `ABSENT` : combien ont été conclues.
+   *
+   * On part de l'historique pour identifier les portes ayant connu `ABSENT`, puis on
+   * lit leur statut **actuel** sur `Porte`. Le taux répond à « le repassage
+   * paye-t-il ? », pas à « combien de passages faut-il ? » — cette seconde question
+   * exigerait que l'historique consigne aussi les passages sans changement de statut.
+   */
+  private async repriseStats(immeubleWhere: any): Promise<RepriseStats> {
+    const absentHistory = await this.prisma.statusHistorique.findMany({
+      where: { statut: 'ABSENT', porte: { immeuble: immeubleWhere } },
+      select: { porteId: true },
+      distinct: ['porteId'],
+    });
+
+    const porteIds = absentHistory.map((row) => row.porteId);
+    if (porteIds.length === 0) {
+      return {
+        portesPasseesParAbsent: 0,
+        portesConclues: 0,
+        portesEncoreAbsentes: 0,
+        tauxReprise: 0,
+      };
+    }
+
+    const grouped = await this.prisma.porte.groupBy({
+      by: ['statut'],
+      where: { id: { in: porteIds } },
+      _count: { _all: true },
+    });
+
+    const byStatut = new Map(
+      grouped.map((row) => [row.statut as string, row._count._all]),
+    );
+    const portesConclues =
+      (byStatut.get('CONTRAT_SIGNE') ?? 0) +
+      (byStatut.get('ARGUMENTE') ?? 0) +
+      (byStatut.get('REFUS') ?? 0);
+    const portesEncoreAbsentes = byStatut.get('ABSENT') ?? 0;
+
+    return {
+      portesPasseesParAbsent: porteIds.length,
+      portesConclues,
+      portesEncoreAbsentes,
+      tauxReprise: this.roundRate((portesConclues / porteIds.length) * 100),
+    };
   }
 }

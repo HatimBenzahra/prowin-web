@@ -59,6 +59,7 @@ export const GET_PORTES_BY_IMMEUBLE = `
       rdvTime
       commentaire
       derniereVisite
+      coachingFavori
       createdAt
       updatedAt
     }

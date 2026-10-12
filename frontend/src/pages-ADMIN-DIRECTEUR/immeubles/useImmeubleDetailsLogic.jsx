@@ -109,6 +109,7 @@ export function useImmeubleDetailsLogic() {
       lastVisit: porte.updatedAt || null,
       nbRepassages: porte.nbRepassages || 0,
       nbContrats: porte.nbContrats || 0,
+      coachingFavori: porte.coachingFavori ?? false,
     })
 
     // Regrouper les portes par unité à partir des vraies données.

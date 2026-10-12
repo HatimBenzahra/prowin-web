@@ -179,6 +179,111 @@ export interface OwnerActivityStatistic {
   lastActivityAt?: string | null
 }
 
+/** Totaux d'activité d'une plage, calculés depuis `StatusHistorique`. */
+export interface StatsPeriodTotals {
+  startDate?: string | null
+  endDate?: string | null
+  contratsSignes: number
+  rendezVousPris: number
+  refus: number
+  absents: number
+  argumentes: number
+  repassages: number
+  nbPortesProspectes: number
+  nbPortesDistinctes: number
+  nbIntervenants: number
+  nbJoursActifs: number
+  tauxConversion: number
+  tauxContact: number
+  tauxRdv: number
+}
+
+/** Période courante + période précédente de même durée, pour les deltas. */
+export interface StatsPeriodComparison {
+  current: StatsPeriodTotals
+  previous?: StatsPeriodTotals | null
+}
+
+/** Effort terrain mesuré depuis `StatusHistorique.duree`. */
+export interface StatsEffort {
+  nbPassagesMesures: number
+  nbPassagesSansDuree: number
+  dureeTotaleSec: number
+  dureeMoyenneParPassageSec: number
+  dureeMedianeParPassageSec: number
+  dureeParContratSignesSec?: number | null
+  dureeParRdvSec?: number | null
+  passagesParHeure: number
+}
+
+export interface ContratsValidesPoint {
+  periodKey: string
+  contratsValides: number
+}
+
+/** Contrats validés back-office agrégés sur la plage. */
+export interface ContratsValidesAggregate {
+  total: number
+  totalPrevious?: number | null
+  series: ContratsValidesPoint[]
+  delaiMedianValidationJours?: number | null
+  nbSansDateSignature: number
+}
+
+export interface PipelineAgeBucket {
+  label: string
+  count: number
+}
+
+export interface RepassageStock {
+  total: number
+  buckets: PipelineAgeBucket[]
+  plusAncienJours?: number | null
+}
+
+export interface RdvStock {
+  total: number
+  aujourdhui: number
+  aVenir: number
+  enRetard: number
+  sansDate: number
+  plusEnRetardJours?: number | null
+}
+
+export interface ConclusionStock {
+  contratsSignes: number
+  argumentes: number
+  refus: number
+  total: number
+}
+
+export interface HabitatStock {
+  typeHabitat: string
+  batiments: number
+  portesCreees: number
+  capaciteDeclaree: number
+  prospectees: number
+  aTraiter: number
+  couverture: number
+}
+
+export interface RepriseStats {
+  portesPasseesParAbsent: number
+  portesConclues: number
+  portesEncoreAbsentes: number
+  tauxReprise: number
+}
+
+/** Stock de travail de prospection à l'instant présent (pas un flux de période). */
+export interface ProspectionPipeline {
+  repassages: RepassageStock
+  rdv: RdvStock
+  conclusions: ConclusionStock
+  nonVisitees: number
+  habitat: HabitatStock[]
+  reprise: RepriseStats
+}
+
 /* Ces unemarations sont pour classifier les utilisateurs d'un utilisateur actif a celui non actif et aussi de separer les comptes de testes */
 export enum UserStatus {
   ACTIF = 'ACTIF',

@@ -58,7 +58,7 @@ import {
   PaginationPrevious,
 } from '@/components/ui/pagination'
 import { MapSkeleton } from '@/components/LoadingSkeletons'
-import { AdvancedDataTable } from './tableau'
+import { StatTile } from '@/components/details/DetailPrimitives'
 import { useEntityPermissions } from '@/hooks/metier/permissions/useRoleBasedData'
 import PortesProspectionChart from './charts/PortesProspectionChart'
 import PortesWeeklyChart from './charts/PortesWeeklyChart'
@@ -76,6 +76,36 @@ import { cn } from '@/lib/utils'
 
 const AssignedZoneCard = lazy(() => import('./AssignedZoneCard'))
 
+/**
+ * Les appelants (`statsCards`, `personalInfo`) désignent leur icône par une chaîne.
+ * `iconComponent` rend le **composant**, ce que `StatTile` attend ; `getIcon` (plus
+ * bas) reste pour les blocs qui rendent l'élément eux-mêmes avec leurs classes.
+ */
+const ICON_COMPONENTS = {
+  award: Award,
+  badgeCheck: BadgeCheck,
+  building: Building2,
+  calendar: Calendar,
+  doorOpen: DoorOpen,
+  fileText: FileText,
+  key: KeyRound,
+  keyRound: KeyRound,
+  mail: Mail,
+  mapPin: MapPin,
+  messageCircle: MessageCircle,
+  'message-square': MessageCircle,
+  phone: Phone,
+  shieldCheck: ShieldCheck,
+  star: Star,
+  target: Target,
+  trendingUp: TrendingUp,
+  userX: UserX,
+  users: Users,
+  x: X,
+}
+
+const iconComponent = iconName => ICON_COMPONENTS[iconName] || BadgeCheck
+
 function SectionHeader({ title, description }) {
   return (
     <div className="mb-4 flex flex-col gap-1.5">
@@ -84,27 +114,6 @@ function SectionHeader({ title, description }) {
         <h2 className="text-lg font-semibold tracking-tight">{title}</h2>
       </div>
       {description && <p className="text-sm text-muted-foreground">{description}</p>}
-    </div>
-  )
-}
-
-function ProspectionMetric({ label, value, detail, icon }) {
-  const IconComponent = icon
-
-  return (
-    <div className="rounded-xl border border-border/60 bg-card p-4">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            {label}
-          </p>
-          <p className="mt-2 text-2xl font-bold tracking-tight">{value}</p>
-          {detail && <p className="mt-1 text-xs text-muted-foreground">{detail}</p>}
-        </div>
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-border/60 bg-muted/60 text-primary">
-          <IconComponent className="h-4 w-4" />
-        </div>
-      </div>
     </div>
   )
 }
@@ -178,28 +187,28 @@ function ProspectionChartsSection({ charts = [], totalDoors }) {
   return (
     <div className="space-y-5">
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <ProspectionMetric
+        <StatTile
           label="Couverture"
           value={`${summary.couverture}%`}
-          detail={`${summary.portesProspectees}/${summary.totalPortes} portes prospectées`}
+          hint={`${summary.portesProspectees}/${summary.totalPortes} portes prospectées`}
           icon={DoorOpen}
         />
-        <ProspectionMetric
+        <StatTile
           label="Contrats"
           value={summary.contrats}
-          detail={`${summary.conversion}% de conversion qualifiée`}
+          hint={`${summary.conversion}% de conversion qualifiée`}
           icon={BadgeCheck}
         />
-        <ProspectionMetric
+        <StatTile
           label="Rendez-vous"
           value={summary.rdv}
-          detail="Opportunités à suivre"
+          hint="Opportunités à suivre"
           icon={Calendar}
         />
-        <ProspectionMetric
+        <StatTile
           label="Points de friction"
           value={summary.refus + summary.argumentes + summary.absents}
-          detail={`${summary.refus} refus · ${summary.absents} absents`}
+          hint={`${summary.refus} refus · ${summary.absents} absents`}
           icon={UserX}
         />
       </div>
@@ -816,6 +825,13 @@ export default function DetailsPage({
   // Enregistrer les sections dans le contexte quand le composant est monté
   useEffect(() => {
     const sections = []
+    // Sections additionnelles positionnées EN HAUT (avant les stats)
+    additionalSections
+      .filter(section => section.position === 'top')
+      .forEach(section => {
+        sections.push({ id: createSectionId(section.title), title: section.title })
+      })
+
     // Ajouter la section des informations personnelles
     if (personalInfo.length > 0) {
       sections.push({
@@ -840,13 +856,15 @@ export default function DetailsPage({
       })
     }
 
-    // Ajouter les sections additionnelles
-    additionalSections.forEach(section => {
-      sections.push({
-        id: createSectionId(section.title),
-        title: section.title,
+    // Ajouter les sections additionnelles restantes (en bas)
+    additionalSections
+      .filter(section => section.position !== 'top')
+      .forEach(section => {
+        sections.push({
+          id: createSectionId(section.title),
+          title: section.title,
+        })
       })
-    })
 
     setSections(sections)
 
@@ -890,29 +908,7 @@ export default function DetailsPage({
   }
 
   const getIcon = (iconName, iconColor = 'text-primary', className = '') => {
-    const icons = {
-      award: Award,
-      badgeCheck: BadgeCheck,
-      building: Building2,
-      calendar: Calendar,
-      doorOpen: DoorOpen,
-      fileText: FileText,
-      key: KeyRound,
-      keyRound: KeyRound,
-      mail: Mail,
-      mapPin: MapPin,
-      messageCircle: MessageCircle,
-      'message-square': MessageCircle,
-      phone: Phone,
-      shieldCheck: ShieldCheck,
-      star: Star,
-      target: Target,
-      trendingUp: TrendingUp,
-      userX: UserX,
-      users: Users,
-      x: X,
-    }
-    const Icon = icons[iconName] || BadgeCheck
+    const Icon = iconComponent(iconName)
     return <Icon className={`h-4 w-4 ${iconColor} ${className}`} />
   }
 
@@ -942,65 +938,24 @@ export default function DetailsPage({
     )
   }
 
-  const renderStatCard = (stat, index, variant = 'default') => {
-    const isFeatured = variant === 'full'
-    const isHalf = variant === 'half'
+  const STAT_CARD_SIZES = { full: 'xl', half: 'lg', default: 'md' }
 
-    return (
-      <Card
-        key={index}
-        className={cn(
-          'group border-border/60 bg-card transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md',
-          isFeatured && 'overflow-hidden',
-          isHalf && 'overflow-hidden'
-        )}
-      >
-        <CardHeader className="flex flex-row items-start justify-between gap-4 pb-3">
-          <div className="min-w-0 space-y-1">
-            <CardTitle
-              className={cn(
-                'truncate font-medium text-muted-foreground',
-                isFeatured ? 'text-sm' : 'text-xs uppercase tracking-wide'
-              )}
-            >
-              {stat.title}
-            </CardTitle>
-            {stat.description && (
-              <p
-                className={cn(
-                  'text-muted-foreground',
-                  isFeatured || isHalf ? 'text-sm' : 'text-xs'
-                )}
-              >
-                {stat.description}
-              </p>
-            )}
-          </div>
-          {stat.icon && (
-            <div
-              className={cn(
-                'flex shrink-0 items-center justify-center rounded-xl border border-border/60 bg-muted/60 text-primary transition-colors group-hover:bg-primary/10',
-                isFeatured ? 'h-12 w-12' : 'h-10 w-10'
-              )}
-            >
-              {getIcon(stat.icon, stat.iconColor || 'text-primary', isFeatured ? 'h-5 w-5' : '')}
-            </div>
-          )}
-        </CardHeader>
-        <CardContent className={cn(isFeatured ? 'pt-1' : 'pt-0')}>
-          <div
-            className={cn(
-              'font-bold tracking-tight text-foreground',
-              isFeatured ? 'text-4xl md:text-5xl' : isHalf ? 'text-3xl' : 'text-2xl'
-            )}
-          >
-            {stat.value}
-          </div>
-          {renderTrend(stat.trend)}
-        </CardContent>
-      </Card>
-    )
-  }
+  /**
+   * `trend` est un rendu libre côté appelant (pas un écart numérique) : il passe par
+   * `footer` plutôt que par le `delta` de `StatTile`.
+   */
+  const renderStatCard = (stat, index, variant = 'default') => (
+    <StatTile
+      key={index}
+      size={STAT_CARD_SIZES[variant] || STAT_CARD_SIZES.default}
+      interactive
+      icon={stat.icon ? iconComponent(stat.icon) : undefined}
+      label={stat.title}
+      value={stat.value}
+      hint={stat.description}
+      footer={renderTrend(stat.trend)}
+    />
+  )
 
   return (
     <div className="mb-50 space-y-8">
@@ -1028,6 +983,18 @@ export default function DetailsPage({
           </div>
         </div>
       </div>
+      {/* Sections additionnelles EN HAUT (avant les stats) — auto-encadrées */}
+      {additionalSections
+        .filter(section => section.position === 'top')
+        .map((section, index) => (
+          <div
+            key={`top-${index}`}
+            id={createSectionId(section.title)}
+            className={getSectionClasses(createSectionId(section.title))}
+          >
+            {section.render ? section.render(data) : null}
+          </div>
+        ))}
       {/* Informations personnelles */}
       {personalInfo.length > 0 && (
         <div
@@ -1101,26 +1068,14 @@ export default function DetailsPage({
                 {statsCards
                   .filter(stat => stat.fullWidth)
                   .map((stat, index) => (
-                    <div key={index} className="rounded-lg border border-border/60 bg-card p-3.5">
-                      <div className="flex items-center justify-between gap-2">
-                        <p className="truncate text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                          {stat.title}
-                        </p>
-                        {stat.icon && (
-                          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border/60 bg-muted/60 text-primary">
-                            {getIcon(stat.icon, stat.iconColor || 'text-primary', 'h-3.5 w-3.5')}
-                          </div>
-                        )}
-                      </div>
-                      <div className="mt-1 truncate text-lg font-bold tracking-tight text-foreground">
-                        {stat.value}
-                      </div>
-                      {stat.description && (
-                        <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                          {stat.description}
-                        </p>
-                      )}
-                    </div>
+                    <StatTile
+                      key={index}
+                      size="sm"
+                      icon={stat.icon ? iconComponent(stat.icon) : undefined}
+                      label={stat.title}
+                      value={stat.value}
+                      hint={stat.description}
+                    />
                   ))}
               </div>
             ) : (
@@ -1137,21 +1092,13 @@ export default function DetailsPage({
               {statsCards
                 .filter(stat => !stat.fullWidth && !stat.halfWidth)
                 .map((stat, index) => (
-                  <div key={index} className="rounded-lg border border-border/60 bg-card p-3">
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="truncate text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                        {stat.title}
-                      </p>
-                      {stat.icon && (
-                        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border/60 bg-muted/60 text-primary">
-                          {getIcon(stat.icon, stat.iconColor || 'text-primary', 'h-3.5 w-3.5')}
-                        </div>
-                      )}
-                    </div>
-                    <div className="mt-1.5 text-2xl font-bold tracking-tight text-foreground">
-                      {stat.value}
-                    </div>
-                  </div>
+                  <StatTile
+                    key={index}
+                    size="sm"
+                    icon={stat.icon ? iconComponent(stat.icon) : undefined}
+                    label={stat.title}
+                    value={stat.value}
+                  />
                 ))}
             </div>
           ) : (
@@ -1193,7 +1140,7 @@ export default function DetailsPage({
               ))
             ) : (
               <Card className="border-border/60 bg-card">
-                <CardContent className="pt-6">
+                <CardContent>
                   <p className="text-muted-foreground text-center py-8">Aucune zone assignée</p>
                 </CardContent>
               </Card>
@@ -1203,200 +1150,204 @@ export default function DetailsPage({
       )}
 
       {/* Sections additionnelles personnalisées */}
-      {additionalSections.map((section, index) => (
-        <div
-          key={index}
-          id={createSectionId(section.title)}
-          className={getSectionClasses(createSectionId(section.title))}
-        >
-          <SectionHeader title={section.title} description={section.description} />
-          {/* Afficher le filtre personnalisé si présent */}
-          {section.customFilter && <div className="mb-5">{section.customFilter}</div>}
-          {section.type === 'custom' && section.component === 'ChartsSection' ? (
-            <ProspectionChartsSection
-              charts={section.data.charts}
-              totalDoors={section.data.totalDoors}
-            />
-          ) : section.type === 'custom' && section.bare && section.render ? (
-            // Section auto-encadrée (ex. carte trajet) → pas de Card externe pour
-            // éviter une carte dans une carte.
-            section.render(data)
-          ) : (
-            <Card className="border-border/60 bg-card">
-              <CardContent className="pt-6">
-                {section.type === 'grid' && (
-                  <div className="grid gap-6 md:grid-cols-2">
-                    {section.items.map((item, itemIndex) => (
-                      <div
-                        key={itemIndex}
-                        className="rounded-xl border border-border/60 bg-muted/30 p-4"
-                      >
-                        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                          {item.label}
-                        </p>
-                        <p className="text-base font-semibold mt-1.5">{item.value}</p>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                {section.type === 'list' && (
-                  <div className="divide-y">
-                    {section.items.map((item, itemIndex) => (
-                      <div
-                        key={itemIndex}
-                        className="flex items-center justify-between py-3 first:pt-0 last:pb-0"
-                      >
-                        <span className="text-sm font-medium">{item.label}</span>
-                        <span className="text-sm font-semibold">{item.value}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                {section.type === 'custom' && section.render && section.render(data)}
-                {section.type === 'custom' && section.component === 'DoorsTable' && (
-                  <DoorsTableContent
-                    data={section.data.doors}
-                    columns={section.data.columns}
-                    customStatusFilter={section.data.customFilters}
-                    searchPlaceholder="Rechercher par numéro de porte..."
-                    searchKey="number"
-                  />
-                )}
-                {section.type === 'custom' && section.component === 'ImmeublesTable' && (
-                  <DoorsTableContent
-                    data={section.data.immeubles}
-                    columns={section.data.columns}
-                    customStatusFilter={section.data.customFilters}
-                    searchPlaceholder="Rechercher par adresse..."
-                    searchKey="address"
-                    nestedTableColumns={section.data.nestedColumns}
-                    nestedDataKey="doors"
-                    showFilters={section.data.showFilters !== false}
-                    onRowClick={section.data.onImmeubleClick}
-                  />
-                )}
-                {section.type === 'custom' && section.component === 'FloorDetails' && (
-                  <div className="space-y-4">
-                    {section.data.map((floor, floorIndex) => (
-                      <div
-                        key={floorIndex}
-                        className="rounded-xl border border-border/60 bg-muted/20 p-4"
-                      >
-                        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                          <h3 className="text-base font-semibold tracking-tight">
-                            Étage {floor.floor}
-                          </h3>
-                          <div className="flex flex-wrap gap-2">
-                            <Badge variant="outline" className="bg-background">
-                              {floor.doors.filter(d => d.status === 'contrat_signe').length} signés
-                            </Badge>
-                            <Badge variant="outline" className="bg-background">
-                              {floor.doors.filter(d => d.status === 'rdv_pris').length} RDV
-                            </Badge>
-                            <Badge variant="outline" className="bg-background">
-                              {floor.doors.filter(d => d.status === 'absent').length} absents
-                            </Badge>
-                            <Badge variant="outline" className="bg-background">
-                              {floor.doors.filter(d => d.status === 'argumente').length} argumentés
-                            </Badge>
-                            <Badge variant="outline" className="bg-background">
-                              {floor.doors.filter(d => d.status === 'refus').length} refus
-                            </Badge>
-                          </div>
+      {additionalSections
+        .filter(section => section.position !== 'top')
+        .map((section, index) => (
+          <div
+            key={index}
+            id={createSectionId(section.title)}
+            className={getSectionClasses(createSectionId(section.title))}
+          >
+            <SectionHeader title={section.title} description={section.description} />
+            {/* Afficher le filtre personnalisé si présent */}
+            {section.customFilter && <div className="mb-5">{section.customFilter}</div>}
+            {section.type === 'custom' && section.component === 'ChartsSection' ? (
+              <ProspectionChartsSection
+                charts={section.data.charts}
+                totalDoors={section.data.totalDoors}
+              />
+            ) : section.type === 'custom' && section.bare && section.render ? (
+              // Section auto-encadrée (ex. carte trajet) → pas de Card externe pour
+              // éviter une carte dans une carte.
+              section.render(data)
+            ) : (
+              <Card className="border-border/60 bg-card">
+                <CardContent>
+                  {section.type === 'grid' && (
+                    <div className="grid gap-6 md:grid-cols-2">
+                      {section.items.map((item, itemIndex) => (
+                        <div
+                          key={itemIndex}
+                          className="rounded-xl border border-border/60 bg-muted/30 p-4"
+                        >
+                          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                            {item.label}
+                          </p>
+                          <p className="text-base font-semibold mt-1.5">{item.value}</p>
                         </div>
+                      ))}
+                    </div>
+                  )}
+                  {section.type === 'list' && (
+                    <div className="divide-y">
+                      {section.items.map((item, itemIndex) => (
+                        <div
+                          key={itemIndex}
+                          className="flex items-center justify-between py-3 first:pt-0 last:pb-0"
+                        >
+                          <span className="text-sm font-medium">{item.label}</span>
+                          <span className="text-sm font-semibold">{item.value}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {section.type === 'custom' && section.render && section.render(data)}
+                  {section.type === 'custom' && section.component === 'DoorsTable' && (
+                    <DoorsTableContent
+                      data={section.data.doors}
+                      columns={section.data.columns}
+                      customStatusFilter={section.data.customFilters}
+                      searchPlaceholder="Rechercher par numéro de porte..."
+                      searchKey="number"
+                    />
+                  )}
+                  {section.type === 'custom' && section.component === 'ImmeublesTable' && (
+                    <DoorsTableContent
+                      data={section.data.immeubles}
+                      columns={section.data.columns}
+                      customStatusFilter={section.data.customFilters}
+                      searchPlaceholder="Rechercher par adresse..."
+                      searchKey="address"
+                      nestedTableColumns={section.data.nestedColumns}
+                      nestedDataKey="doors"
+                      showFilters={section.data.showFilters !== false}
+                      onRowClick={section.data.onImmeubleClick}
+                    />
+                  )}
+                  {section.type === 'custom' && section.component === 'FloorDetails' && (
+                    <div className="space-y-4">
+                      {section.data.map((floor, floorIndex) => (
+                        <div
+                          key={floorIndex}
+                          className="rounded-xl border border-border/60 bg-muted/20 p-4"
+                        >
+                          <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                            <h3 className="text-base font-semibold tracking-tight">
+                              Étage {floor.floor}
+                            </h3>
+                            <div className="flex flex-wrap gap-2">
+                              <Badge variant="outline" className="bg-background">
+                                {floor.doors.filter(d => d.status === 'contrat_signe').length}{' '}
+                                signés
+                              </Badge>
+                              <Badge variant="outline" className="bg-background">
+                                {floor.doors.filter(d => d.status === 'rdv_pris').length} RDV
+                              </Badge>
+                              <Badge variant="outline" className="bg-background">
+                                {floor.doors.filter(d => d.status === 'absent').length} absents
+                              </Badge>
+                              <Badge variant="outline" className="bg-background">
+                                {floor.doors.filter(d => d.status === 'argumente').length}{' '}
+                                argumentés
+                              </Badge>
+                              <Badge variant="outline" className="bg-background">
+                                {floor.doors.filter(d => d.status === 'refus').length} refus
+                              </Badge>
+                            </div>
+                          </div>
 
-                        <div className="border-t border-border/60 pt-4">
-                          <h4 className="mb-3 text-sm font-medium text-muted-foreground">
-                            Statut des portes
-                          </h4>
-                          <div className="grid gap-3">
-                            {floor.doors.map((door, doorIndex) => {
-                              const getStatusColor = status => {
-                                switch (status) {
-                                  case 'contrat_signe':
-                                    return 'border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
-                                  case 'rdv_pris':
-                                    return 'border-blue-500/20 bg-blue-500/10 text-blue-700 dark:text-blue-300'
-                                  case 'absent':
-                                    return 'border-slate-500/20 bg-slate-500/10 text-slate-700 dark:text-slate-300'
-                                  case 'argumente':
-                                    return 'border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-300'
-                                  case 'refus':
-                                    return 'border-destructive/20 bg-destructive/10 text-destructive'
-                                  default:
-                                    return 'border-border/60 bg-background text-foreground'
+                          <div className="border-t border-border/60 pt-4">
+                            <h4 className="mb-3 text-sm font-medium text-muted-foreground">
+                              Statut des portes
+                            </h4>
+                            <div className="grid gap-3">
+                              {floor.doors.map((door, doorIndex) => {
+                                const getStatusColor = status => {
+                                  switch (status) {
+                                    case 'contrat_signe':
+                                      return 'border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
+                                    case 'rdv_pris':
+                                      return 'border-blue-500/20 bg-blue-500/10 text-blue-700 dark:text-blue-300'
+                                    case 'absent':
+                                      return 'border-slate-500/20 bg-slate-500/10 text-slate-700 dark:text-slate-300'
+                                    case 'argumente':
+                                      return 'border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-300'
+                                    case 'refus':
+                                      return 'border-destructive/20 bg-destructive/10 text-destructive'
+                                    default:
+                                      return 'border-border/60 bg-background text-foreground'
+                                  }
                                 }
-                              }
 
-                              const getStatusLabel = status => {
-                                switch (status) {
-                                  case 'contrat_signe':
-                                    return 'Contrat signé'
-                                  case 'rdv_pris':
-                                    return 'RDV programmé'
-                                  case 'absent':
-                                    return 'Absent'
-                                  case 'argumente':
-                                    return 'Argumenté'
-                                  case 'refus':
-                                    return 'Refus'
-                                  case 'non_visite':
-                                    return 'Non visité'
-                                  default:
-                                    return status
+                                const getStatusLabel = status => {
+                                  switch (status) {
+                                    case 'contrat_signe':
+                                      return 'Contrat signé'
+                                    case 'rdv_pris':
+                                      return 'RDV programmé'
+                                    case 'absent':
+                                      return 'Absent'
+                                    case 'argumente':
+                                      return 'Argumenté'
+                                    case 'refus':
+                                      return 'Refus'
+                                    case 'non_visite':
+                                      return 'Non visité'
+                                    default:
+                                      return status
+                                  }
                                 }
-                              }
 
-                              return (
-                                <div
-                                  key={doorIndex}
-                                  className={`rounded-xl border p-3 ${getStatusColor(door.status)}`}
-                                >
-                                  <div className="flex items-start justify-between">
-                                    <div className="flex-1">
-                                      <div className="flex items-center gap-2 mb-1">
-                                        <span className="font-medium">Porte {door.number}</span>
-                                        <span className="rounded-full border border-current/15 bg-background/70 px-2 py-0.5 text-xs">
-                                          {getStatusLabel(door.status)}
-                                        </span>
+                                return (
+                                  <div
+                                    key={doorIndex}
+                                    className={`rounded-xl border p-3 ${getStatusColor(door.status)}`}
+                                  >
+                                    <div className="flex items-start justify-between">
+                                      <div className="flex-1">
+                                        <div className="flex items-center gap-2 mb-1">
+                                          <span className="font-medium">Porte {door.number}</span>
+                                          <span className="rounded-full border border-current/15 bg-background/70 px-2 py-0.5 text-xs">
+                                            {getStatusLabel(door.status)}
+                                          </span>
+                                        </div>
+
+                                        {door.rdvDate && (
+                                          <div className="text-sm mt-2">
+                                            <span className="font-medium">RDV:</span> {door.rdvDate}{' '}
+                                            à {door.rdvTime}
+                                          </div>
+                                        )}
+
+                                        {door.lastVisit && (
+                                          <div className="text-sm mt-1">
+                                            <span className="font-medium">Dernière visite:</span>{' '}
+                                            {door.lastVisit}
+                                          </div>
+                                        )}
+
+                                        {door.comment && (
+                                          <div className="mt-2 rounded-lg bg-background/70 p-2 text-sm">
+                                            <span className="font-medium">Commentaire:</span>{' '}
+                                            {door.comment}
+                                          </div>
+                                        )}
                                       </div>
-
-                                      {door.rdvDate && (
-                                        <div className="text-sm mt-2">
-                                          <span className="font-medium">RDV:</span> {door.rdvDate} à{' '}
-                                          {door.rdvTime}
-                                        </div>
-                                      )}
-
-                                      {door.lastVisit && (
-                                        <div className="text-sm mt-1">
-                                          <span className="font-medium">Dernière visite:</span>{' '}
-                                          {door.lastVisit}
-                                        </div>
-                                      )}
-
-                                      {door.comment && (
-                                        <div className="mt-2 rounded-lg bg-background/70 p-2 text-sm">
-                                          <span className="font-medium">Commentaire:</span>{' '}
-                                          {door.comment}
-                                        </div>
-                                      )}
                                     </div>
                                   </div>
-                                </div>
-                              )
-                            })}
+                                )
+                              })}
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          )}
-        </div>
-      ))}
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+          </div>
+        ))}
     </div>
   )
 }

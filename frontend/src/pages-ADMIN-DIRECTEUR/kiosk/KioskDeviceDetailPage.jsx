@@ -9,6 +9,7 @@ import {
   useKioskRenameDevice,
   useKioskDeleteDevice,
 } from '@/hooks/metier/api/kiosk'
+import { useBackNavigation } from '@/hooks/ui/use-back-navigation'
 import { formatBattery, clampBattery, isBatteryKnown, getBatteryHexColor } from './batteryUtils'
 import DeviceCommandDialog from './components/DeviceCommandDialog'
 import KioskErrorState from './components/KioskErrorState'
@@ -161,6 +162,9 @@ const DEPLOY_STATUS_STYLES = {
 export default function KioskDeviceDetailPage() {
   const { deviceId } = useParams()
   const navigate = useNavigate()
+  // `navigate` reste utilisé pour la redirection après suppression : on ne peut pas
+  // « revenir » sur la fiche d'une tablette qui n'existe plus.
+  const goBack = useBackNavigation('/kiosk/tablettes')
 
   // Source principale : la liste des tablettes (déjà exposée et mise en cache).
   // On évite ainsi de dépendre d'un endpoint /devices/:id qui pourrait ne pas
@@ -211,10 +215,10 @@ export default function KioskDeviceDetailPage() {
       variant="ghost"
       size="sm"
       className="self-start w-fit text-muted-foreground hover:text-foreground -ml-2"
-      onClick={() => navigate('/kiosk/tablettes')}
+      onClick={goBack}
     >
       <ArrowLeft className="h-4 w-4" />
-      Retour aux tablettes
+      Retour
     </Button>
   )
 

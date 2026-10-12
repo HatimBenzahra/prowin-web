@@ -29,27 +29,11 @@ import {
   isPolygonTooSmall,
   hasSelfIntersection,
   overlapsExistingZones,
+  getZoneColor,
 } from '@/pages-ADMIN-DIRECTEUR/zones/zones-utils'
 
 // Set Mapbox access token
 mapboxgl.accessToken = import.meta.env.VITE_MAPBOX_ACCESS_TOKEN
-
-// Generate a deterministic color from zone ID
-function getZoneColor(zoneId) {
-  const colors = [
-    '#3388ff', // Blue
-    '#ff6b6b', // Red
-    '#51cf66', // Green
-    '#ffd93d', // Yellow
-    '#a78bfa', // Purple
-    '#f59e0b', // Orange
-    '#ec4899', // Pink
-    '#06b6d4', // Cyan
-    '#84cc16', // Lime
-    '#f97316', // Dark Orange
-  ]
-  return colors[zoneId % colors.length]
-}
 
 // Couleurs du tracé actif (retour visuel live).
 const DRAW_STROKE = '#2563eb' // Bleu franc, cohérent avec le thème "primary"

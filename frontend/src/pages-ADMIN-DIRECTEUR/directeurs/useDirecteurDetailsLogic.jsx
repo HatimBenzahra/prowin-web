@@ -78,7 +78,11 @@ export function useDirecteurDetailsLogic() {
       const managersAvecStats = assignedManagers.map(manager => {
         const managerCommercials = allCommercials?.filter(c => c.managerId === manager.id) || []
         const allStats = managerCommercials.flatMap(c => c.statistics || [])
-        const { contratsSignes: managerContratsSignes, rendezVousPris: managerRendezVous, immeublesVisites: managerImmeubles } = aggregateStats(allStats)
+        const {
+          contratsSignes: managerContratsSignes,
+          rendezVousPris: managerRendezVous,
+          immeublesVisites: managerImmeubles,
+        } = aggregateStats(allStats)
 
         const { rank: managerRank, points: managerPoints } = calculateRank(
           managerContratsSignes,
@@ -110,7 +114,11 @@ export function useDirecteurDetailsLogic() {
     if (allDirecteurCommercials.length > 0) {
       const commercialAvecRangs = allDirecteurCommercials.map(commercial => {
         const stats = commercial.statistics || []
-        const { contratsSignes, rendezVousPris: rendezVous, immeublesVisites: immeubles } = aggregateStats(stats)
+        const {
+          contratsSignes,
+          rendezVousPris: rendezVous,
+          immeublesVisites: immeubles,
+        } = aggregateStats(stats)
         const { rank: commercialRank, points: commercialPoints } = calculateRank(
           contratsSignes,
           rendezVous,
@@ -498,80 +506,84 @@ export function useDirecteurDetailsLogic() {
     )
   }
 
-  const personalInfo = directeurData ? [
-    {
-      label: 'Email',
-      value: directeurData.email,
-      icon: 'mail',
-    },
-    {
-      label: 'Téléphone',
-      value: directeurData.phone,
-      icon: 'phone',
-    },
+  const personalInfo = directeurData
+    ? [
+        {
+          label: 'Email',
+          value: directeurData.email,
+          icon: 'mail',
+        },
+        {
+          label: 'Téléphone',
+          value: directeurData.phone,
+          icon: 'phone',
+        },
 
-    {
-      label: 'Date de nomination',
-      value: directeurData.date_nomination,
-      icon: 'calendar',
-    },
-  ] : []
+        {
+          label: 'Date de nomination',
+          value: directeurData.date_nomination,
+          icon: 'calendar',
+        },
+      ]
+    : []
 
-  const statsCards = directeurData ? [
-    {
-      title: 'Contrats signés',
-      value: directeurData.totalContratsSignes,
-      description: 'Total de la division (50 pts/contrat)',
-      icon: 'fileText',
-    },
-    {
-      title: 'Bâtiments visités',
-      value: directeurData.totalImmeublesVisites,
-      description: 'Total de la division (5 pts/bâtiment)',
-      icon: 'building',
-    },
-    {
-      title: 'Rendez-vous pris',
-      value: directeurData.totalRendezVousPris,
-      description: 'Total de la division (10 pts/RDV)',
-      icon: 'calendar',
-    },
-    {
-      title: 'Refus',
-      value: directeurData.totalRefus,
-      description: 'Total de la division',
-      icon: 'x',
-    },
-    {
-      title: 'Meilleur manager',
-      value: directeurData.meilleurManager,
-      description: `Badge: ${directeurData.meilleurManagerBadge}`,
-      icon: 'award',
-    },
-    {
-      title: 'Meilleur commercial',
-      value: directeurData.meilleurCommercial,
-      description: `Badge: ${directeurData.meilleurCommercialBadge}`,
-      icon: 'star',
-    },
-    {
-      title: 'Managers',
-      value: directeurData.managers_count,
-      description: 'Sous supervision',
-      icon: 'users',
-    },
-    {
-      title: 'Commerciaux',
-      value: directeurData.commerciaux_count,
-      description: 'Dans la division',
-      icon: 'users',
-    },
-    {
-      title: 'Zones actuellement assignées',
-      value: directeurZones.map(zone => zone.nom).join(', ') || 'Aucune zone assignée',
-      icon: 'mapPin',
-    },
-  ] : []
+  const statsCards = directeurData
+    ? [
+        {
+          title: 'Contrats signés',
+          value: directeurData.totalContratsSignes,
+          description: 'Total de la division (50 pts/contrat)',
+          icon: 'fileText',
+        },
+        {
+          title: 'Bâtiments visités',
+          value: directeurData.totalImmeublesVisites,
+          description: 'Total de la division (5 pts/bâtiment)',
+          icon: 'building',
+        },
+        {
+          title: 'Rendez-vous pris',
+          value: directeurData.totalRendezVousPris,
+          description: 'Total de la division (10 pts/RDV)',
+          icon: 'calendar',
+        },
+        {
+          title: 'Refus',
+          value: directeurData.totalRefus,
+          description: 'Total de la division',
+          icon: 'x',
+        },
+        {
+          title: 'Meilleur manager',
+          value: directeurData.meilleurManager,
+          description: `Badge: ${directeurData.meilleurManagerBadge}`,
+          icon: 'award',
+        },
+        {
+          title: 'Meilleur commercial',
+          value: directeurData.meilleurCommercial,
+          description: `Badge: ${directeurData.meilleurCommercialBadge}`,
+          icon: 'star',
+        },
+        {
+          title: 'Managers',
+          value: directeurData.managers_count,
+          description: 'Sous supervision',
+          icon: 'users',
+        },
+        {
+          title: 'Commerciaux',
+          value: directeurData.commerciaux_count,
+          description: 'Dans la division',
+          icon: 'users',
+        },
+        {
+          title: 'Zones actuellement assignées',
+          value: directeurZones.map(zone => zone.nom).join(', ') || 'Aucune zone assignée',
+          icon: 'mapPin',
+        },
+      ]
+    : []
 
   const additionalSections = []
 

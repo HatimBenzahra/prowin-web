@@ -12,13 +12,14 @@ test.describe('Dashboard — Admin/Directeur', () => {
   })
 
   test('displays RDV section', async ({ page }) => {
-    await expect(
-      page.locator('text=RDV').or(page.locator('text=rendez-vous')).first()
-    ).toBeVisible({ timeout: 10_000 })
+    await expect(page.locator('text=RDV').or(page.locator('text=rendez-vous')).first()).toBeVisible(
+      { timeout: 10_000 }
+    )
   })
 
   test('navigates to commerciaux page', async ({ page }) => {
-    const link = page.getByRole('link', { name: /commerc/i })
+    const link = page
+      .getByRole('link', { name: /commerc/i })
       .or(page.locator('a[href*="commerc"]'))
       .first()
 
@@ -29,7 +30,8 @@ test.describe('Dashboard — Admin/Directeur', () => {
   })
 
   test('navigates to zones page', async ({ page }) => {
-    const link = page.getByRole('link', { name: /zone/i })
+    const link = page
+      .getByRole('link', { name: /zone/i })
       .or(page.locator('a[href*="zone"]'))
       .first()
 
@@ -40,7 +42,8 @@ test.describe('Dashboard — Admin/Directeur', () => {
   })
 
   test('navigates to immeubles page', async ({ page }) => {
-    const link = page.getByRole('link', { name: /immeuble/i })
+    const link = page
+      .getByRole('link', { name: /immeuble/i })
       .or(page.locator('a[href*="immeuble"]'))
       .first()
 
@@ -51,7 +54,8 @@ test.describe('Dashboard — Admin/Directeur', () => {
   })
 
   test('navigates to statistiques page', async ({ page }) => {
-    const link = page.getByRole('link', { name: /statistiq/i })
+    const link = page
+      .getByRole('link', { name: /statistiq/i })
       .or(page.locator('a[href*="statistiq"]'))
       .first()
 

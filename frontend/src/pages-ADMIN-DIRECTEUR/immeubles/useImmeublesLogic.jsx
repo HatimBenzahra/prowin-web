@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useCallback } from 'react'
 import {
   useImmeubles,
   useUpdateImmeuble,
@@ -15,6 +15,14 @@ import { useErrorToast } from '@/hooks/utils/ui/use-error-toast'
 import { Badge } from '@/components/ui/badge'
 import { BuildingTypeBadge } from '@/components/BuildingTypeBadge'
 import { habitatBreakdown, buildingDoorCount } from '@/constants/domain/habitat'
+import { UserStatus } from '@/constants/domain/user-status'
+import {
+  couvertureBarClass,
+  filterByAddress,
+  sortCardRows,
+  groupRowsByDate,
+  CARD_SORT_OPTIONS,
+} from './immeubles-display'
 
 // Valeur de filtre/groupe pour les bâtiments sans quartier
 export const AUTONOMES_KEY = 'autonomes'
@@ -27,11 +35,15 @@ function calculnbcontrats(immeuble) {
 
 export function useImmeublesLogic() {
   const { showError, showSuccess } = useErrorToast()
-  const [viewMode, setViewMode] = useState('list')
-  const [dateFilterMode, setDateFilterMode] = useState('updatedAt_desc')
+  const [viewMode, setViewMode] = useState('cards')
+  const [cardSearch, setCardSearch] = useState('')
+  const [cardSort, setCardSort] = useState(CARD_SORT_OPTIONS[0].value)
+  // Par défaut on regarde ce qui vient d'être créé : c'est ce qui met la journée en
+  // cours en tête du groupement par date.
+  const [dateFilterMode, setDateFilterMode] = useState('createdAt_desc')
   const [filterCommercial, setFilterCommercial] = useState('all')
   const [filterQuartier, setFilterQuartier] = useState('all')
-  const [groupByQuartier, setGroupByQuartier] = useState(false)
+  const [filterOwnerStatus, setFilterOwnerStatus] = useState(UserStatus.ACTIF)
   const [createdDate, setCreatedDate] = useState('')
 
   // API hooks
@@ -47,6 +59,57 @@ export function useImmeublesLogic() {
     ;(quartiers || []).forEach(q => map.set(q.id, q.nom))
     return map
   }, [quartiers])
+
+  /**
+   * Statut du propriétaire d'un bâtiment, indexé par type et identifiant.
+   * `GET_IMMEUBLES` n'expose pas de créateur : on se rabat sur le commercial
+   * rattaché, puis sur le manager.
+   */
+  const ownerStatusByKey = useMemo(() => {
+    const map = new Map()
+    ;(commercials || []).forEach(c => map.set(`COMMERCIAL-${Number(c.id)}`, c.status))
+    ;(managers || []).forEach(m => map.set(`MANAGER-${Number(m.id)}`, m.status))
+    return map
+  }, [commercials, managers])
+
+  const ownerStatusOf = useCallback(
+    immeuble => {
+      if (immeuble?.commercialId != null) {
+        return ownerStatusByKey.get(`COMMERCIAL-${Number(immeuble.commercialId)}`) ?? null
+      }
+      if (immeuble?.managerId != null) {
+        return ownerStatusByKey.get(`MANAGER-${Number(immeuble.managerId)}`) ?? null
+      }
+      return null
+    },
+    [ownerStatusByKey]
+  )
+
+  /** Le filtre commerciaux suit le statut choisi : il ne propose que ce que ce statut laisse voir. */
+  const commercialsForStatus = useMemo(
+    () =>
+      filterOwnerStatus === 'all'
+        ? commercials || []
+        : (commercials || []).filter(c => c.status === filterOwnerStatus),
+    [commercials, filterOwnerStatus]
+  )
+
+  // Un commercial sélectionné qui sort du statut choisi ne doit pas vider la liste en silence.
+  useEffect(() => {
+    if (
+      filterCommercial !== 'all' &&
+      commercials &&
+      !commercialsForStatus.some(c => String(c.id) === String(filterCommercial))
+    ) {
+      setFilterCommercial('all')
+    }
+  }, [filterCommercial, commercials, commercialsForStatus])
+
+  /** Champ de date qui gouverne à la fois le tri et le groupement par journée. */
+  const activeDateField = useMemo(
+    () => (dateFilterMode.startsWith('updatedAt') ? 'updatedAt' : 'createdAt'),
+    [dateFilterMode]
+  )
 
   useEffect(() => {
     if (dateFilterMode !== 'created_specific_date' && createdDate) {
@@ -68,6 +131,13 @@ export function useImmeublesLogic() {
 
   const filteredImmeubles = useMemo(() => {
     let result = immeublesApi || []
+
+    // Filtre le plus en amont : les KPI, le groupement et les deux vues en héritent.
+    // Un bâtiment sans propriétaire n'a pas de statut déterminable, il est donc écarté
+    // dès qu'un statut précis est demandé, et ne réapparaît que sur « Tous ».
+    if (filterOwnerStatus !== 'all') {
+      result = result.filter(imm => ownerStatusOf(imm) === filterOwnerStatus)
+    }
 
     if (filterCommercial !== 'all') {
       result = result.filter(imm => imm.commercialId === parseInt(filterCommercial))
@@ -124,7 +194,15 @@ export function useImmeublesLogic() {
     }
 
     return result
-  }, [immeublesApi, filterCommercial, filterQuartier, dateFilterMode, createdDate])
+  }, [
+    immeublesApi,
+    filterOwnerStatus,
+    ownerStatusOf,
+    filterCommercial,
+    filterQuartier,
+    dateFilterMode,
+    createdDate,
+  ])
 
   // Récupération des permissions et description
   const permissions = useEntityPermissions('immeubles')
@@ -230,7 +308,7 @@ export function useImmeublesLogic() {
           <div className="flex items-center gap-2 min-w-[100px]">
             <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
               <div
-                className={`h-full rounded-full transition-all ${row.couverture >= 80 ? 'bg-emerald-500' : row.couverture >= 40 ? 'bg-blue-500' : row.couverture > 0 ? 'bg-amber-500' : 'bg-muted'}`}
+                className={`h-full rounded-full transition-all ${couvertureBarClass(row.couverture)}`}
                 style={{ width: `${row.couverture}%` }}
               />
             </div>
@@ -387,31 +465,19 @@ export function useImmeublesLogic() {
   }
   const finalTableData = useMemo(() => tableData?.data || [], [tableData])
 
-  // Regroupement par quartier (utilisé quand groupByQuartier est actif) :
-  // réutilise finalTableData / immeublesColumns, aucune logique de rendu de ligne dupliquée.
-  const groupedByQuartier = useMemo(() => {
-    const groupsById = new Map()
+  // Vue cards : recherche sur l'adresse et tri propres à cette vue. Le tableau garde
+  // sa recherche et son tri par colonne, on n'en duplique donc pas les contrôles.
+  const cardsData = useMemo(
+    () => sortCardRows(filterByAddress(finalTableData, cardSearch), cardSort),
+    [finalTableData, cardSearch, cardSort]
+  )
 
-    finalTableData.forEach(row => {
-      const key = row.quartierId != null ? String(row.quartierId) : AUTONOMES_KEY
-      if (!groupsById.has(key)) {
-        groupsById.set(key, {
-          key,
-          label: row.quartier_name,
-          isAutonomes: row.quartierId == null,
-          data: [],
-        })
-      }
-      groupsById.get(key).data.push(row)
-    })
-
-    const groups = Array.from(groupsById.values())
-    groups.sort((a, b) => {
-      if (a.isAutonomes !== b.isAutonomes) return a.isAutonomes ? 1 : -1
-      return a.label.localeCompare(b.label, 'fr')
-    })
-    return groups
-  }, [finalTableData])
+  // Les cards sont regroupées par journée sur le champ de date actif : l'ordre des
+  // groupes suit celui des lignes, donc la direction choisie dans le select de date.
+  const cardsGroupedByDate = useMemo(
+    () => groupRowsByDate(cardsData, activeDateField),
+    [cardsData, activeDateField]
+  )
 
   const handleEditImmeuble = async editedData => {
     try {
@@ -464,14 +530,19 @@ export function useImmeublesLogic() {
     setFilterCommercial,
     filterQuartier,
     setFilterQuartier,
-    groupByQuartier,
-    setGroupByQuartier,
-    groupedByQuartier,
+    cardsData,
+    cardsGroupedByDate,
+    filterOwnerStatus,
+    setFilterOwnerStatus,
+    cardSearch,
+    setCardSearch,
+    cardSort,
+    setCardSort,
     dateFilterMode,
     setDateFilterMode,
     createdDate,
     setCreatedDate,
-    commercialsList: commercials,
+    commercialsList: commercialsForStatus,
     quartiersList: quartiers,
   }
 }

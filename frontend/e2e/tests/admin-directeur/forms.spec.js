@@ -9,7 +9,13 @@ test.describe('Form Validation — Edit Modal (Managers)', () => {
   test('opens edit modal with populated fields', async ({ page }) => {
     test.skip(!(await hasTableData(page)), 'No data in table')
 
-    const actionButton = page.locator('tbody tr').first().locator('td').last().locator('button').first()
+    const actionButton = page
+      .locator('tbody tr')
+      .first()
+      .locator('td')
+      .last()
+      .locator('button')
+      .first()
     await actionButton.click()
 
     const editItem = page.getByRole('menuitem', { name: /modifier/i })
@@ -29,7 +35,13 @@ test.describe('Form Validation — Edit Modal (Managers)', () => {
   test('shows validation error when required field is cleared', async ({ page }) => {
     test.skip(!(await hasTableData(page)), 'No data in table')
 
-    const actionButton = page.locator('tbody tr').first().locator('td').last().locator('button').first()
+    const actionButton = page
+      .locator('tbody tr')
+      .first()
+      .locator('td')
+      .last()
+      .locator('button')
+      .first()
     await actionButton.click()
 
     const editItem = page.getByRole('menuitem', { name: /modifier/i })
@@ -50,7 +62,13 @@ test.describe('Form Validation — Edit Modal (Managers)', () => {
   test('required field indicator (*) is displayed', async ({ page }) => {
     test.skip(!(await hasTableData(page)), 'No data in table')
 
-    const actionButton = page.locator('tbody tr').first().locator('td').last().locator('button').first()
+    const actionButton = page
+      .locator('tbody tr')
+      .first()
+      .locator('td')
+      .last()
+      .locator('button')
+      .first()
     await actionButton.click()
 
     const editItem = page.getByRole('menuitem', { name: /modifier/i })
@@ -70,7 +88,13 @@ test.describe('Form Validation — Edit Modal (Managers)', () => {
 
     const firstRowText = await page.locator('tbody tr').first().textContent()
 
-    const actionButton = page.locator('tbody tr').first().locator('td').last().locator('button').first()
+    const actionButton = page
+      .locator('tbody tr')
+      .first()
+      .locator('td')
+      .last()
+      .locator('button')
+      .first()
     await actionButton.click()
 
     const editItem = page.getByRole('menuitem', { name: /modifier/i })
@@ -95,7 +119,13 @@ test.describe('Form Validation — Edit Modal (Managers)', () => {
   test('error clears when user starts typing', async ({ page }) => {
     test.skip(!(await hasTableData(page)), 'No data in table')
 
-    const actionButton = page.locator('tbody tr').first().locator('td').last().locator('button').first()
+    const actionButton = page
+      .locator('tbody tr')
+      .first()
+      .locator('td')
+      .last()
+      .locator('button')
+      .first()
     await actionButton.click()
 
     const editItem = page.getByRole('menuitem', { name: /modifier/i })
@@ -112,13 +142,21 @@ test.describe('Form Validation — Edit Modal (Managers)', () => {
     await expect(page.getByText('Ce champ est requis').first()).toBeVisible({ timeout: 5_000 })
 
     await nomInput.fill('Nouveau nom')
-    await expect(page.getByText('Ce champ est requis')).not.toBeVisible({ timeout: 3_000 }).catch(() => {})
+    await expect(page.getByText('Ce champ est requis'))
+      .not.toBeVisible({ timeout: 3_000 })
+      .catch(() => {})
   })
 
   test('border-red-500 class applied on invalid field', async ({ page }) => {
     test.skip(!(await hasTableData(page)), 'No data in table')
 
-    const actionButton = page.locator('tbody tr').first().locator('td').last().locator('button').first()
+    const actionButton = page
+      .locator('tbody tr')
+      .first()
+      .locator('td')
+      .last()
+      .locator('button')
+      .first()
     await actionButton.click()
 
     const editItem = page.getByRole('menuitem', { name: /modifier/i })

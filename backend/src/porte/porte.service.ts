@@ -8,6 +8,7 @@ import { PrismaService } from '../prisma.service';
 import { CreatePorteInput, UpdatePorteInput, StatutPorte } from './porte.dto';
 import { StatisticSyncService } from '../statistic/statistic-sync.service';
 import { getAllStatuses } from './porte-status.constants';
+import { shouldIncrementRepassages } from './porte.repassage';
 
 @Injectable()
 export class PorteService {
@@ -206,11 +207,16 @@ export class PorteService {
 
     const oldStatut = currentPorte.statut;
 
-    // 2. Si le statut change vers ABSENT, incrémenter le nombre de repassages
-    if (data.statut === StatutPorte.ABSENT) {
-      if (currentPorte.statut !== data.statut) {
-        data.nbRepassages = (currentPorte.nbRepassages || 0) + 1;
-      }
+    // 2. Compter les passages sur une porte laissée absente.
+    //    Règle et tests : `porte.repassage.ts`.
+    if (
+      shouldIncrementRepassages({
+        nouveauStatut: data.statut,
+        statutActuel: currentPorte.statut,
+        derniereVisite: data.derniereVisite,
+      })
+    ) {
+      data.nbRepassages = (currentPorte.nbRepassages || 0) + 1;
     }
 
     // 3. Mettre à jour la porte

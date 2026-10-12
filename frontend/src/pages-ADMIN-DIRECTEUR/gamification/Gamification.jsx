@@ -49,13 +49,14 @@ import {
   FileText,
   Download,
   Pencil,
-  Calendar,
   Pen,
   Search,
   TrendingUp,
   Target,
   Trash2,
 } from 'lucide-react'
+import GameIcon from '@/components/gamification/GameIcon'
+import iconManifest from '@/assets/gamification-icons/manifest.json'
 import {
   useGamificationLogic,
   RANK_PERIODS,
@@ -147,7 +148,6 @@ const getCategoryBadgeClass = category => {
       return 'bg-muted text-muted-foreground'
   }
 }
-
 
 const STAT_CARD_STYLES = [
   {
@@ -306,41 +306,6 @@ const getTierBadgeClass = tierKey => {
   }
 }
 
-const BADGE_ICON_PROVIDER_FALLBACK = {
-  PROGRESSION: 'https://img.icons8.com/3d-fluency/96/rocket.png',
-  PRODUIT: 'https://img.icons8.com/3d-fluency/96/package.png',
-  PERFORMANCE: 'https://img.icons8.com/3d-fluency/96/medal.png',
-  TROPHEE: 'https://img.icons8.com/3d-fluency/96/trophy.png',
-}
-
-const BADGE_ICON_PROVIDER_SECONDARY_FALLBACK = {
-  PROGRESSION: 'https://api.iconify.design/flat-color-icons/bar-chart.svg',
-  PRODUIT: 'https://api.iconify.design/flat-color-icons/package.svg',
-  PERFORMANCE: 'https://api.iconify.design/flat-color-icons/rules.svg',
-  TROPHEE: 'https://api.iconify.design/flat-color-icons/icons8-cup.svg',
-}
-
-const SEMANTIC_BADGE_ICONS = {
-  chart: 'https://img.icons8.com/3d-fluency/96/combo-chart.png',
-  rocket: 'https://img.icons8.com/3d-fluency/96/rocket.png',
-  increase: 'https://img.icons8.com/3d-fluency/96/increase.png',
-  package: 'https://img.icons8.com/3d-fluency/96/package.png',
-  speed: 'https://img.icons8.com/3d-fluency/96/speedometer.png',
-  medal: 'https://img.icons8.com/3d-fluency/96/medal.png',
-  trophy: 'https://img.icons8.com/3d-fluency/96/trophy.png',
-  contract: 'https://img.icons8.com/3d-fluency/96/signing-a-document.png',
-  calendar: 'https://img.icons8.com/3d-fluency/96/calendar.png',
-  mobile: 'https://img.icons8.com/3d-fluency/96/smartphone.png',
-  energy: 'https://img.icons8.com/3d-fluency/96/lightning-bolt.png',
-  tv: 'https://img.icons8.com/3d-fluency/96/retro-tv.png',
-  shield: 'https://img.icons8.com/3d-fluency/96/shield.png',
-  star: 'https://img.icons8.com/3d-fluency/96/star.png',
-  goal: 'https://img.icons8.com/3d-fluency/96/goal.png',
-  fire: 'https://img.icons8.com/3d-fluency/96/fire.png',
-  crown: 'https://img.icons8.com/3d-fluency/96/crown.png',
-  handshake: 'https://img.icons8.com/3d-fluency/96/handshake.png',
-}
-
 const CATEGORY_ICON_HEX = {
   PROGRESSION: '22C55E',
   PRODUIT: '0EA5E9',
@@ -368,100 +333,29 @@ const normalizeExternalIconUrl = (iconUrl, category) => {
   return iconUrl
 }
 
-const resolveSemanticBadgeIconUrl = badge => {
-  const source = `${badge?.code || ''} ${badge?.nom || ''} ${badge?.description || ''}`
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-
-  if (badge?.category === 'TROPHEE' || source.includes('trophee') || source.includes('champion')) {
-    return SEMANTIC_BADGE_ICONS.trophy
-  }
-
-  if (source.includes('mobile') || source.includes('telecom')) return SEMANTIC_BADGE_ICONS.mobile
-  if (source.includes('fibre')) return SEMANTIC_BADGE_ICONS.mobile
-  if (
-    source.includes('energie') ||
-    source.includes('elec') ||
-    source.includes('gaz') ||
-    source.includes('depanssur')
-  ) {
-    return SEMANTIC_BADGE_ICONS.energy
-  }
-  if (source.includes('assurance') || source.includes('mutuelle'))
-    return SEMANTIC_BADGE_ICONS.shield
-  if (source.includes('mondial tv') || source.includes(' tv')) return SEMANTIC_BADGE_ICONS.tv
-  if (source.includes('conciergerie')) return SEMANTIC_BADGE_ICONS.star
-
-  if (
-    source.includes('signature') ||
-    source.includes('signataire') ||
-    source.includes('contrat') ||
-    source.includes('conversion')
-  ) {
-    return SEMANTIC_BADGE_ICONS.contract
-  }
-
-  if (
-    source.includes('derniere minute') ||
-    source.includes('finisseur') ||
-    source.includes('5j') ||
-    source.includes('semaine') ||
-    source.includes('mois') ||
-    source.includes('trimestre')
-  ) {
-    return SEMANTIC_BADGE_ICONS.calendar
-  }
-
-  if (
-    source.includes('objectif') ||
-    source.includes('top') ||
-    source.includes('transformation') ||
-    source.includes('grand chelem') ||
-    source.includes('record')
-  ) {
-    return SEMANTIC_BADGE_ICONS.goal
-  }
-
-  if (
-    source.includes('marathon') ||
-    source.includes('fulgurante') ||
-    source.includes('as du terrain') ||
-    source.includes('performance')
-  ) {
-    return source.includes('marathon') || source.includes('as du terrain')
-      ? SEMANTIC_BADGE_ICONS.speed
-      : SEMANTIC_BADGE_ICONS.medal
-  }
-
-  if (
-    source.includes('progression') ||
-    source.includes('centurion') ||
-    source.includes('performer') ||
-    source.includes('niveau') ||
-    source.includes('starter') ||
-    source.includes('duo') ||
-    source.includes('trio') ||
-    source.includes('legende')
-  ) {
-    return source.includes('centurion') || source.includes('objectif')
-      ? SEMANTIC_BADGE_ICONS.chart
-      : SEMANTIC_BADGE_ICONS.rocket
-  }
-
-  return BADGE_ICON_PROVIDER_FALLBACK[badge?.category] || null
+/**
+ * R\u00e9sout la cl\u00e9 d'ic\u00f4ne locale (pack Game Icons) \u00e0 partir du `code` du badge.
+ * Source de v\u00e9rit\u00e9 = `manifest.byCode` (1 ic\u00f4ne distincte par produit / exploit /
+ * troph\u00e9e ; les paliers d'un m\u00eame produit partagent l'ic\u00f4ne, le niveau est affich\u00e9 \u00e0 part).
+ * Repli par cat\u00e9gorie si le code est inconnu (badge custom).
+ */
+const resolveBadgeIconKey = badge => {
+  const byCode = iconManifest.byCode[badge?.code]
+  return byCode || iconManifest.categoryFallback[badge?.category] || 'trophy-cup'
 }
 
-const resolveBadgeIconUrl = badge => {
-  if (badge?.iconUrl) {
-    if (badge.iconUrl.startsWith('http://') || badge.iconUrl.startsWith('https://')) {
-      return normalizeExternalIconUrl(badge.iconUrl, badge?.category)
-    }
-    if (badge.iconUrl.startsWith('/')) {
-      return badge.iconUrl
-    }
+/**
+ * URL d'ic\u00f4ne personnalis\u00e9e \u00e9ventuellement saisie en base (`badge.iconUrl`, http/https).
+ * R\u00e9tro-compatibilit\u00e9 : si pr\u00e9sente, elle prime sur l'ic\u00f4ne locale. Sinon `null`.
+ */
+const resolveBadgeCustomUrl = badge => {
+  if (
+    badge?.iconUrl &&
+    (badge.iconUrl.startsWith('http://') || badge.iconUrl.startsWith('https://'))
+  ) {
+    return normalizeExternalIconUrl(badge.iconUrl, badge?.category)
   }
-  return resolveSemanticBadgeIconUrl(badge)
+  return null
 }
 
 const CATEGORY_BADGE_STYLES = {
@@ -493,7 +387,8 @@ const CATEGORY_BADGE_STYLES = {
 
 function BadgeIcon({ badge }) {
   const [imgFailed, setImgFailed] = useState(false)
-  const iconUrl = resolveBadgeIconUrl(badge)
+  const customUrl = resolveBadgeCustomUrl(badge)
+  const iconKey = resolveBadgeIconKey(badge)
   const style = CATEGORY_BADGE_STYLES[badge?.category] || CATEGORY_BADGE_STYLES.PROGRESSION
 
   useEffect(() => {
@@ -504,16 +399,16 @@ function BadgeIcon({ badge }) {
     <div
       className={`h-9 w-9 rounded-lg border ${style.bg} ${style.border} flex items-center justify-center overflow-hidden`}
     >
-      {iconUrl && !imgFailed ? (
+      {customUrl && !imgFailed ? (
         <img
-          src={iconUrl}
+          src={customUrl}
           alt={badge.nom}
           className="h-6 w-6 object-contain"
           loading="lazy"
           onError={() => setImgFailed(true)}
         />
       ) : (
-        <style.Icon className={`h-5 w-5 ${style.color}`} />
+        <GameIcon name={iconKey} size={24} className={style.color} title={badge?.nom} />
       )}
     </div>
   )
@@ -556,7 +451,8 @@ function CommercialBadgesCell({ commercialId, managerId, periodKey }) {
     <div className="flex items-center gap-1 flex-wrap">
       {badges.map(badge => {
         const def = badge.badgeDefinition
-        const iconUrl = def ? resolveBadgeIconUrl(def) : null
+        const customUrl = def ? resolveBadgeCustomUrl(def) : null
+        const iconKey = def ? resolveBadgeIconKey(def) : null
         const style = CATEGORY_BADGE_STYLES[def?.category] || CATEGORY_BADGE_STYLES.PROGRESSION
         return (
           <div
@@ -564,16 +460,16 @@ function CommercialBadgesCell({ commercialId, managerId, periodKey }) {
             title={`${def?.nom || 'Badge'} — ${def?.description || ''}`}
             className={`inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px] font-medium ${style.bg} ${style.border}`}
           >
-            {iconUrl ? (
+            {customUrl ? (
               <img
-                src={iconUrl}
+                src={customUrl}
                 alt=""
                 aria-hidden="true"
                 className="h-3.5 w-3.5 object-contain"
                 loading="lazy"
               />
             ) : (
-              <style.Icon className={`h-3 w-3 ${style.color}`} />
+              <GameIcon name={iconKey} size={14} className={style.color} />
             )}
             <span className="max-w-[80px] truncate">{def?.nom || def?.code || 'Badge'}</span>
           </div>
@@ -794,7 +690,8 @@ function DetailModal({
                             CATEGORY_BADGE_STYLES[def?.category] ||
                             CATEGORY_BADGE_STYLES.PROGRESSION
                           const trigger = getBadgeTriggerLabel(def?.condition, badge.metadata)
-                          const iconUrl = def ? resolveBadgeIconUrl(def) : null
+                          const customUrl = def ? resolveBadgeCustomUrl(def) : null
+                          const iconKey = def ? resolveBadgeIconKey(def) : null
                           return (
                             <div
                               key={badge.id}
@@ -804,17 +701,19 @@ function DetailModal({
                                 <div
                                   className={`h-8 w-8 rounded-lg border ${badgeStyle.bg} ${badgeStyle.border} flex items-center justify-center shrink-0 overflow-hidden`}
                                 >
-                                  {iconUrl ? (
+                                  {customUrl ? (
                                     <img
-                                      src={iconUrl}
+                                      src={customUrl}
                                       alt=""
                                       aria-hidden="true"
                                       className="h-5 w-5 object-contain"
                                       loading="lazy"
                                     />
                                   ) : (
-                                    <badgeStyle.Icon
-                                      className={`h-3.5 w-3.5 ${badgeStyle.color}`}
+                                    <GameIcon
+                                      name={iconKey}
+                                      size={20}
+                                      className={badgeStyle.color}
                                     />
                                   )}
                                 </div>
@@ -1199,7 +1098,17 @@ function ClassementTab({
                         </div>
                       </TableCell>
                       <TableCell>
-                        <Badge variant="outline" className={getTierBadgeClass(entry.rankTierKey)}>
+                        <Badge
+                          variant="outline"
+                          className={`gap-1 ${getTierBadgeClass(entry.rankTierKey)}`}
+                        >
+                          {entry.rankTierKey ? (
+                            <GameIcon
+                              name={String(entry.rankTierKey).toLowerCase()}
+                              group="tiers"
+                              size={13}
+                            />
+                          ) : null}
                           {entry.rankTierLabel}
                         </Badge>
                       </TableCell>

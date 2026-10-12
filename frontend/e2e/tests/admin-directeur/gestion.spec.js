@@ -20,7 +20,11 @@ test.describe('Gestion Organization', () => {
   test('shows organization tree and optional unassigned panel', async ({ page }) => {
     await expect(page.getByText(/Directeur/i).first()).toBeVisible()
 
-    const nonAssignesVisible = await page.getByText(/Non assignés/i).first().isVisible().catch(() => false)
+    const nonAssignesVisible = await page
+      .getByText(/Non assignés/i)
+      .first()
+      .isVisible()
+      .catch(() => false)
     if (nonAssignesVisible) {
       await expect(page.getByText(/Non assignés/i).first()).toBeVisible()
     }

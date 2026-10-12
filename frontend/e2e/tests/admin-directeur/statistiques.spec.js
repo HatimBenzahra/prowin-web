@@ -23,11 +23,17 @@ test.describe('Statistiques Dashboard', () => {
 
   test('charts are visible', async ({ page }) => {
     await expect(page.locator('svg').first()).toBeVisible()
-    await expect(page.locator('body')).toContainText(/Évolution des contrats signés|Analyse des zones/i)
+    await expect(page.locator('body')).toContainText(
+      /Évolution des contrats signés|Analyse des zones/i
+    )
   })
 
   test('ranking table loads if available', async ({ page }) => {
-    const tableVisible = await page.locator('table').first().isVisible({ timeout: 3_000 }).catch(() => false)
+    const tableVisible = await page
+      .locator('table')
+      .first()
+      .isVisible({ timeout: 3_000 })
+      .catch(() => false)
     if (tableVisible) {
       expect(await page.locator('table tbody tr').count()).toBeGreaterThan(0)
     }

@@ -11,8 +11,8 @@ import {
   Users,
   ArrowLeft,
   LogOut,
-  Shield,
-  UserCog,
+  Minimize2,
+  Maximize2,
   Briefcase,
   LayoutDashboard,
   Tablet,
@@ -20,12 +20,14 @@ import {
   Rocket,
   ScrollText,
   Target,
+  GraduationCap,
 } from 'lucide-react'
 import React from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import logoSvg from '@/assets/logo.svg'
 import { useRole } from '@/contexts/userole'
 import { hasPermission } from '@/hooks/metier/permissions/roleFilters'
+import { useSidebarMode, SIDEBAR_MODES } from '@/hooks/ui/use-sidebar-mode'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@radix-ui/react-collapsible'
 import { useDetailsSections } from '@/contexts/DetailsSectionsContext'
 import { cn } from '@/lib/utils'
@@ -45,16 +47,21 @@ import {
   SidebarMenuSubButton,
 } from '@/components/ui/sidebar'
 
-const mainItems = [{ title: 'Dashboard', url: '/', icon: Home, entity: 'dashboard' }]
+const mainItems = [{ title: 'Dashboard', url: '/', icon: Home, entity: 'dashboard', simple: true }]
 
 const terrainItems = [
   { title: 'Bâtiments', url: '/immeubles', icon: Building2, entity: 'immeubles' },
-  { title: 'Ciblage Acquiscan', url: '/adresses', icon: Target, entity: 'immeubles' },
+  { title: 'Ciblage Acquiscan', url: '/adresses', icon: Target, entity: 'immeubles', simple: true },
   {
     title: 'Zones',
+    // En vue simple, l'entrée devient un lien direct « Zones en cours » : /zones EST
+    // déjà cette page, donc aucune route supplémentaire, et l'historique disparaît.
+    simpleTitle: 'Zones en cours',
+    simpleHideSubitems: true,
     url: '/zones',
     icon: MapPin,
     entity: 'zones',
+    simple: true,
     subitems: [
       { title: 'Zones en cours', url: '/zones' },
       { title: 'Historique de zones', url: '/zones/historique' },
@@ -65,23 +72,59 @@ const terrainItems = [
     url: '/gps-tracking',
     icon: Navigation2,
     entity: 'gps-tracking',
+    simple: true,
   },
 ]
 
 const teamItems = [
-  { title: 'Commerciaux', url: '/commerciaux', icon: Briefcase, entity: 'commerciaux' },
-  { title: 'Managers', url: '/managers', icon: UserCog, entity: 'managers' },
-  { title: 'Directeurs', url: '/directeurs', icon: Shield, entity: 'directeurs' },
+  {
+    // Une seule entrée pour les trois annuaires. Le parent pointe sur la page la plus
+    // consultée ; en vue simple il perd ses sous-items et devient un lien direct,
+    // comme Zones.
+    title: 'Utilisateurs',
+    url: '/commerciaux',
+    // En vue simple, une seule entrée plate vers la page fusionnée
+    // commerciaux + managers ; les directeurs n'y figurent pas.
+    simpleUrl: '/equipe',
+    simpleHideSubitems: true,
+    icon: Briefcase,
+    entity: 'commerciaux',
+    simple: true,
+    subitems: [
+      { title: 'Commerciaux', url: '/commerciaux' },
+      { title: 'Managers', url: '/managers' },
+      { title: 'Directeurs', url: '/directeurs' },
+    ],
+  },
 ]
 
 const performanceItems = [
-  { title: 'Statistiques', url: '/statistiques', icon: BarChart3, entity: 'statistics' },
-  { title: 'Classement', url: '/gamification', icon: Trophy, entity: 'gamification', exact: true },
+  {
+    title: 'Statistiques',
+    url: '/statistiques',
+    icon: BarChart3,
+    entity: 'statistics',
+    simple: true,
+  },
+  {
+    title: 'Classement',
+    url: '/gamification',
+    icon: Trophy,
+    entity: 'gamification',
+    exact: true,
+    simple: true,
+  },
   {
     title: 'Bibliothèque',
     url: '/ecoutes/enregistrement',
     icon: Headphones,
     entity: 'ecoutes',
+  },
+  {
+    title: 'Coaching IA',
+    url: '/coaching',
+    icon: GraduationCap,
+    entity: 'coaching',
   },
   {
     title: 'Gamification',
@@ -130,6 +173,25 @@ export function AppSidebar() {
   const [openMenus, setOpenMenus] = React.useState({})
   const { sections, setFocusedSection } = useDetailsSections()
   const [activeSection, setActiveSection] = React.useState(null)
+  const { mode, setMode, isSimple } = useSidebarMode()
+
+  /**
+   * Bascule de densité : on enregistre la préférence, puis on RECHARGE vers le tableau
+   * de bord.
+   *
+   * Le rechargement seul ne suffirait pas — il rejouerait la même URL, et l'écran
+   * courant peut très bien avoir disparu de la navigation cible (Coaching IA, Kiosk et
+   * Gestion n'existent pas en vue simple ; /equipe n'existe pas en vue avancée). On
+   * repart donc du Dashboard, seule page présente dans les deux vues.
+   *
+   * `location.assign` et non `navigate` : la sidebar, les permissions et les entrées
+   * dérivées sont reconstruites à froid, sans état résiduel de l'ancienne vue.
+   */
+  const handleModeChange = nextMode => {
+    if (nextMode === mode) return // déjà actif : pas de rechargement inutile
+    setMode(nextMode) // écrit localStorage avant de quitter la page
+    window.location.assign('/')
+  }
 
   const normalizePath = value => {
     if (!value) return ''
@@ -190,6 +252,24 @@ export function AppSidebar() {
       }, 2000)
     }
   }
+
+  /**
+   * Groupes réellement affichés : un item doit passer les DEUX filtres — la
+   * permission du rôle et, en vue simple, son drapeau `simple`. Aucun ne remplace
+   * l'autre. Les groupes qui se vident disparaissent, ce qui fait tomber tout le
+   * groupe Administration en vue simple.
+   */
+  const visibleGroups = React.useMemo(() => {
+    return navigationGroups
+      .map(group => ({
+        ...group,
+        items: group.items.filter(item => {
+          if (item.entity && !hasPermission(currentRole, item.entity, 'view')) return false
+          return isSimple ? Boolean(item.simple) : true
+        }),
+      }))
+      .filter(group => group.items.length > 0)
+  }, [currentRole, isSimple])
 
   // Enrichir les items du menu avec les sections dynamiques pour les pages de détails
   const enrichedItems = React.useMemo(() => {
@@ -390,32 +470,63 @@ export function AppSidebar() {
         </SidebarMenu>
       </SidebarHeader>
       <SidebarContent className="gap-1 px-1 py-2">
-        {navigationGroups.map((group, idx) => {
-          const groupVisible = group.items.filter(
-            item => !item.entity || hasPermission(currentRole, item.entity, 'view')
-          )
-          if (groupVisible.length === 0) return null
-          return (
-            <SidebarGroup
-              key={group.label}
-              className={cn('px-2 py-1', idx > 0 && 'mt-2 border-t border-sidebar-border/50 pt-3')}
-            >
-              <SidebarGroupLabel className="h-6 mb-1 px-2 text-[10px] uppercase tracking-widest text-sidebar-foreground/40 font-semibold">
-                {group.label}
-              </SidebarGroupLabel>
-              <SidebarGroupContent>
-                <SidebarMenu className="gap-0.5">
-                  {groupVisible.map(item => {
-                    const enriched = enrichedItems.find(e => e.title === item.title) || item
-                    return renderMenuItem(enriched)
-                  })}
-                </SidebarMenu>
-              </SidebarGroupContent>
-            </SidebarGroup>
-          )
-        })}
+        {visibleGroups.map((group, idx) => (
+          <SidebarGroup
+            key={group.label}
+            className={cn('px-2 py-1', idx > 0 && 'mt-2 border-t border-sidebar-border/50 pt-3')}
+          >
+            <SidebarGroupLabel className="h-6 mb-1 px-2 text-[10px] uppercase tracking-widest text-sidebar-foreground/40 font-semibold">
+              {group.label}
+            </SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu className="gap-0.5">
+                {group.items.map(item => {
+                  const enriched = enrichedItems.find(e => e.title === item.title) || item
+                  // En vue simple, une entrée peut porter un libellé dédié et masquer
+                  // son sous-menu — mais seulement si elle le demande. Utilisateurs
+                  // garde ses trois sous-onglets, sinon Managers et Directeurs
+                  // deviendraient inatteignables dans cette vue.
+                  const displayed = isSimple
+                    ? {
+                        ...enriched,
+                        title: item.simpleTitle || item.title,
+                        url: item.simpleUrl || enriched.url,
+                        subitems: item.simpleHideSubitems ? undefined : enriched.subitems,
+                      }
+                    : enriched
+                  return renderMenuItem(displayed)
+                })}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        ))}
       </SidebarContent>
       <SidebarFooter>
+        {/* Bascule de densité de navigation, en primitives shadcn : `SidebarMenuButton`
+            gère seul le mode replié (icône seule) et n'affiche le tooltip que dans cet
+            état, via son `useSidebar()` interne. */}
+        <SidebarMenu>
+          {[
+            { value: SIDEBAR_MODES.SIMPLE, label: 'Vue simple', icon: Minimize2 },
+            { value: SIDEBAR_MODES.ADVANCED, label: 'Vue avancée', icon: Maximize2 },
+          ].map(option => {
+            const Icon = option.icon
+            return (
+              <SidebarMenuItem key={option.value}>
+                <SidebarMenuButton
+                  onClick={() => handleModeChange(option.value)}
+                  isActive={mode === option.value}
+                  aria-pressed={mode === option.value}
+                  tooltip={option.label}
+                  size="sm"
+                >
+                  <Icon />
+                  <span>{option.label}</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            )
+          })}
+        </SidebarMenu>
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton

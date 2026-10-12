@@ -30,9 +30,10 @@ import {
   RecordingSegmentDto,
 } from './recording.dto';
 import { PrismaService } from '../prisma.service';
-import { TranscriptionService } from '../transcription/transcription.service';
+import { TranscriptionService, WhisperBusyError } from '../transcription/transcription.service';
 import { SpeechAnalysisService } from '../transcription/speech-analysis.service';
 import { S3DiagnosticsService } from '../s3-diagnostics/s3-diagnostics.service';
+import { CoachingService } from '../coaching/coaching.service';
 
 type RoomTarget = {
   type: 'COMMERCIAL' | 'MANAGER';
@@ -76,6 +77,7 @@ export class RecordingService {
     private transcription: TranscriptionService,
     private speechAnalysis: SpeechAnalysisService,
     private s3Diagnostics: S3DiagnosticsService,
+    private coaching: CoachingService,
   ) {
     this.s3Diagnostics.instrument(this.s3, RecordingService.name);
   }
@@ -444,6 +446,7 @@ export class RecordingService {
   async confirmRecordingUpload(
     input: ConfirmRecordingUploadInput,
     currentUser: { id: number; role: string },
+    userToken?: string,
   ): Promise<RecordingItem> {
     const { s3Key, duration, doorSegments } = input;
 
@@ -526,6 +529,18 @@ export class RecordingService {
         void this.processSegments(s3Key, createdSegments);
       }
     }
+
+    // Coaching IA : 1 audio = 1 porte. Analyse déclenchée automatiquement
+    // à partir de la porte du premier segment. Les tarifs sont figés pendant
+    // cette requête; le calcul audio reste asynchrone. Le module coaching
+    // re-transcrit depuis S3, il ne dépend pas des RecordingSegment.
+    const primaryDoor = doorSegments?.[0] ?? null;
+    await this.coaching.enqueue({
+      s3Key,
+      porteId: primaryDoor?.porteId ?? null,
+      statut: (primaryDoor?.statut as string | undefined) ?? null,
+      durationSec: duration ?? null,
+    }, userToken);
 
     const url = await this.signedUrlOrUndefined(s3Key);
 
@@ -1152,6 +1167,17 @@ export class RecordingService {
       }
 
     } catch (error) {
+      if (error instanceof WhisperBusyError) {
+        this.logger.warn('Whisper occupé : enrichissement différé, segments conservés');
+        this.transcription.deferBusy(`enrich:${originalS3Key}`, async () => {
+          const retryDir = fs.mkdtempSync(path.join(os.tmpdir(), 'recording-enrich-'));
+          const retryFile = path.join(retryDir, 'original.mp4');
+          try {
+            if (await this.downloadFromS3(originalS3Key, retryFile)) await this.enrichSegments(originalS3Key, retryFile, segments);
+          } finally { this.cleanupDir(retryDir); }
+        });
+        return;
+      }
       this.logger.error(
         `Enrichment failed for ${originalS3Key}: ${error?.message || error}`,
       );

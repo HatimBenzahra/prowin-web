@@ -38,4 +38,13 @@ export default defineConfig([
       'react-hooks/exhaustive-deps': 'warn',
     },
   },
+  {
+    // Les tests e2e et les fichiers de configuration tournent sous Node, pas dans le
+    // navigateur : avec les seules globales navigateur, `process` était signalé comme
+    // indéfini partout dans `e2e/`.
+    files: ['e2e/**/*.{js,mjs}', '*.config.js'],
+    languageOptions: {
+      globals: globals.node,
+    },
+  },
 ])

@@ -10,6 +10,10 @@ import {
   GET_TEAM_LAST_STATUS_ACTIVITIES,
   GET_STATS_TIMELINE,
   GET_STATS_ACTIVITY_BY_OWNER,
+  GET_STATS_PERIOD_COMPARISON,
+  GET_STATS_EFFORT,
+  GET_CONTRATS_VALIDES_AGGREGATE,
+  GET_PROSPECTION_PIPELINE,
   GET_ME,
 } from './statistic.queries'
 import {
@@ -24,6 +28,10 @@ import type {
   Statistic,
   TimelinePoint,
   OwnerActivityStatistic,
+  StatsPeriodComparison,
+  StatsEffort,
+  ContratsValidesAggregate,
+  ProspectionPipeline,
   ZoneStatistic,
   TeamLastStatusActivity,
   QueryStatisticsResponse,
@@ -32,6 +40,10 @@ import type {
   QueryTeamLastStatusActivitiesResponse,
   QueryStatsTimelineResponse,
   QueryStatsActivityByOwnerResponse,
+  QueryStatsPeriodComparisonResponse,
+  QueryStatsEffortResponse,
+  QueryContratsValidesAggregateResponse,
+  QueryProspectionPipelineResponse,
   CreateStatisticVariables,
   MutationCreateStatisticResponse,
   UpdateStatisticVariables,
@@ -46,6 +58,13 @@ export interface StatsActivityFilters {
   ownerId?: number
   startDate?: string
   endDate?: string
+}
+
+/** Granularité de regroupement des contrats validés. */
+export type ContratsValidesGranularity = 'day' | 'week' | 'month'
+
+export interface ContratsValidesFilters extends StatsActivityFilters {
+  granularity?: ContratsValidesGranularity
 }
 
 export const statisticApi = {
@@ -116,6 +135,48 @@ export const statisticApi = {
       filters
     )
     return response.statsActivityByOwner
+  },
+
+  async getStatsPeriodComparison(
+    filters: StatsActivityFilters = {}
+  ): Promise<StatsPeriodComparison> {
+    const response = await gql<QueryStatsPeriodComparisonResponse, StatsActivityFilters>(
+      GET_STATS_PERIOD_COMPARISON,
+      filters
+    )
+    return response.statsPeriodComparison
+  },
+
+  async getStatsEffort(filters: StatsActivityFilters = {}): Promise<StatsEffort> {
+    const response = await gql<QueryStatsEffortResponse, StatsActivityFilters>(
+      GET_STATS_EFFORT,
+      filters
+    )
+    return response.statsEffort
+  },
+
+  async getContratsValidesAggregate(
+    filters: ContratsValidesFilters = {}
+  ): Promise<ContratsValidesAggregate> {
+    const response = await gql<QueryContratsValidesAggregateResponse, ContratsValidesFilters>(
+      GET_CONTRATS_VALIDES_AGGREGATE,
+      filters
+    )
+    return response.contratsValidesAggregate
+  },
+
+  /**
+   * Stock de travail courant. Ne prend délibérément pas de bornes de dates : les
+   * filtres de période de la page ne s'appliquent pas à un stock.
+   */
+  async getProspectionPipeline(
+    filters: Pick<StatsActivityFilters, 'scopeType' | 'ownerType' | 'ownerId'> = {}
+  ): Promise<ProspectionPipeline> {
+    const response = await gql<QueryProspectionPipelineResponse, typeof filters>(
+      GET_PROSPECTION_PIPELINE,
+      filters
+    )
+    return response.prospectionPipeline
   },
 
   async getCurrentUserAssignment(userId: number, userType: string): Promise<any> {

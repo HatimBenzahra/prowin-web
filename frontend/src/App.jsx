@@ -18,6 +18,7 @@ const Dashboard = lazy(() => import('@/pages-ADMIN-DIRECTEUR/dashboard/Dashboard
 const Commerciaux = lazy(() => import('@/pages-ADMIN-DIRECTEUR/commercial/Commerciaux'))
 const Managers = lazy(() => import('@/pages-ADMIN-DIRECTEUR/managers/Managers'))
 const Directeurs = lazy(() => import('@/pages-ADMIN-DIRECTEUR/directeurs/Directeurs'))
+const Equipe = lazy(() => import('@/pages-ADMIN-DIRECTEUR/equipe/Equipe'))
 const Immeubles = lazy(() => import('@/pages-ADMIN-DIRECTEUR/immeubles/Immeubles'))
 const AdressesAcquiscan = lazy(() => import('@/pages-ADMIN-DIRECTEUR/adresses/AdressesAcquiscan'))
 const Zones = lazy(() => import('@/pages-ADMIN-DIRECTEUR/zones/Zones'))
@@ -30,6 +31,7 @@ const PorteDetails = lazy(() => import('@/pages-ADMIN-DIRECTEUR/immeubles/PorteD
 const ZoneDetails = lazy(() => import('@/pages-ADMIN-DIRECTEUR/zones/ZoneDetails'))
 const GPSTracking = lazy(() => import('@/pages-ADMIN-DIRECTEUR/gps-tracking/GPSTracking'))
 const Enregistrement = lazy(() => import('@/pages-ADMIN-DIRECTEUR/ecoutes/Enregistrement'))
+const CoachingIA = lazy(() => import('@/pages-ADMIN-DIRECTEUR/coaching/CoachingIA'))
 const Statistiques = lazy(() => import('@/pages-ADMIN-DIRECTEUR/statistiques/Statistiques'))
 const Gestion = lazy(() => import('@/pages-ADMIN-DIRECTEUR/gestion/Gestion'))
 const Gamification = lazy(() => import('@/pages-ADMIN-DIRECTEUR/gamification/Gamification'))
@@ -74,6 +76,7 @@ function AdminLayout() {
   const breadcrumbMap = {
     '': { label: 'Tableau de bord', href: '/' },
     dashboard: { label: 'Tableau de bord', href: '/' },
+    equipe: { label: 'Équipe', href: '/equipe' },
     commerciaux: { label: 'Commerciaux', href: '/commerciaux' },
     managers: { label: 'Managers', href: '/managers' },
     directeurs: { label: 'Directeurs', href: '/directeurs' },
@@ -84,6 +87,7 @@ function AdminLayout() {
     gestion: { label: 'Gestion', href: '/gestion' },
     'gps-tracking': { label: 'Suivi GPS', href: '/gps-tracking' },
     ecoutes: { label: 'Bibliothèque', href: '/ecoutes/enregistrement' },
+    coaching: { label: 'Coaching IA', href: '/coaching' },
     statistiques: { label: 'Statistiques', href: '/statistiques' },
     gamification: { label: 'Gamification', href: '/gamification' },
     kiosk: { label: 'Kiosk', href: '/kiosk' },
@@ -123,7 +127,12 @@ function AdminLayout() {
   }
 
   const breadcrumbs = buildBreadcrumbs()
-  const isWideMapPage = location.pathname === '/adresses'
+  // Carte d'adresses = plein bord. Fiche détail commercial = largeur non plafonnée
+  // (pas de max-w-1400) mais marges confortables conservées (w-11/12), pour le layout 2 colonnes.
+  const isMapPage = location.pathname === '/adresses'
+  const isFullWidthPage = /^\/(commerciaux|managers)\/\d+$/.test(location.pathname)
+  // Tableau de bord : pleine largeur (pas de plafond 1400px), marges conservées.
+  const isDashboard = location.pathname === '/'
 
   return (
     <ErrorBoundary>
@@ -132,23 +141,29 @@ function AdminLayout() {
           <AppSidebar />
           <SidebarInset className="overflow-x-hidden">
             <header className="flex h-16 shrink-0 items-center justify-between gap-2 border-b">
-              <div className="flex items-center gap-2 px-4">
-                <SidebarTrigger className="-ml-1" />
-                <Separator orientation="vertical" className="mr-2 h-4" />
-                <nav className="flex items-center gap-1 text-sm text-muted-foreground">
+              {/* `min-w-0` sur le bloc gauche et sur le fil : sans lui le fil garde sa
+                  largeur min-content, pousse la recherche et le thème au-delà du bord, et
+                  `overflow-x-hidden` sur le SidebarInset les coupe au lieu de les scroller.
+                  Quand la place manque, c'est le fil qui tronque, pas les actions. */}
+              <div className="flex min-w-0 flex-1 items-center gap-2 px-4">
+                <SidebarTrigger className="-ml-1 shrink-0" />
+                <Separator orientation="vertical" className="mr-2 h-4 shrink-0" />
+                <nav className="flex min-w-0 items-center gap-1 text-sm text-muted-foreground">
                   {breadcrumbs.map((crumb, index) => (
                     <React.Fragment
                       key={`${crumb.href}-${crumb.label}-${crumb.isCurrent ? 'current' : 'link'}`}
                     >
                       {index > 0 && (
-                        <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/40" />
+                        <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground/40" />
                       )}
                       {crumb.isCurrent ? (
-                        <span className="font-semibold text-foreground">{crumb.label}</span>
+                        <span className="truncate font-semibold text-foreground">
+                          {crumb.label}
+                        </span>
                       ) : (
                         <Link
                           to={crumb.href}
-                          className="hover:text-foreground transition-colors rounded-md px-1.5 py-0.5 hover:bg-muted"
+                          className="truncate rounded-md px-1.5 py-0.5 transition-colors hover:bg-muted hover:text-foreground"
                         >
                           {crumb.label}
                         </Link>
@@ -157,7 +172,7 @@ function AdminLayout() {
                   ))}
                 </nav>
               </div>
-              <div className="flex items-center gap-3 px-4">
+              <div className="flex shrink-0 items-center gap-3 px-4">
                 <button
                   type="button"
                   onClick={() => document.dispatchEvent(new CustomEvent('open-global-search'))}
@@ -173,7 +188,11 @@ function AdminLayout() {
             </header>
             <div
               className={`flex flex-1 flex-col gap-4 overflow-x-hidden animate-fade-in-content ${
-                isWideMapPage ? 'w-full px-4 py-4' : 'mx-auto w-11/12 max-w-[1400px] p-6 pt-6'
+                isMapPage
+                  ? 'w-full px-4 py-4'
+                  : isFullWidthPage || isDashboard
+                    ? 'mx-auto w-11/12 p-6 pt-6'
+                    : 'mx-auto w-11/12 max-w-[1400px] p-6 pt-6'
               }`}
             >
               <Suspense fallback={null}>
@@ -183,6 +202,14 @@ function AdminLayout() {
                     element={
                       <SectionErrorBoundary>
                         <Dashboard />
+                      </SectionErrorBoundary>
+                    }
+                  />
+                  <Route
+                    path="/equipe"
+                    element={
+                      <SectionErrorBoundary>
+                        <Equipe />
                       </SectionErrorBoundary>
                     }
                   />
@@ -316,6 +343,14 @@ function AdminLayout() {
                     element={
                       <SectionErrorBoundary>
                         <Enregistrement />
+                      </SectionErrorBoundary>
+                    }
+                  />
+                  <Route
+                    path="/coaching"
+                    element={
+                      <SectionErrorBoundary>
+                        <CoachingIA />
                       </SectionErrorBoundary>
                     }
                   />

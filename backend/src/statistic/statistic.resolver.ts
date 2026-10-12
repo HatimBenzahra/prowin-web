@@ -4,7 +4,11 @@ import { StatisticService } from './statistic.service';
 import { StatisticSyncService } from './statistic-sync.service';
 import {
   Statistic,
+  ContratsValidesAggregate,
   CreateStatisticInput,
+  ProspectionPipeline,
+  StatsEffort,
+  StatsPeriodComparison,
   UpdateStatisticInput,
   ZoneStatistic,
   TimelinePoint,
@@ -163,6 +167,89 @@ export class StatisticResolver {
       ownerId,
       startDate,
       endDate,
+    );
+  }
+
+  @Query(() => StatsPeriodComparison, { name: 'statsPeriodComparison' })
+  @Roles('admin', 'directeur', 'manager', 'commercial')
+  statsPeriodComparison(
+    @Args('scopeType', { type: () => String, nullable: true }) scopeType: string | undefined,
+    @Args('ownerType', { type: () => String, nullable: true }) ownerType: string | undefined,
+    @Args('ownerId', { type: () => Int, nullable: true }) ownerId: number | undefined,
+    @Args('startDate', { type: () => Date, nullable: true }) startDate: Date | undefined,
+    @Args('endDate', { type: () => Date, nullable: true }) endDate: Date | undefined,
+    @CurrentUser() user: any,
+  ) {
+    return this.statisticService.statsPeriodComparison(
+      user.id,
+      user.role,
+      scopeType,
+      ownerType,
+      ownerId,
+      startDate,
+      endDate,
+    );
+  }
+
+  @Query(() => StatsEffort, { name: 'statsEffort' })
+  @Roles('admin', 'directeur', 'manager', 'commercial')
+  statsEffort(
+    @Args('scopeType', { type: () => String, nullable: true }) scopeType: string | undefined,
+    @Args('ownerType', { type: () => String, nullable: true }) ownerType: string | undefined,
+    @Args('ownerId', { type: () => Int, nullable: true }) ownerId: number | undefined,
+    @Args('startDate', { type: () => Date, nullable: true }) startDate: Date | undefined,
+    @Args('endDate', { type: () => Date, nullable: true }) endDate: Date | undefined,
+    @CurrentUser() user: any,
+  ) {
+    return this.statisticService.statsEffort(
+      user.id,
+      user.role,
+      scopeType,
+      ownerType,
+      ownerId,
+      startDate,
+      endDate,
+    );
+  }
+
+  @Query(() => ContratsValidesAggregate, { name: 'contratsValidesAggregate' })
+  @Roles('admin', 'directeur', 'manager', 'commercial')
+  contratsValidesAggregate(
+    @Args('scopeType', { type: () => String, nullable: true }) scopeType: string | undefined,
+    @Args('ownerType', { type: () => String, nullable: true }) ownerType: string | undefined,
+    @Args('ownerId', { type: () => Int, nullable: true }) ownerId: number | undefined,
+    @Args('startDate', { type: () => Date, nullable: true }) startDate: Date | undefined,
+    @Args('endDate', { type: () => Date, nullable: true }) endDate: Date | undefined,
+    @Args('granularity', { type: () => String, nullable: true }) granularity: string | undefined,
+    @CurrentUser() user: any,
+  ) {
+    return this.statisticService.contratsValidesAggregate(
+      user.id,
+      user.role,
+      scopeType,
+      ownerType,
+      ownerId,
+      startDate,
+      endDate,
+      granularity,
+    );
+  }
+
+  /** Stock de travail en cours — sans filtre de période, un stock se lit au présent. */
+  @Query(() => ProspectionPipeline, { name: 'prospectionPipeline' })
+  @Roles('admin', 'directeur', 'manager', 'commercial')
+  prospectionPipeline(
+    @Args('scopeType', { type: () => String, nullable: true }) scopeType: string | undefined,
+    @Args('ownerType', { type: () => String, nullable: true }) ownerType: string | undefined,
+    @Args('ownerId', { type: () => Int, nullable: true }) ownerId: number | undefined,
+    @CurrentUser() user: any,
+  ) {
+    return this.statisticService.prospectionPipeline(
+      user.id,
+      user.role,
+      scopeType,
+      ownerType,
+      ownerId,
     );
   }
 

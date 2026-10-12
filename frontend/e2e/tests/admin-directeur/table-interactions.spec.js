@@ -1,26 +1,44 @@
-import { test, expect, waitForPageLoad, getTableRowCount, hasTableData } from '../../fixtures/base.js'
+import {
+  test,
+  expect,
+  waitForPageLoad,
+  getTableRowCount,
+  hasTableData,
+} from '../../fixtures/base.js'
 
+/**
+ * Ce spec teste le composant `AdvancedDataTable` lui-même, pas une page en
+ * particulier. Il s'appuyait sur /commerciaux, qui rend désormais des cards : il est
+ * repointé vers /zones, qui conserve un tableau.
+ *
+ * Les deux tests de filtre de statut ont été retirés : plus aucune page n'utilise
+ * `customStatusFilter` / `defaultStatusFilter`.
+ */
 test.describe('Table — Sorting & Filtering', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/commerciaux')
+    await page.goto('/zones')
     await waitForPageLoad(page)
   })
 
   test('column header click toggles sort indicator', async ({ page }) => {
     test.skip(!(await hasTableData(page)), 'No data to sort')
 
-    const nomHeader = page.getByRole('columnheader', { name: /^Nom/ }).first()
-    await expect(nomHeader).toBeVisible()
+    const firstHeader = page.getByRole('columnheader').first()
+    await expect(firstHeader).toBeVisible()
+    const headerLabel = (await firstHeader.textContent())?.trim()
 
-    await nomHeader.click()
+    await firstHeader.click()
     await page.waitForTimeout(300)
 
-    const headerAfterClick = page.getByRole('columnheader', { name: /^Nom/ }).first()
+    const headerAfterClick = page.getByRole('columnheader', { name: headerLabel }).first()
     expect(await headerAfterClick.textContent()).toMatch(/↑|↓/)
   })
 
   test('search with gibberish shows empty state', async ({ page }) => {
-    await page.getByPlaceholder(/Rechercher/i).first().fill('xyznonexistent999')
+    await page
+      .getByPlaceholder(/Rechercher/i)
+      .first()
+      .fill('xyznonexistent999')
     await page.waitForTimeout(500)
 
     await expect(page.locator('tbody tr').first()).toContainText(/Aucun résultat/i)
@@ -47,33 +65,11 @@ test.describe('Table — Sorting & Filtering', () => {
       await expect(counter).toBeVisible()
     }
   })
-
-  test('filter "Tous" shows all entries', async ({ page }) => {
-    await page.getByRole('button', { name: /^Status$/i }).first().click()
-    await page.getByRole('menuitem', { name: 'Tous' }).click()
-    await page.waitForTimeout(300)
-
-    await expect(page.getByRole('table').first()).toBeVisible()
-  })
-
-  test('switching filters Actif → Tous shows equal or more rows', async ({ page }) => {
-    await page.getByRole('button', { name: /^Status$/i }).first().click()
-    await page.getByRole('menuitem', { name: 'Actif' }).click()
-    await page.waitForTimeout(300)
-    const actifCount = await getTableRowCount(page)
-
-    await page.getByRole('button', { name: /^Status$/i }).first().click()
-    await page.getByRole('menuitem', { name: 'Tous' }).click()
-    await page.waitForTimeout(300)
-    const allCount = await getTableRowCount(page)
-
-    expect(allCount).toBeGreaterThanOrEqual(actifCount)
-  })
 })
 
 test.describe('Table — Pagination', () => {
   test('pagination controls appear when data exceeds page size', async ({ page }) => {
-    await page.goto('/commerciaux')
+    await page.goto('/zones')
     await waitForPageLoad(page)
     test.skip(!(await hasTableData(page)), 'No data in table')
 
@@ -87,13 +83,13 @@ test.describe('Table — Pagination', () => {
       const prevBtn = page.locator('a[aria-label="Go to previous page"]').first()
       expect(
         (await nextBtn.isVisible().catch(() => false)) ||
-        (await prevBtn.isVisible().catch(() => false))
+          (await prevBtn.isVisible().catch(() => false))
       ).toBeTruthy()
     }
   })
 
   test('clicking next page changes displayed rows', async ({ page }) => {
-    await page.goto('/commerciaux')
+    await page.goto('/zones')
     await waitForPageLoad(page)
     test.skip(!(await hasTableData(page)), 'No data in table')
 
@@ -113,7 +109,7 @@ test.describe('Table — Pagination', () => {
 
 test.describe('Table — Special Characters', () => {
   test('search handles special characters without crashing', async ({ page }) => {
-    await page.goto('/commerciaux')
+    await page.goto('/zones')
     await waitForPageLoad(page)
 
     const searchInput = page.getByPlaceholder(/Rechercher/i).first()

@@ -55,7 +55,7 @@ export const GET_ZONES_WITH_COMMERCIALS = `
 
 export const GET_ZONE = `
   query GetZone($id: Int!) {
-    zone(id: $id, excludeTestUsers: true) {
+    zone(id: $id) {
       id
       nom
       polygon

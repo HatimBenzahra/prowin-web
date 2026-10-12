@@ -11,6 +11,11 @@ test.describe('Immeubles Admin Page', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/immeubles')
     await waitForPageLoad(page)
+    // La page s'ouvre désormais en vue « Cartes ». Les tests ci-dessous portent sur
+    // les filtres et la navigation, pas sur la vue par défaut : on bascule donc en
+    // vue Liste pour conserver les assertions sur le tableau.
+    await page.getByRole('button', { name: /^Liste$/i }).click()
+    await expect(page.getByRole('table').first()).toBeVisible()
   })
 
   test('page loads and shows list', async ({ page }) => {
@@ -19,19 +24,20 @@ test.describe('Immeubles Admin Page', () => {
 
   test('search filters results', async ({ page }) => {
     const initialCount = await getTableRowCount(page)
-    await page.getByPlaceholder(/Rechercher/i).first().fill('test')
+    await page
+      .getByPlaceholder(/Rechercher/i)
+      .first()
+      .fill('test')
     await page.waitForTimeout(500)
     expect(await getTableRowCount(page)).toBeLessThanOrEqual(initialCount)
   })
 
-  test('list/map view toggle works', async ({ page }) => {
-    const vueCarteButton = page.getByRole('button', { name: /Vue Carte/i })
-    const vueListeButton = page.getByRole('button', { name: /Vue Liste/i })
+  test('grid/list view toggle works', async ({ page }) => {
+    // La vue Carte a été retirée de la page : il ne reste que Grille et Liste.
+    await page.getByRole('button', { name: /^Grille$/i }).click()
+    await expect(page.getByRole('table')).toHaveCount(0)
 
-    await vueCarteButton.click()
-    await expect(vueListeButton).toBeVisible()
-
-    await vueListeButton.click()
+    await page.getByRole('button', { name: /^Liste$/i }).click()
     await expect(page.getByRole('table').first()).toBeVisible()
   })
 

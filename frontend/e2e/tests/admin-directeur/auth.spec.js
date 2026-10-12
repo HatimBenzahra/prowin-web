@@ -31,7 +31,8 @@ test.describe('Auth — Admin/Directeur', () => {
     await page.goto('/')
     await expect(page).not.toHaveURL(/\/login/)
 
-    const logoutButton = page.getByRole('button', { name: /déconnex|logout|quitter/i })
+    const logoutButton = page
+      .getByRole('button', { name: /déconnex|logout|quitter/i })
       .or(page.locator('[class*="logout"], [data-slot*="logout"]'))
       .first()
 

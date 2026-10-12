@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { AlertTriangle, Loader2, Mic, PlayCircle } from 'lucide-react'
+import { Loader2, Mic, PlayCircle } from 'lucide-react'
 import AudioPlayer from '@/components/AudioPlayer'
 import { RecordingService } from '@/services/audio'
 import { getStatusColor, getStatusLabel } from '@/constants/domain/porte-status'
@@ -75,24 +75,13 @@ export default function RecordingSegmentPlayer({ segment, autoLoad = false }) {
               {getStatusLabel(segment.statut)}
             </Badge>
           )}
-          {segment.status && segment.status !== 'COMPLETED' && (
-            <Badge variant="outline" className="text-[10px]">
-              {segment.status}
-            </Badge>
-          )}
         </div>
       </div>
 
       {segmentUrl ? (
         <AudioPlayer src={segmentUrl} />
       ) : originalUrl ? (
-        <div className="space-y-2">
-          <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-800">
-            Segment indisponible. Audio complet chargé, passage autour de{' '}
-            <span className="font-medium tabular-nums">{formatDuration(segment.startTime)}</span>.
-          </div>
-          <AudioPlayer src={originalUrl} />
-        </div>
+        <AudioPlayer src={originalUrl} />
       ) : segment.status === 'PENDING' || segment.status === 'PROCESSING' ? (
         <div className="flex items-center gap-2 rounded-lg border border-border/40 bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
           <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -120,30 +109,21 @@ export default function RecordingSegmentPlayer({ segment, autoLoad = false }) {
           Charger l'audio
         </Button>
       ) : canLoadOriginal ? (
-        <div className="space-y-2 rounded-lg border border-amber-200 bg-amber-50 p-3">
-          <div className="flex items-start gap-2 text-[11px] leading-relaxed text-amber-900">
-            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-            <span>
-              Le découpage porte n'est pas disponible. Charge l'audio complet et écoute autour de{' '}
-              <span className="font-medium tabular-nums">{formatDuration(segment.startTime)}</span>.
-            </span>
-          </div>
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            onClick={handleLoadOriginal}
-            disabled={loadingOriginal}
-            className="h-8 gap-1.5 bg-background"
-          >
-            {loadingOriginal ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            ) : (
-              <PlayCircle className="h-3.5 w-3.5" />
-            )}
-            Charger l'audio complet
-          </Button>
-        </div>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          onClick={handleLoadOriginal}
+          disabled={loadingOriginal}
+          className="h-8 gap-1.5"
+        >
+          {loadingOriginal ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <PlayCircle className="h-3.5 w-3.5" />
+          )}
+          Charger l'audio
+        </Button>
       ) : (
         <div className="rounded-lg border border-border/40 bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
           Aucun lecteur disponible pour ce segment.

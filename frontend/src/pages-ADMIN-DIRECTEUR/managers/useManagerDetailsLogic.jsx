@@ -103,10 +103,8 @@ export function useManagerDetailsLogic() {
 
   // États pour le filtre des immeubles
   const immeubleDateFilter = useDateFilter()
-  const {
-    appliedStartDate: appliedImmeubleStartDate,
-    appliedEndDate: appliedImmeubleEndDate,
-  } = immeubleDateFilter
+  const { appliedStartDate: appliedImmeubleStartDate, appliedEndDate: appliedImmeubleEndDate } =
+    immeubleDateFilter
 
   // État pour le type de date à filtrer (création ou modification)
   const [immeubleDateType, setImmeubleDateType] = useState('created')
@@ -172,7 +170,11 @@ export function useManagerDetailsLogic() {
       const commercialAvecRangs = assignedCommercials.map(commercial => {
         // Utiliser les stats filtrées du commercial
         const stats = filteredCommercialsStats[commercial.id] || []
-        const { contratsSignes, rendezVousPris: rendezVous, immeublesVisites: immeubles } = aggregateStats(stats)
+        const {
+          contratsSignes,
+          rendezVousPris: rendezVous,
+          immeublesVisites: immeubles,
+        } = aggregateStats(stats)
         const { rank: commercialRank, points: commercialPoints } = calculateRank(
           contratsSignes,
           rendezVous,
@@ -392,7 +394,12 @@ export function useManagerDetailsLogic() {
       .map(commercial => {
         // Utiliser les stats filtrées du commercial
         const stats = filteredCommercialsStats[commercial.id] || []
-        const { contratsSignes, rendezVousPris: rendezVous, immeublesVisites: immeubles, refus } = aggregateStats(stats)
+        const {
+          contratsSignes,
+          rendezVousPris: rendezVous,
+          immeublesVisites: immeubles,
+          refus,
+        } = aggregateStats(stats)
         const { rank: commercialRank, points: commercialPoints } = calculateRank(
           contratsSignes,
           rendezVous,
@@ -440,9 +447,10 @@ export function useManagerDetailsLogic() {
     if (!appliedImmeubleStartDate && !appliedImmeubleEndDate) return allImmeublesTableData
 
     return allImmeublesTableData.filter(immeuble => {
-      const dateToCompare = immeubleDateType === 'created'
-        ? new Date(immeuble.createdAt)
-        : new Date(immeuble.visitedAt || immeuble.createdAt)
+      const dateToCompare =
+        immeubleDateType === 'created'
+          ? new Date(immeuble.createdAt)
+          : new Date(immeuble.visitedAt || immeuble.createdAt)
 
       if (appliedImmeubleStartDate) {
         const startDateObj = new Date(appliedImmeubleStartDate)
@@ -478,165 +486,240 @@ export function useManagerDetailsLogic() {
   }, [recordingSegments])
 
   // Construct props for view
-  const personalInfo = managerData ? [
-    {
-      label: 'Email :',
-      value: managerData.email,
-      icon: 'mail',
-    },
-    {
-      label: 'Téléphone :',
-      value: managerData.phone,
-      icon: 'phone',
-    },
-    {
-      label: 'Directeur :',
-      value: managerData.directeur,
-      icon: 'users',
-    },
-    {
-      label: 'Rang :',
-      value: (
-        <span
-          className={`inline-flex items-center gap-2 px-3 py-1 rounded-full ${managerData.rank.bgColor} ${managerData.rank.textColor} ${managerData.rank.borderColor} border-text-primary font-semibold`}
-        >
-          <span className="text-lg">🏆</span>
-          {managerData.rank.name}
-          <span className="text-xs opacity-75">({managerData.points} pts)</span>
-        </span>
-      ),
-      icon: 'award',
-    },
-    {
-      label: 'Date de création de compte:',
-      value: managerData.date_promotion,
-      icon: 'calendar',
-    },
-  ] : []
+  const personalInfo = managerData
+    ? [
+        {
+          label: 'Email :',
+          value: managerData.email,
+          icon: 'mail',
+        },
+        {
+          label: 'Téléphone :',
+          value: managerData.phone,
+          icon: 'phone',
+        },
+        {
+          label: 'Directeur :',
+          value: managerData.directeur,
+          icon: 'users',
+        },
+        {
+          label: 'Rang :',
+          value: (
+            <span
+              className={`inline-flex items-center gap-2 px-3 py-1 rounded-full ${managerData.rank.bgColor} ${managerData.rank.textColor} ${managerData.rank.borderColor} border-text-primary font-semibold`}
+            >
+              <span className="text-lg">🏆</span>
+              {managerData.rank.name}
+              <span className="text-xs opacity-75">({managerData.points} pts)</span>
+            </span>
+          ),
+          icon: 'award',
+        },
+        {
+          label: 'Date de création de compte:',
+          value: managerData.date_promotion,
+          icon: 'calendar',
+        },
+      ]
+    : []
 
-  const personalStatsCards = managerData ? [
-    {
-      title: 'Points totaux',
-      value: managerData.points,
-      description: 'Score personnel',
-      icon: 'trendingUp',
-      fullWidth: true,
-    },
-    {
-      title: 'Dernière activité terrain',
-      value: formatRelativeActivityDate(managerData.lastStatusActivity?.changedAt),
-      description: getActivityDescription(managerData.lastStatusActivity),
-      icon: 'shieldCheck',
-      fullWidth: true,
-    },
-    {
-      title: 'Contrats signés',
-      value: managerData.totalContratsSignes,
-      description: 'Total des contrats signés',
-      icon: 'fileText',
-    },
-    {
-      title: 'Rendez-vous pris',
-      value: managerData.totalRendezVousPris,
-      description: 'Total des rendez-vous',
-      icon: 'calendar',
-    },
-    {
-      title: 'Bâtiments visités',
-      value: managerData.totalImmeublesVisites,
-      description: 'Total des bâtiments visités',
-      icon: 'building',
-    },
-    {
-      title: 'Refus',
-      value: managerData.totalRefus,
-      description: 'Total des refus',
-      icon: 'x',
-    },
-    {
-      title: 'Absents',
-      value: managerData.totalAbsents,
-      description: 'Portes où personne n\'était présent',
-      icon: 'userX',
-    },
-    {
-      title: 'Argumentés',
-      value: managerData.totalArgumentes,
-      description: 'Refus après argumentation',
-      icon: 'messageCircle',
-    },
-    {
-      title: 'Portes prospectées',
-      value: managerData.totalPortesProspectes,
-      description: 'Total des portes prospectées',
-      icon: 'fileText',
-    },
-    {
-      title: 'Bâtiments prospectés',
-      value: managerData.totalImmeublesProspectes,
-      description: 'Total des bâtiments prospectés',
-      icon: 'building',
-    },
-  ] : []
+  const personalStatsCards = managerData
+    ? [
+        {
+          title: 'Points totaux',
+          value: managerData.points,
+          description: 'Score personnel',
+          icon: 'trendingUp',
+          fullWidth: true,
+        },
+        {
+          title: 'Dernière activité terrain',
+          value: formatRelativeActivityDate(managerData.lastStatusActivity?.changedAt),
+          description: getActivityDescription(managerData.lastStatusActivity),
+          icon: 'shieldCheck',
+          fullWidth: true,
+        },
+        {
+          title: 'Contrats signés',
+          value: managerData.totalContratsSignes,
+          description: 'Total des contrats signés',
+          icon: 'fileText',
+        },
+        {
+          title: 'Rendez-vous pris',
+          value: managerData.totalRendezVousPris,
+          description: 'Total des rendez-vous',
+          icon: 'calendar',
+        },
+        {
+          title: 'Bâtiments visités',
+          value: managerData.totalImmeublesVisites,
+          description: 'Total des bâtiments visités',
+          icon: 'building',
+        },
+        {
+          title: 'Refus',
+          value: managerData.totalRefus,
+          description: 'Total des refus',
+          icon: 'x',
+        },
+        {
+          title: 'Absents',
+          value: managerData.totalAbsents,
+          description: "Portes où personne n'était présent",
+          icon: 'userX',
+        },
+        {
+          title: 'Argumentés',
+          value: managerData.totalArgumentes,
+          description: 'Refus après argumentation',
+          icon: 'messageCircle',
+        },
+        {
+          title: 'Portes prospectées',
+          value: managerData.totalPortesProspectes,
+          description: 'Total des portes prospectées',
+          icon: 'fileText',
+        },
+        {
+          title: 'Bâtiments prospectés',
+          value: managerData.totalImmeublesProspectes,
+          description: 'Total des bâtiments prospectés',
+          icon: 'building',
+        },
+      ]
+    : []
 
-  const teamStatsCards = managerData ? [
-    {
-      title: 'Meilleur commercial',
-      value: managerData.meilleurCommercial,
-      description: `Badge: ${managerData.meilleurBadge}`,
-      icon: 'award',
-    },
-    {
-      title: "Taille de l'équipe",
-      value: managerData.equipe_taille,
-      description: 'Commerciaux assignés',
-      icon: 'users',
-    },
-    {
-      title: "Contrats signés par l'équipe",
-      value: teamTotals.totalContrats,
-      description: `Total de ${commercialStats.length} commercial${commercialStats.length > 1 ? 'aux' : ''}`,
-      icon: 'fileText',
-    },
-    {
-      title: "Rendez-vous pris par l'équipe",
-      value: teamTotals.totalRDV,
-      description: `Total de ${commercialStats.length} commercial${commercialStats.length > 1 ? 'aux' : ''}`,
-      icon: 'calendar',
-    },
-    {
-      title: "Bâtiments visités par l'équipe",
-      value: teamTotals.totalImmeubles,
-      description: `Total de ${commercialStats.length} commercial${commercialStats.length > 1 ? 'aux' : ''}`,
-      icon: 'building',
-    },
-    {
-      title: "Refus par l'équipe",
-      value: teamTotals.totalRefus,
-      description: `Total de ${commercialStats.length} commercial${commercialStats.length > 1 ? 'aux' : ''}`,
-      icon: 'x',
-    },
-  ] : []
+  const teamStatsCards = managerData
+    ? [
+        {
+          title: 'Meilleur commercial',
+          value: managerData.meilleurCommercial,
+          description: `Badge: ${managerData.meilleurBadge}`,
+          icon: 'award',
+        },
+        {
+          title: "Taille de l'équipe",
+          value: managerData.equipe_taille,
+          description: 'Commerciaux assignés',
+          icon: 'users',
+        },
+        {
+          title: "Contrats signés par l'équipe",
+          value: teamTotals.totalContrats,
+          description: `Total de ${commercialStats.length} commercial${commercialStats.length > 1 ? 'aux' : ''}`,
+          icon: 'fileText',
+        },
+        {
+          title: "Rendez-vous pris par l'équipe",
+          value: teamTotals.totalRDV,
+          description: `Total de ${commercialStats.length} commercial${commercialStats.length > 1 ? 'aux' : ''}`,
+          icon: 'calendar',
+        },
+        {
+          title: "Bâtiments visités par l'équipe",
+          value: teamTotals.totalImmeubles,
+          description: `Total de ${commercialStats.length} commercial${commercialStats.length > 1 ? 'aux' : ''}`,
+          icon: 'building',
+        },
+        {
+          title: "Refus par l'équipe",
+          value: teamTotals.totalRefus,
+          description: `Total de ${commercialStats.length} commercial${commercialStats.length > 1 ? 'aux' : ''}`,
+          icon: 'x',
+        },
+      ]
+    : []
 
   // Table columns definition (moved from component to avoid clutter, though simplified)
   // ... (Using same column defs as in ManagerDetails.jsx but exported or defined here)
   const commercialStatsColumns = [
     { header: 'Commercial', accessor: 'nom', sortable: true, className: 'font-medium' },
-    { header: 'Contrats signés', accessor: 'contratsSignes', sortable: true, className: 'text-center', cell: row => <Badge className="bg-green-100 text-green-800">{row.contratsSignes || 0}</Badge> },
-    { header: 'RDV pris', accessor: 'rendezVous', sortable: true, className: 'text-center', cell: row => <Badge className="bg-blue-100 text-blue-800">{row.rendezVous || 0}</Badge> },
-    { header: 'Bâtiments visités', accessor: 'immeubles', sortable: true, className: 'text-center', cell: row => <Badge className="bg-purple-100 text-purple-800">{row.immeubles || 0}</Badge> },
-    { header: 'Refus', accessor: 'refus', sortable: true, className: 'text-center', cell: row => <Badge className="bg-red-100 text-red-800">{row.refus || 0}</Badge> },
-    { header: 'Rang', accessor: 'rank', sortable: false, className: 'text-center', cell: row => <Badge className={`${row.rank.bgColor} ${row.rank.textColor} ${row.rank.borderColor} border`}>{row.rank.name}</Badge> },
-    { header: 'Points', accessor: 'points', sortable: true, className: 'text-center font-semibold', cell: row => `${row.points} pts` },
+    {
+      header: 'Contrats signés',
+      accessor: 'contratsSignes',
+      sortable: true,
+      className: 'text-center',
+      cell: row => <Badge className="bg-green-100 text-green-800">{row.contratsSignes || 0}</Badge>,
+    },
+    {
+      header: 'RDV pris',
+      accessor: 'rendezVous',
+      sortable: true,
+      className: 'text-center',
+      cell: row => <Badge className="bg-blue-100 text-blue-800">{row.rendezVous || 0}</Badge>,
+    },
+    {
+      header: 'Bâtiments visités',
+      accessor: 'immeubles',
+      sortable: true,
+      className: 'text-center',
+      cell: row => <Badge className="bg-purple-100 text-purple-800">{row.immeubles || 0}</Badge>,
+    },
+    {
+      header: 'Refus',
+      accessor: 'refus',
+      sortable: true,
+      className: 'text-center',
+      cell: row => <Badge className="bg-red-100 text-red-800">{row.refus || 0}</Badge>,
+    },
+    {
+      header: 'Rang',
+      accessor: 'rank',
+      sortable: false,
+      className: 'text-center',
+      cell: row => (
+        <Badge
+          className={`${row.rank.bgColor} ${row.rank.textColor} ${row.rank.borderColor} border`}
+        >
+          {row.rank.name}
+        </Badge>
+      ),
+    },
+    {
+      header: 'Points',
+      accessor: 'points',
+      sortable: true,
+      className: 'text-center font-semibold',
+      cell: row => `${row.points} pts`,
+    },
   ]
 
   const doorsColumns = [
     { header: 'Porte', accessor: 'number', sortable: true, className: 'font-medium' },
     { header: 'Adresse', accessor: 'address', sortable: true, className: 'text-sm' },
     { header: 'Étage', accessor: 'etage', sortable: true, className: 'text-sm' },
-    { header: 'Statut', accessor: 'status', sortable: true, cell: row => <Badge className={getStatusColor(row.status?.toUpperCase())}>{getStatusLabel(row.status?.toUpperCase())}</Badge> },
-    { header: 'RDV', accessor: 'rdvDate', sortable: true, cell: row => row.rdvDate ? <div className="text-sm"><div>{row.rdvDate}</div><div className="text-muted-foreground">{row.rdvTime}</div></div> : <span className="text-muted-foreground">-</span> },
-    { header: 'Dernière visite', accessor: 'lastVisit', sortable: true, cell: row => row.visitedAt || <span className="text-muted-foreground">-</span> },
+    {
+      header: 'Statut',
+      accessor: 'status',
+      sortable: true,
+      cell: row => (
+        <Badge className={getStatusColor(row.status?.toUpperCase())}>
+          {getStatusLabel(row.status?.toUpperCase())}
+        </Badge>
+      ),
+    },
+    {
+      header: 'RDV',
+      accessor: 'rdvDate',
+      sortable: true,
+      cell: row =>
+        row.rdvDate ? (
+          <div className="text-sm">
+            <div>{row.rdvDate}</div>
+            <div className="text-muted-foreground">{row.rdvTime}</div>
+          </div>
+        ) : (
+          <span className="text-muted-foreground">-</span>
+        ),
+    },
+    {
+      header: 'Dernière visite',
+      accessor: 'lastVisit',
+      sortable: true,
+      cell: row => row.visitedAt || <span className="text-muted-foreground">-</span>,
+    },
     {
       header: 'Audio',
       accessor: 'audio',
@@ -661,17 +744,82 @@ export function useManagerDetailsLogic() {
 
   const immeublesColumns = [
     { header: 'Adresse', accessor: 'address', sortable: true, className: 'font-medium' },
-    { header: 'Type', accessor: 'type', sortable: true, className: 'hidden md:table-cell', cell: row => <BuildingTypeBadge type={row.type} className="text-[10px]" /> },
-    { header: 'Étages', accessor: 'floors', className: 'hidden md:table-cell text-center', cell: row => `${row.floors} étages` },
-    { header: 'Total Portes', accessor: 'total_doors', className: 'hidden lg:table-cell text-center' },
-    { header: 'Couverture', accessor: 'couverture', sortable: true, className: 'hidden lg:table-cell text-center', cell: row => <Badge className={row.couverture >= 80 ? 'bg-green-100 text-green-800' : row.couverture >= 50 ? 'bg-yellow-100 text-yellow-800' : 'bg-red-100 text-red-800'}>{row.couverture || 0}%</Badge> },
-    { header: 'Contrats signés', accessor: 'contrats_signes', sortable: true, className: 'text-center', cell: row => <Badge className="bg-green-100 text-green-800">{row.contrats_signes || 0}</Badge> },
-    { header: 'RDV pris', accessor: 'rdv_pris', sortable: true, className: 'hidden xl:table-cell text-center', cell: row => <Badge className="bg-blue-100 text-blue-800">{row.rdv_pris || 0}</Badge> },
-    { header: 'Refus', accessor: 'refus', sortable: true, className: 'hidden xl:table-cell text-center', cell: row => <Badge className="bg-red-100 text-red-800">{row.refus || 0}</Badge> },
-    { header: 'Absents', accessor: 'absent', sortable: true, className: 'hidden xl:table-cell text-center', cell: row => <Badge className="bg-blue-100 text-blue-800">{row.absent || 0}</Badge> },
-    { header: 'Argumentés', accessor: 'argumente', sortable: true, className: 'hidden xl:table-cell text-center', cell: row => <Badge className="bg-orange-100 text-orange-800">{row.argumente || 0}</Badge> },
+    {
+      header: 'Type',
+      accessor: 'type',
+      sortable: true,
+      className: 'hidden md:table-cell',
+      cell: row => <BuildingTypeBadge type={row.type} className="text-[10px]" />,
+    },
+    {
+      header: 'Étages',
+      accessor: 'floors',
+      className: 'hidden md:table-cell text-center',
+      cell: row => `${row.floors} étages`,
+    },
+    {
+      header: 'Total Portes',
+      accessor: 'total_doors',
+      className: 'hidden lg:table-cell text-center',
+    },
+    {
+      header: 'Couverture',
+      accessor: 'couverture',
+      sortable: true,
+      className: 'hidden lg:table-cell text-center',
+      cell: row => (
+        <Badge
+          className={
+            row.couverture >= 80
+              ? 'bg-green-100 text-green-800'
+              : row.couverture >= 50
+                ? 'bg-yellow-100 text-yellow-800'
+                : 'bg-red-100 text-red-800'
+          }
+        >
+          {row.couverture || 0}%
+        </Badge>
+      ),
+    },
+    {
+      header: 'Contrats signés',
+      accessor: 'contrats_signes',
+      sortable: true,
+      className: 'text-center',
+      cell: row => (
+        <Badge className="bg-green-100 text-green-800">{row.contrats_signes || 0}</Badge>
+      ),
+    },
+    {
+      header: 'RDV pris',
+      accessor: 'rdv_pris',
+      sortable: true,
+      className: 'hidden xl:table-cell text-center',
+      cell: row => <Badge className="bg-blue-100 text-blue-800">{row.rdv_pris || 0}</Badge>,
+    },
+    {
+      header: 'Refus',
+      accessor: 'refus',
+      sortable: true,
+      className: 'hidden xl:table-cell text-center',
+      cell: row => <Badge className="bg-red-100 text-red-800">{row.refus || 0}</Badge>,
+    },
+    {
+      header: 'Absents',
+      accessor: 'absent',
+      sortable: true,
+      className: 'hidden xl:table-cell text-center',
+      cell: row => <Badge className="bg-blue-100 text-blue-800">{row.absent || 0}</Badge>,
+    },
+    {
+      header: 'Argumentés',
+      accessor: 'argumente',
+      sortable: true,
+      className: 'hidden xl:table-cell text-center',
+      cell: row => <Badge className="bg-orange-100 text-orange-800">{row.argumente || 0}</Badge>,
+    },
   ]
-  
+
   // Prepare Table Data (Portes)
   const doorsData = useMemo(() => {
     if (!allPortes) return []
@@ -687,13 +835,18 @@ export function useManagerDetailsLogic() {
         address: immeuble ? `${immeuble.adresse}` : 'Non spécifié',
         etage: `Étage ${porte.etage}`,
         status: porte.statut.toLowerCase(),
-        rdvDate: porte.rdvDate ? new Date(porte.rdvDate).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' }) : null,
+        rdvDate: porte.rdvDate
+          ? new Date(porte.rdvDate).toLocaleDateString('fr-FR', {
+              day: '2-digit',
+              month: '2-digit',
+              year: 'numeric',
+            })
+          : null,
         rdvTime: porte.rdvTime || null,
         lastVisit: porte.updatedAt ? new Date(porte.updatedAt).toLocaleDateString() : null,
       }
     })
   }, [allPortes, manager?.immeubles])
-
 
   const additionalSections = [
     {
@@ -710,7 +863,7 @@ export function useManagerDetailsLogic() {
       },
     },
     {
-      title: 'Gestion de l\'équipe',
+      title: "Gestion de l'équipe",
       description: 'Affectation des commerciaux au manager',
       type: 'custom',
       component: 'CustomRender',
@@ -724,9 +877,33 @@ export function useManagerDetailsLogic() {
       data: {
         totalDoors: totalDoorsGrid,
         charts: [
-          { type: 'PortesStatusChart', props: { portes: allPortes || [], title: 'Répartition des statuts', description: 'État actuel de toutes les portes', showNonVisited: true } },
-          { type: 'PortesProspectionChart', props: { portes: allPortes || [], title: 'Portes prospectées par jour', description: 'Activité quotidienne des 7 derniers jours', daysToShow: 7 } },
-          { type: 'PortesWeeklyChart', props: { portes: allPortes || [], title: 'Évolution hebdomadaire', description: 'Tendance sur les 4 dernières semaines', weeksToShow: 4 } },
+          {
+            type: 'PortesStatusChart',
+            props: {
+              portes: allPortes || [],
+              title: 'Répartition des statuts',
+              description: 'État actuel de toutes les portes',
+              showNonVisited: true,
+            },
+          },
+          {
+            type: 'PortesProspectionChart',
+            props: {
+              portes: allPortes || [],
+              title: 'Portes prospectées par jour',
+              description: 'Activité quotidienne des 7 derniers jours',
+              daysToShow: 7,
+            },
+          },
+          {
+            type: 'PortesWeeklyChart',
+            props: {
+              portes: allPortes || [],
+              title: 'Évolution hebdomadaire',
+              description: 'Tendance sur les 4 dernières semaines',
+              weeksToShow: 4,
+            },
+          },
         ],
       },
     },
@@ -740,7 +917,7 @@ export function useManagerDetailsLogic() {
         columns: immeublesColumns,
         nestedColumns: doorsColumns,
         showFilters: false,
-        doorsData: doorsData, 
+        doorsData: doorsData,
       },
       customFilter: (
         <DateRangeFilter

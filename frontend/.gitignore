@@ -28,3 +28,10 @@ e2e/.auth/
 playwright-report/
 blob-report/
 test-results/
+
+# Captures vidéo : artefacts de génération (journal de chapitres, repérage, rendus
+# intermédiaires). Le mp4 diffusé vit dans src/assets/guide/, produit par
+# `node e2e/video/build-video.mjs --publish`.
+e2e/video/.chapters.json
+e2e/video/.scout.json
+e2e/video/out/

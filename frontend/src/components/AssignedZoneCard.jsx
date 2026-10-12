@@ -27,7 +27,11 @@ import {
 import { MapSkeleton } from '@/components/LoadingSkeletons'
 import { mapboxCache } from '@/services/core'
 import { logError } from '@/services/core'
-import { zoneToGeoJSON, polygonAreaKm2 } from '@/pages-ADMIN-DIRECTEUR/zones/zones-utils'
+import {
+  zoneToGeoJSON,
+  polygonAreaKm2,
+  getZoneColor,
+} from '@/pages-ADMIN-DIRECTEUR/zones/zones-utils'
 import {
   buildingDoorCount,
   habitatBreakdown,
@@ -144,23 +148,6 @@ function ZoneKpiStrip({ stats, totalImmeubles }) {
       })}
     </div>
   )
-}
-
-// Generate a deterministic color from zone ID
-function getZoneColor(zoneId) {
-  const colors = [
-    '#3388ff', // Blue
-    '#ff6b6b', // Red
-    '#51cf66', // Green
-    '#ffd93d', // Yellow
-    '#a78bfa', // Purple
-    '#f59e0b', // Orange
-    '#ec4899', // Pink
-    '#06b6d4', // Cyan
-    '#84cc16', // Lime
-    '#f97316', // Dark Orange
-  ]
-  return colors[zoneId % colors.length]
 }
 
 const fetchLocationName = async (longitude, latitude) => {
@@ -361,7 +348,7 @@ export default function AssignedZoneCard({
   if (!zone && !showAllImmeubles) {
     return (
       <Card className={`border-2 ${className}`}>
-        <CardContent className="pt-6">
+        <CardContent>
           <div className="flex items-center justify-center py-8">
             <p className="text-muted-foreground">Aucune zone assignée</p>
           </div>
@@ -473,8 +460,7 @@ export default function AssignedZoneCard({
             // Couverture = prospectées / total de portes PRÉVUES (grille déclarée), jamais / portes créées.
             const totalPortes = buildingDoorCount(immeuble)
             const prospectees = portes.filter(p => p.statut !== 'NON_VISITE').length
-            const couverture =
-              totalPortes > 0 ? Math.round((prospectees / totalPortes) * 100) : 0
+            const couverture = totalPortes > 0 ? Math.round((prospectees / totalPortes) * 100) : 0
             const contrats = portes
               .filter(p => p.statut === 'CONTRAT_SIGNE')
               .reduce((s, p) => s + (p.nbContrats ?? 0), 0)
@@ -571,7 +557,7 @@ export default function AssignedZoneCard({
   return (
     <>
       <Card className={`border-2 ${className}`}>
-        <CardContent className="pt-6">
+        <CardContent>
           {fullWidth ? (
             /* Layout pleine largeur avec map en haut */
             <div className="space-y-6">

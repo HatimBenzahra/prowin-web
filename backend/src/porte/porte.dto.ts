@@ -66,6 +66,9 @@ export class Porte {
   @Field({ nullable: true })
   derniereVisite?: Date;
 
+  @Field({ defaultValue: false })
+  coachingFavori: boolean;
+
   @Field()
   createdAt: Date;
 

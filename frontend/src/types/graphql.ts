@@ -13,6 +13,10 @@ import type {
   Statistic,
   TimelinePoint,
   OwnerActivityStatistic,
+  StatsPeriodComparison,
+  StatsEffort,
+  ContratsValidesAggregate,
+  ProspectionPipeline,
   ZoneStatistic,
   TeamLastStatusActivity,
   Porte,
@@ -110,6 +114,22 @@ export interface QueryStatsTimelineResponse {
 
 export interface QueryStatsActivityByOwnerResponse {
   statsActivityByOwner: OwnerActivityStatistic[]
+}
+
+export interface QueryStatsPeriodComparisonResponse {
+  statsPeriodComparison: StatsPeriodComparison
+}
+
+export interface QueryStatsEffortResponse {
+  statsEffort: StatsEffort
+}
+
+export interface QueryContratsValidesAggregateResponse {
+  contratsValidesAggregate: ContratsValidesAggregate
+}
+
+export interface QueryProspectionPipelineResponse {
+  prospectionPipeline: ProspectionPipeline
 }
 
 export interface QueryPortesResponse {

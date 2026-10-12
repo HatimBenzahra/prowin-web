@@ -1,34 +1,30 @@
-import { AdvancedDataTable } from '@/components/tableau'
 import { TableSkeleton } from '@/components/LoadingSkeletons'
-import { memo, useMemo } from 'react'
-import { RANKS } from '@/utils/business/ranks'
-import { Card } from '@/components/ui/card'
+import { memo, useMemo, useState } from 'react'
+import PeopleListToolbar from '@/components/people/PeopleListToolbar'
+import PeopleCardsView from '@/components/people/PeopleCardsView'
+import RankTiersCard from '@/components/people/RankTiersCard'
+import { filterPeople } from '@/components/people/people-filters'
+import { UserStatus } from '@/constants/domain/user-status'
 import { useCommerciauxLogic } from './useCommerciauxLogic'
 
 export default memo(function Commerciaux() {
   const {
     tableData,
-    columns,
     permissions,
-    description,
     loading,
     error,
-    updating,
     refetch,
     commerciauxEditFields,
     handleEditCommercial,
-    statusOptions,
+    handleArchiveCommercial,
   } = useCommerciauxLogic()
 
-  const statusFilterOptions = useMemo(
-    () => [
-      { value: 'all', label: 'Tous' },
-      ...statusOptions.map(option => ({
-        value: option.value,
-        label: option.label,
-      })),
-    ],
-    [statusOptions]
+  const [search, setSearch] = useState('')
+  const [status, setStatus] = useState(UserStatus.ACTIF)
+
+  const cardsPeople = useMemo(
+    () => filterPeople(tableData, { search, status }),
+    [tableData, search, status]
   )
 
   if (loading) {
@@ -68,60 +64,41 @@ export default memo(function Commerciaux() {
   }
 
   return (
-    <div className="space-y-6">
-      {/* Section d'information sur le système de rangs */}
-      <Card className="p-6 bg-linear-to-br from-primary/5 to-primary/10 border-primary/20">
-        <div className="space-y-4">
-          <div>
-            <h3 className="text-lg font-semibold">🏆 Système de Rangs</h3>
-            <p className="text-sm text-muted-foreground mt-1">
-              Progression et paliers de performance basés sur les statistiques
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-            {RANKS.map(rank => (
-              <div
-                key={rank.name}
-                className="bg-card rounded-lg p-4 border border-border hover:shadow-md transition-shadow"
-              >
-                <span
-                  className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full ${rank.bgColor} ${rank.textColor} ${rank.borderColor} border font-semibold text-sm`}
-                >
-                  {rank.name}
-                </span>
-                <p className="text-xs text-muted-foreground mt-2">
-                  {rank.maxPoints === Infinity
-                    ? `${rank.minPoints}+ points`
-                    : `${rank.minPoints} - ${rank.maxPoints} points`}
-                </p>
-              </div>
-            ))}
-          </div>
-
-          <div className="pt-3 border-t border-border">
-            <p className="text-xs text-muted-foreground">
-              <span className="font-semibold">Calcul des points:</span> Contrat signé (+50 pts) •
-              Rendez-vous pris (+10 pts) • Immeuble visité (+5 pts)
-            </p>
-          </div>
-        </div>
-      </Card>
-
-      <AdvancedDataTable
-        showStatusColumn
-        title="Liste des Commerciaux"
-        description={description}
-        data={tableData}
-        columns={columns}
-        searchKey="nom"
-        detailsPath="/commerciaux"
-        editFields={commerciauxEditFields}
-        onEdit={permissions.canEdit ? handleEditCommercial : undefined}
-        customStatusFilter={statusFilterOptions}
-        defaultStatusFilter="ACTIF"
-        loading={updating}
+    // `@container/page` : c'est la largeur du conteneur, pas celle de la fenêtre, qui
+    // décide si le panneau « Paliers » tient à droite de la liste.
+    <div className="@container/page space-y-6">
+      <PeopleListToolbar
+        search={search}
+        onSearchChange={setSearch}
+        status={status}
+        onStatusChange={setStatus}
       />
+
+      {/* minmax(0,1fr) et non 1fr : sinon la colonne refuse de descendre sous la
+          largeur min-content du tableau, la grille déborde et la page scrolle.
+
+          Le seuil porte sur `@container/page`, donc sur la largeur réellement
+          disponible, pas sur celle de la fenêtre : 1536 px de viewport n'étaient pas
+          atteints sur un 14 pouces alors que le conteneur en offrait 1103, largement
+          de quoi tenir les deux colonnes. Budget : 680 px pour une rangée d'un seul
+          tenant + 24 px de gap + 320 px de panneau = 1024. En dessous, le panneau
+          Paliers est une légende de référence : il passe sous la liste. */}
+      <div className="grid grid-cols-1 items-start gap-6 @min-[1024px]/page:grid-cols-[minmax(0,1fr)_320px]">
+        <PeopleCardsView
+          people={cardsPeople}
+          detailsPath="/commerciaux"
+          showRanking={true}
+          canEdit={permissions.canEdit}
+          canArchive={permissions.canEdit}
+          onArchive={handleArchiveCommercial}
+          editFields={commerciauxEditFields}
+          onSave={handleEditCommercial}
+          editTitle="Modifier le commercial"
+          emptyLabel="Aucun commercial pour ces filtres"
+        />
+
+        <RankTiersCard />
+      </div>
     </div>
   )
 })

@@ -107,7 +107,8 @@ function DoorTile({ door, selected, onSelect }) {
         tone.soft,
         'hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-ring',
         selected && 'ring-2 ring-primary/45',
-        isLong && !selected && 'ring-1 ring-primary/25'
+        isLong && !selected && 'ring-1 ring-primary/25',
+        door.coachingFavori && 'favori-glow'
       )}
     >
       <div className="flex items-center justify-between gap-2">

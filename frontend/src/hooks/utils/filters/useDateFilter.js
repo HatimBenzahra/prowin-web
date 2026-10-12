@@ -1,19 +1,44 @@
 import { useState } from 'react'
 
 /**
- * Hook pour gérer les filtres de date et filtrer les données par période
+ * Hook pour gérer les filtres de date et filtrer les données par période.
+ *
+ * `initialRange` permet à un appelant de démarrer sur une période déjà appliquée.
+ * C'est indispensable quand des requêtes dépendent des bornes : les poser dans un
+ * `useEffect` après le montage fait partir un premier jeu de requêtes **sans
+ * bornes** (donc sur tout l'historique) dont le résultat est aussitôt jeté.
+ *
+ * @param {{ start?: string, end?: string }} [initialRange] Bornes `YYYY-MM-DD`
  * @returns {Object} Objet contenant les états et fonctions de filtrage
  */
-export function useDateFilter() {
-  const [startDate, setStartDate] = useState('')
-  const [endDate, setEndDate] = useState('')
-  const [appliedStartDate, setAppliedStartDate] = useState('')
-  const [appliedEndDate, setAppliedEndDate] = useState('')
+export function useDateFilter({ start = '', end = '' } = {}) {
+  const [startDate, setStartDate] = useState(start)
+  const [endDate, setEndDate] = useState(end)
+  const [appliedStartDate, setAppliedStartDate] = useState(start)
+  const [appliedEndDate, setAppliedEndDate] = useState(end)
 
-  // Fonction pour valider les filtres
-  const handleApplyFilters = () => {
-    setAppliedStartDate(startDate)
-    setAppliedEndDate(endDate)
+  /**
+   * Valide les filtres.
+   *
+   * Accepte des dates explicites, indispensable pour les presets : ils posent les
+   * dates et appliquent dans le même geste. Sans ce paramètre, l'appel se faisait via
+   * une closure capturée avant la mise à jour d'état et appliquait les anciennes
+   * valeurs. Sans argument, on applique le brouillon courant — comportement inchangé
+   * pour le bouton « Appliquer ».
+   *
+   * @param {string} [nextStart]
+   * @param {string} [nextEnd]
+   */
+  const handleApplyFilters = (nextStart, nextEnd) => {
+    const start = nextStart !== undefined ? nextStart : startDate
+    const end = nextEnd !== undefined ? nextEnd : endDate
+
+    // On aligne aussi le brouillon, sinon le panneau réafficherait les anciennes
+    // valeurs alors que la période appliquée a changé.
+    setStartDate(start)
+    setEndDate(end)
+    setAppliedStartDate(start)
+    setAppliedEndDate(end)
   }
 
   // Fonction pour réinitialiser les filtres

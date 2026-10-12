@@ -148,8 +148,8 @@ function SegmentCard({ segment }) {
           <div className="flex items-start gap-2 text-amber-900">
             <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
             <div className="text-[11px] leading-relaxed">
-              Le découpage de ce segment n'est pas disponible. Tu peux écouter
-              l'enregistrement complet et te placer autour de{' '}
+              Le découpage de ce segment n'est pas disponible. Tu peux écouter l'enregistrement
+              complet et te placer autour de{' '}
               <span className="font-medium tabular-nums">{formatDuration(segment.startTime)}</span>.
             </div>
           </div>

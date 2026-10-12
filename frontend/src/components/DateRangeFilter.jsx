@@ -1,76 +1,9 @@
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { getDatePreset } from '@/hooks/utils/filters/date-presets'
 import { CalendarDays, ChevronDown, RefreshCw, X } from 'lucide-react'
 import { useState } from 'react'
 import { cn } from '@/lib/utils'
-
-// Fonction utilitaire pour obtenir les dates selon les presets
-const getDatePreset = preset => {
-  const today = new Date()
-  const endDate = new Date(today)
-  endDate.setHours(23, 59, 59, 999)
-
-  let startDate = new Date(today)
-  startDate.setHours(0, 0, 0, 0)
-
-  switch (preset) {
-    case 'today':
-      startDate.setDate(today.getDate() + 1)
-      endDate.setDate(today.getDate())
-      break
-    case 'yesterday':
-      startDate.setDate(today.getDate() - 1)
-      endDate.setDate(today.getDate() - 1)
-      break
-    case 'last7days':
-      startDate.setDate(today.getDate() - 6)
-      break
-    case 'last14days':
-      startDate.setDate(today.getDate() - 13)
-      break
-    case 'last30days':
-      startDate.setDate(today.getDate() - 29)
-      break
-    case 'thisWeek': {
-      const dayOfWeek = today.getDay()
-      const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek
-      startDate.setDate(today.getDate() + mondayOffset)
-      break
-    }
-    case 'lastWeek': {
-      const lastWeekEnd = new Date(today)
-      lastWeekEnd.setDate(today.getDate() - today.getDay())
-      lastWeekEnd.setHours(23, 59, 59, 999)
-      const lastWeekStart = new Date(lastWeekEnd)
-      lastWeekStart.setDate(lastWeekEnd.getDate() - 6)
-      lastWeekStart.setHours(0, 0, 0, 0)
-      return {
-        start: lastWeekStart.toISOString().split('T')[0],
-        end: lastWeekEnd.toISOString().split('T')[0],
-      }
-    }
-    case 'thisMonth':
-      startDate.setDate(1)
-      break
-    case 'lastMonth': {
-      const lastMonthEnd = new Date(today.getFullYear(), today.getMonth(), 0)
-      const lastMonthStart = new Date(today.getFullYear(), today.getMonth() - 1, 1)
-      return {
-        start: lastMonthStart.toISOString().split('T')[0],
-        end: lastMonthEnd.toISOString().split('T')[0],
-      }
-    }
-    case 'all':
-      return { start: '', end: '' }
-    default:
-      break
-  }
-
-  return {
-    start: startDate.toISOString().split('T')[0],
-    end: endDate.toISOString().split('T')[0],
-  }
-}
 
 const DATE_PRESETS = [
   { id: 'today', label: "Aujourd'hui" },
@@ -120,10 +53,13 @@ export default function DateRangeFilter({
     const dates = getDatePreset(preset.id)
     onChangeStart?.(dates.start)
     onChangeEnd?.(dates.end)
-    setTimeout(() => {
-      onApply?.()
-      setOpen(false)
-    }, 80)
+    // Les dates sont passées EXPLICITEMENT à `onApply`. Auparavant il était appelé
+    // sans argument dans un setTimeout, donc via la référence capturée au rendu
+    // courant : sa closure tenait encore les anciennes dates et appliquait celles-là
+    // — vides au premier clic. Le délai n'y changeait rien, une fonction capturée ne
+    // se met pas à jour en attendant.
+    onApply?.(dates.start, dates.end)
+    setOpen(false)
   }
 
   const handleApply = () => {
@@ -155,7 +91,20 @@ export default function DateRangeFilter({
         </Button>
       </PopoverTrigger>
 
-      <PopoverContent align="start" className="w-80">
+      <PopoverContent
+        align="start"
+        className="w-80"
+        onInteractOutside={e => {
+          // Le calendrier natif de <input type="date"> s'ouvre HORS du DOM du popover :
+          // cliquer un jour est vu comme une interaction "extérieure" et fermait le popover
+          // avant de pouvoir cliquer « Appliquer ». On empêche la fermeture tant qu'un champ
+          // date est actif (calendrier ouvert) ; le clic-ailleurs normal ferme toujours.
+          const active = document.activeElement
+          if (active instanceof HTMLInputElement && active.type === 'date') {
+            e.preventDefault()
+          }
+        }}
+      >
         <div className="space-y-4">
           <p className="text-sm font-semibold">{title}</p>
 

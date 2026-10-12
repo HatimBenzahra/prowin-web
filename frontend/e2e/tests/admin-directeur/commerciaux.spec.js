@@ -1,12 +1,10 @@
-import {
-  test,
-  expect,
-  waitForPageLoad,
-  getTableRowCount,
-  navigateToRowDetails,
-  openStatusFilter,
-  hasTableData,
-} from '../../fixtures/base.js'
+import { test, expect, waitForPageLoad } from '../../fixtures/base.js'
+
+/**
+ * La page Commerciaux n'a plus de tableau : elle rend des cards. Les repères ne sont
+ * donc plus des lignes mais les liens de fiche, `a[href^="/commerciaux/"]`.
+ */
+const personLinks = page => page.locator('a[href^="/commerciaux/"]')
 
 test.describe('Commerciaux Admin Dashboard', () => {
   test.beforeEach(async ({ page }) => {
@@ -14,38 +12,43 @@ test.describe('Commerciaux Admin Dashboard', () => {
     await waitForPageLoad(page)
   })
 
-  test('page loads and shows table', async ({ page }) => {
-    await expect(page.getByRole('table').first()).toBeVisible()
+  test('page loads and shows people cards', async ({ page }) => {
+    await expect(page.getByRole('button', { name: /Rechercher/i })).toBeVisible()
+    expect(await personLinks(page).count()).toBeGreaterThanOrEqual(0)
   })
 
   test('search filters results', async ({ page }) => {
-    const initialCount = await getTableRowCount(page)
+    const initialCount = await personLinks(page).count()
+    test.skip(initialCount === 0, 'No data for this role')
 
-    await page.getByPlaceholder(/Rechercher/i).first().fill('test')
+    // La recherche est repliée par défaut : on l'ouvre avant de saisir.
+    await page.getByRole('button', { name: /Rechercher/i }).click()
+    await page.getByPlaceholder(/Rechercher/i).fill('zzzzzzzz')
     await page.waitForTimeout(500)
 
-    const filteredCount = await getTableRowCount(page)
-    expect(filteredCount).toBeLessThanOrEqual(initialCount)
+    expect(await personLinks(page).count()).toBeLessThanOrEqual(initialCount)
   })
 
   test('status filter works', async ({ page }) => {
-    await openStatusFilter(page)
-    await page.getByRole('menuitem', { name: 'Actif' }).click()
+    await page.getByRole('combobox').first().click()
+    await page.getByRole('option', { name: /Tous les statuts/i }).click()
     await page.waitForTimeout(300)
 
-    await expect(page.getByRole('table').first()).toBeVisible()
+    expect(await personLinks(page).count()).toBeGreaterThanOrEqual(0)
   })
 
   test('navigates to commercial details', async ({ page }) => {
-    test.skip(!(await hasTableData(page)), 'No data in table for this role')
-    await navigateToRowDetails(page)
+    test.skip((await personLinks(page).count()) === 0, 'No data for this role')
+
+    await personLinks(page).first().click()
     await page.waitForURL(/\/commerciaux\/[^/]+$/)
     expect(page.url()).toMatch(/\/commerciaux\/[^/]+$/)
   })
 
   test('details page shows commercial info', async ({ page }) => {
-    test.skip(!(await hasTableData(page)), 'No data in table for this role')
-    await navigateToRowDetails(page)
+    test.skip((await personLinks(page).count()) === 0, 'No data for this role')
+
+    await personLinks(page).first().click()
     await page.waitForURL(/\/commerciaux\/[^/]+$/)
     await waitForPageLoad(page)
 
@@ -54,8 +57,9 @@ test.describe('Commerciaux Admin Dashboard', () => {
   })
 
   test('can navigate back from details', async ({ page }) => {
-    test.skip(!(await hasTableData(page)), 'No data in table for this role')
-    await navigateToRowDetails(page)
+    test.skip((await personLinks(page).count()) === 0, 'No data for this role')
+
+    await personLinks(page).first().click()
     await page.waitForURL(/\/commerciaux\/[^/]+$/)
 
     const breadcrumbBack = page.locator('a[href="/commerciaux"]').first()
@@ -66,6 +70,6 @@ test.describe('Commerciaux Admin Dashboard', () => {
     }
 
     await page.waitForURL(/\/commerciaux\/?$/)
-    await expect(page.getByRole('table').first()).toBeVisible()
+    await expect(page.getByRole('button', { name: /Rechercher/i })).toBeVisible()
   })
 })

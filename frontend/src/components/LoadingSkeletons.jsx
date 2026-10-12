@@ -113,7 +113,7 @@ export function DetailsPageSkeleton() {
         </div>
         <div className="h-px bg-border mb-6" />
         <Card className="border-2">
-          <CardContent className="pt-6">
+          <CardContent>
             <div className="grid gap-6 md:grid-cols-2">
               {Array.from({ length: 6 }).map((_, index) => (
                 <div key={index} className="flex items-start gap-3">
@@ -152,7 +152,7 @@ export function DetailsPageSkeleton() {
           </div>
           <div className="h-px bg-border mb-6" />
           <Card className="border-2">
-            <CardContent className="pt-6">
+            <CardContent>
               <div className="space-y-4">
                 {Array.from({ length: 4 }).map((_, itemIndex) => (
                   <div key={itemIndex} className="flex items-center justify-between py-2">
@@ -177,7 +177,7 @@ export function ListSkeleton({ items = 5 }) {
     <div className="space-y-4">
       {Array.from({ length: items }).map((_, index) => (
         <Card key={index}>
-          <CardContent className="pt-6">
+          <CardContent>
             <div className="flex items-center gap-4">
               <Skeleton className="h-12 w-12 rounded-full" />
               <div className="flex-1 space-y-2">
