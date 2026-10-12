@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
-  Loader2,
   ThumbsUp,
   TrendingUp,
   Lightbulb,
@@ -153,6 +152,10 @@ export default function CoachingResultPanel({
   if (!analysis) return null
 
   const inProgress = isInProgress(analysis.status)
+  // Tant que l'analyse n'est pas prête, il n'y a ni verdict de conformité ni
+  // étape du plan : dire « aucun écart détecté » serait une affirmation fausse.
+  const isReady = analysis.status === 'READY'
+  const hasPlanSteps = stepGroups.shown.length > 0
   const hasScore = typeof analysis.score === 'number'
   const malus = typeof analysis.malus === 'number' ? analysis.malus : 0
   const hasMalus = malus > 0 && typeof analysis.scoreBeforeMalus === 'number'
@@ -208,8 +211,11 @@ export default function CoachingResultPanel({
 
           L'enregistrement ouvre la colonne de gauche et défile avec elle, d'un
           seul tenant : il n'est pas au-dessus des deux colonnes, sinon celle de
-          droite ne démarre qu'en dessous et laisse un vide en haut. */}
-      <div className="grid min-h-0 flex-1 gap-5 @4xl:grid-cols-2">
+          droite ne démarre qu'en dessous et laisse un vide en haut.
+
+          Sans étape du plan à afficher (analyse en attente, en cours, échouée),
+          une seule colonne : sinon la moitié droite reste vide. */}
+      <div className={cn('grid min-h-0 flex-1 gap-5', hasPlanSteps && '@4xl:grid-cols-2')}>
         <div className="min-w-0 space-y-5 overflow-y-auto @4xl:pr-1">
           {lead}
 
@@ -222,7 +228,7 @@ export default function CoachingResultPanel({
             </div>
           )}
 
-          {violations.length === 0 && (
+          {isReady && violations.length === 0 && (
             <Alert
               className={cn(
                 'p-3',
@@ -314,8 +320,8 @@ export default function CoachingResultPanel({
           )}
         </div>
 
-        <div className="min-w-0 overflow-y-auto @4xl:pl-1">
-          {stepGroups.shown.length > 0 && (
+        {hasPlanSteps && (
+          <div className="min-w-0 overflow-y-auto @4xl:pl-1">
             <div>
               <div className="mb-2 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
                 <h3 className="text-sm font-semibold">Respect du plan de vente</h3>
@@ -386,8 +392,8 @@ export default function CoachingResultPanel({
                 </p>
               )}
             </div>
-          )}
-        </div>
+          </div>
+        )}
       </div>
 
       {showScoreFooter && <ScoreFooter />}

@@ -98,10 +98,18 @@ export default function CoachingDetail({ analysis, onBack, onClose, backLabel = 
             <DialogDescription className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 [&>*+*]:before:mr-2 [&>*+*]:before:content-['·']">
               {meta.address && meta.address !== title && <span>{meta.address}</span>}
               {meta.date && <span>{formatDateTime(meta.date)}</span>}
-              <span className="inline-flex items-center gap-1">
-                <Clock className="h-3.5 w-3.5" />
-                {formatDuration(a.transcriptDurationSec)}
-              </span>
+              {/* La durée n'existe qu'une fois l'audio transcrit. */}
+              {typeof a.transcriptDurationSec === 'number' && (
+                <span className="inline-flex items-center gap-1">
+                  <Clock className="h-3.5 w-3.5" />
+                  {formatDuration(a.transcriptDurationSec)}
+                </span>
+              )}
+              {a.status === 'READY' && a.planSlug && (
+                <span>
+                  {a.planSlug} v{a.planVersion}
+                </span>
+              )}
             </DialogDescription>
             {a.statutPorte && (
               <div className="mt-2">
@@ -151,35 +159,27 @@ export default function CoachingDetail({ analysis, onBack, onClose, backLabel = 
               <StatusPill status={a.status} />
               <QualityPill quality={a.quality} />
             </div>
-            <div className="text-right">
-              <div className="text-3xl font-semibold leading-none">
-                {hasScore ? Math.round(a.score) : '—'}
-                <span className="text-base text-muted-foreground">/100</span>
-              </div>
-              {typeof a.confidence === 'number' && (
-                <div className="mt-1 text-xs text-muted-foreground">
-                  confiance {Math.round(a.confidence)}%
+            {hasScore && (
+              <div className="text-right">
+                <div className="text-3xl font-semibold leading-none">
+                  {Math.round(a.score)}
+                  <span className="text-base text-muted-foreground">/100</span>
                 </div>
-              )}
-            </div>
+                {typeof a.confidence === 'number' && (
+                  <div className="mt-1 text-xs text-muted-foreground">
+                    confiance {Math.round(a.confidence)}%
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
         {hasScore && <ScoreBar value={a.score} className="mt-3" />}
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden px-5 py-4">
-        <CoachingResultPanel
-          analysis={a}
-          recordingKey={a.s3KeyOriginal}
-          showAudio
-          showScoreFooter
-        />
-      </div>
-
-      <div className="flex items-center justify-end border-t px-5 py-3">
-        <span className="text-xs text-muted-foreground">
-          {a.planSlug} v{a.planVersion}
-        </span>
+        {/* Pas de pied de score : l'en-tête porte déjà score, barre et pastilles. */}
+        <CoachingResultPanel analysis={a} recordingKey={a.s3KeyOriginal} showAudio />
       </div>
     </>
   )
