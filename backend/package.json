@@ -41,6 +41,7 @@
     "graphql": "^16.11.0",
     "graphql-type-json": "^0.3.2",
     "gray-matter": "^4.0.3",
+    "http-proxy-middleware": "^3.0.7",
     "p-limit": "^7.3.0",
     "pg": "^8.22.0",
     "reflect-metadata": "^0.2.2",

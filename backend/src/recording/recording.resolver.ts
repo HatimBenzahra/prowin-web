@@ -8,8 +8,6 @@ import {
   RequestRecordingUploadInput,
   RecordingUploadDetails,
   ConfirmRecordingUploadInput,
-  ExtractionProgressDto,
-  ExtractionQueueItemDto,
   ListRecentRecordingsInput,
   BackfillRecordingsInput,
   BackfillRecordingsResult,
@@ -46,15 +44,6 @@ export class RecordingResolver {
     return this.svc.getStreamingUrl(key, user);
   }
 
-  @Query(() => String, { nullable: true })
-  @Roles('admin', 'directeur')
-  async getConversationStreamingUrl(
-    @Args('key') key: string,
-    @CurrentUser() user: any,
-  ): Promise<string | null> {
-    return this.svc.getConversationStreamingUrl(key, user);
-  }
-
   @Mutation(() => RecordingUploadDetails)
   @Roles('admin', 'directeur', 'manager', 'commercial')
   async requestRecordingUpload(
@@ -72,46 +61,6 @@ export class RecordingResolver {
     @Context() context: BearerRequestContext,
   ): Promise<RecordingItem> {
     return this.svc.confirmRecordingUpload(input, user, requestBearer(context));
-  }
-
-  @Query(() => ExtractionProgressDto, { nullable: true })
-  @Roles('admin', 'directeur')
-  getExtractionProgress(
-    @Args('key') key: string,
-  ): ExtractionProgressDto | null {
-    return this.svc.getExtractionProgress(key);
-  }
-
-  @Mutation(() => Boolean)
-  @Roles('admin', 'directeur')
-  async triggerConversationExtraction(
-    @Args('key') key: string,
-    @CurrentUser() user: any,
-  ): Promise<boolean> {
-    return this.svc.triggerConversationExtraction(key, user);
-  }
-
-  @Mutation(() => Int)
-  @Roles('admin', 'directeur')
-  async triggerBatchExtraction(
-    @Args({ name: 'keys', type: () => [String] }) keys: string[],
-    @CurrentUser() user: any,
-  ): Promise<number> {
-    return this.svc.triggerBatchExtraction(keys, user);
-  }
-
-  @Query(() => [ExtractionQueueItemDto])
-  @Roles('admin', 'directeur')
-  getExtractionQueue(): ExtractionQueueItemDto[] {
-    return this.svc.getExtractionQueue();
-  }
-
-  @Query(() => [String])
-  @Roles('admin', 'directeur')
-  async getProcessedKeys(
-    @Args({ name: 'keys', type: () => [String] }) keys: string[],
-  ): Promise<string[]> {
-    return this.svc.getProcessedKeys(keys);
   }
 
   @Query(() => PaginatedRecordingsResult)
@@ -155,15 +104,6 @@ export class RecordingResolver {
     @CurrentUser() user: any,
   ): Promise<RecordingSegmentDto[]> {
     return this.svc.getSegmentsByPorte(porteId, user);
-  }
-
-  @Query(() => [RecordingSegmentDto])
-  @Roles('admin', 'directeur')
-  async recordingSegmentsByKey(
-    @Args('s3Key') s3Key: string,
-    @CurrentUser() user: any,
-  ): Promise<RecordingSegmentDto[]> {
-    return this.svc.getSegmentsByKey(s3Key, user);
   }
 
   @Query(() => [RecordingSegmentDto])

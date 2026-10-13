@@ -68,10 +68,7 @@ import RecordingSegmentPlayer from '@/components/RecordingSegmentPlayer'
 import { useRecordingSegmentsByPorte } from '@/hooks/metier/api/portes'
 import { formatDateTimeFr, formatDateFr } from '@/lib/format-date'
 import { getStatusColor, getStatusLabel } from '@/constants/domain/porte-status'
-import {
-  formatDuration,
-  SpeechScoreBar,
-} from '@/pages-ADMIN-DIRECTEUR/ecoutes/EnregistrementComponents'
+import { formatDuration } from '@/pages-ADMIN-DIRECTEUR/ecoutes/EnregistrementComponents'
 import { cn } from '@/lib/utils'
 
 const AssignedZoneCard = lazy(() => import('./AssignedZoneCard'))
@@ -330,14 +327,9 @@ function InlineDoorDetails({ door }) {
 
       <div className="space-y-3">
         <div className="rounded-xl border border-border/60 bg-background p-4">
-          <div className="mb-3 flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
-              <Mic className="h-4 w-4 text-primary" />
-              <h3 className="text-sm font-semibold">Enregistrement</h3>
-            </div>
-            {!segmentsLoading && primarySegment?.speechScore != null && (
-              <SpeechScoreBar score={primarySegment.speechScore} />
-            )}
+          <div className="mb-3 flex items-center gap-2">
+            <Mic className="h-4 w-4 text-primary" />
+            <h3 className="text-sm font-semibold">Enregistrement</h3>
           </div>
 
           {segmentsLoading ? (

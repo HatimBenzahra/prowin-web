@@ -28,7 +28,6 @@ export function enrichRecordingWithUser(recording, userLookup, formatSize) {
       ? new Date(recording.lastModified).toLocaleTimeString()
       : '',
     duration: formatSize(recording.size),
-    hasConversation: recording.hasConversation,
     userId: user?.id,
     userType: user?.userType,
     userName,

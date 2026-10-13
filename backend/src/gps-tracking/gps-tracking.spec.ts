@@ -11,6 +11,7 @@ import { UserType } from '../zone/zone.dto';
 // un utilisateur au role donne, pour exercer le RolesGuard reellement.
 function makeContext(handler: (...args: any[]) => any, role: string): any {
   const ctx = {
+    getType: () => 'graphql',
     getHandler: () => handler,
     getClass: () => GpsTrackingResolver,
     getArgByIndex: () => ({ req: { user: { id: 42, role } } }),

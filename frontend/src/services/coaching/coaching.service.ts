@@ -266,16 +266,14 @@ const SET_SYNTHESIS_CRON = `
 `
 
 export class CoachingService {
-  /** Analyses existantes pour un lot de clés S3 (map côté UI). */
+  /**
+   * Analyses existantes pour un lot de clés S3 (map côté UI). Lève l'erreur : une
+   * liste vide doit signifier « aucune analyse », jamais « appel échoué ».
+   */
   static async byS3Keys(s3Keys: string[]): Promise<any[]> {
     if (!s3Keys?.length) return []
-    try {
-      const data = await graphqlClient.request(BY_S3_KEYS, { s3Keys })
-      return data.coachingByS3Keys || []
-    } catch (error) {
-      console.error('Erreur coachingByS3Keys:', error)
-      return []
-    }
+    const data = await graphqlClient.request(BY_S3_KEYS, { s3Keys })
+    return data.coachingByS3Keys || []
   }
 
   /** Liste paginée d'analyses (filtrable par commercial, statut…). */

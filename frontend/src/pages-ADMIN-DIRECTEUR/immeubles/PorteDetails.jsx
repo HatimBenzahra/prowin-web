@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import { usePorteDetailsLogic } from './usePorteDetailsLogic'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -12,28 +11,18 @@ import {
   Calendar,
   MessageSquare,
   DoorOpen,
-  ChevronDown,
-  ChevronUp,
   Loader2,
   PlayCircle,
-  AlertTriangle,
 } from 'lucide-react'
 import { getStatusLabel, getStatusColor } from '@/constants/domain/porte-status'
 import PorteHistoriqueTimeline from './components/PorteHistoriqueTimeline'
-import {
-  SpeechScoreBar,
-  formatDuration,
-} from '@/pages-ADMIN-DIRECTEUR/ecoutes/EnregistrementComponents'
+import { formatDuration } from '@/pages-ADMIN-DIRECTEUR/ecoutes/EnregistrementComponents'
 import AudioPlayer from '@/components/AudioPlayer'
-import { RecordingService } from '@/services/audio'
+import { useSegmentAudio } from '@/hooks/ecoutes/useSegmentAudio'
 
 function SegmentCard({ segment }) {
-  const [expanded, setExpanded] = useState(false)
-  const [segmentUrl, setSegmentUrl] = useState(null)
-  const [loadingSegment, setLoadingSegment] = useState(false)
-  const [originalUrl, setOriginalUrl] = useState(null)
-  const [loadingOriginal, setLoadingOriginal] = useState(false)
-  const [audioError, setAudioError] = useState(null)
+  const { audioKey, audioUrl, loadingAudio, audioError, loadAudio, onWavesurferReady } =
+    useSegmentAudio(segment)
   const date = new Date(segment.createdAt)
   const dateStr = date.toLocaleDateString('fr-FR', {
     day: '2-digit',
@@ -42,45 +31,6 @@ function SegmentCard({ segment }) {
   })
   const timeStr = date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
   const duration = formatDuration(segment.durationSec)
-
-  const truncateLimit = 180
-  const hasLongTranscription = segment.transcription && segment.transcription.length > truncateLimit
-  const displayedTranscription =
-    hasLongTranscription && !expanded
-      ? segment.transcription.slice(0, truncateLimit) + '…'
-      : segment.transcription
-  const canLoadSegment = Boolean(segment.s3KeySegment)
-  const canLoadOriginal = !canLoadSegment && segment.s3KeyOriginal
-
-  const handleLoadSegment = async () => {
-    if (!segment.s3KeySegment || loadingSegment) return
-
-    setLoadingSegment(true)
-    setAudioError(null)
-    try {
-      const url = await RecordingService.getStreamingUrl(segment.s3KeySegment)
-      setSegmentUrl(url)
-    } catch {
-      setAudioError("Impossible de charger l'audio du segment.")
-    } finally {
-      setLoadingSegment(false)
-    }
-  }
-
-  const handleLoadOriginal = async () => {
-    if (!segment.s3KeyOriginal || loadingOriginal) return
-
-    setLoadingOriginal(true)
-    setAudioError(null)
-    try {
-      const url = await RecordingService.getStreamingUrl(segment.s3KeyOriginal)
-      setOriginalUrl(url)
-    } catch {
-      setAudioError("Impossible de charger l'enregistrement complet.")
-    } finally {
-      setLoadingOriginal(false)
-    }
-  }
 
   return (
     <div className="rounded-xl border border-border/60 hover:border-border hover:shadow-sm transition-all duration-200 bg-card p-3.5">
@@ -103,105 +53,30 @@ function SegmentCard({ segment }) {
               {getStatusLabel(segment.statut)}
             </Badge>
           )}
-          {segment.speechScore != null && <SpeechScoreBar score={segment.speechScore} />}
-          {segment.status && (
-            <Badge variant="outline" className="text-[10px]">
-              {segment.status}
-            </Badge>
-          )}
         </div>
       </div>
 
-      {segmentUrl ? (
-        <AudioPlayer src={segmentUrl} />
-      ) : originalUrl ? (
-        <div className="space-y-2">
-          <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-800">
-            Segment non découpé. Audio complet chargé, passage à écouter autour de{' '}
-            <span className="font-medium tabular-nums">{formatDuration(segment.startTime)}</span>.
-          </div>
-          <AudioPlayer src={originalUrl} />
-        </div>
-      ) : segment.status === 'PENDING' || segment.status === 'PROCESSING' ? (
-        <div className="flex items-center gap-2 py-3 px-3 rounded-lg bg-muted/30 border border-border/40">
-          <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
-          <span className="text-[11px] text-muted-foreground">Traitement audio en cours...</span>
-        </div>
-      ) : canLoadSegment ? (
+      {audioUrl ? (
+        <AudioPlayer src={audioUrl} onWavesurferReady={onWavesurferReady} />
+      ) : audioKey ? (
         <Button
           type="button"
           size="sm"
           variant="outline"
-          onClick={handleLoadSegment}
-          disabled={loadingSegment}
+          onClick={loadAudio}
+          disabled={loadingAudio}
           className="h-8 gap-1.5"
         >
-          {loadingSegment ? (
+          {loadingAudio ? (
             <Loader2 className="h-3.5 w-3.5 animate-spin" />
           ) : (
             <PlayCircle className="h-3.5 w-3.5" />
           )}
           Charger l'audio
         </Button>
-      ) : canLoadOriginal ? (
-        <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 space-y-2">
-          <div className="flex items-start gap-2 text-amber-900">
-            <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
-            <div className="text-[11px] leading-relaxed">
-              Le découpage de ce segment n'est pas disponible. Tu peux écouter l'enregistrement
-              complet et te placer autour de{' '}
-              <span className="font-medium tabular-nums">{formatDuration(segment.startTime)}</span>.
-            </div>
-          </div>
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            onClick={handleLoadOriginal}
-            disabled={loadingOriginal}
-            className="h-8 gap-1.5 bg-background"
-          >
-            {loadingOriginal ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            ) : (
-              <PlayCircle className="h-3.5 w-3.5" />
-            )}
-            Charger l'audio complet
-          </Button>
-        </div>
       ) : null}
 
       {audioError && <p className="mt-2 text-[11px] text-red-600">{audioError}</p>}
-
-      {segment.transcription && (
-        <div className="bg-muted/40 rounded-lg p-2.5 border border-border/40">
-          <div className="flex items-start gap-1.5">
-            <MessageSquare className="h-3 w-3 mt-0.5 shrink-0 text-muted-foreground/60" />
-            <div>
-              <p className="text-[11px] italic text-muted-foreground leading-relaxed">
-                {displayedTranscription}
-              </p>
-              {hasLongTranscription && (
-                <button
-                  type="button"
-                  onClick={() => setExpanded(v => !v)}
-                  className="mt-1 text-[11px] text-primary hover:underline flex items-center gap-0.5"
-                >
-                  {expanded ? (
-                    <>
-                      Voir moins <ChevronUp className="h-3 w-3" />
-                    </>
-                  ) : (
-                    <>
-                      Voir plus <ChevronDown className="h-3 w-3" />
-                    </>
-                  )}
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   )
 }

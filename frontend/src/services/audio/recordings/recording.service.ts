@@ -20,51 +20,6 @@ const GET_STREAMING_URL = `
   }
 `
 
-const GET_CONVERSATION_STREAMING_URL = `
-  query GetConversationStreamingUrl($key: String!) {
-    getConversationStreamingUrl(key: $key)
-  }
-`
-
-const TRIGGER_CONVERSATION_EXTRACTION = `
-  mutation TriggerConversationExtraction($key: String!) {
-    triggerConversationExtraction(key: $key)
-  }
-`
-
-const GET_EXTRACTION_PROGRESS = `
-  query GetExtractionProgress($key: String!) {
-    getExtractionProgress(key: $key) {
-      step
-      current
-      total
-    }
-  }
-`
-
-const TRIGGER_BATCH_EXTRACTION = `
-  mutation TriggerBatchExtraction($keys: [String!]!) {
-    triggerBatchExtraction(keys: $keys)
-  }
-`
-
-const GET_EXTRACTION_QUEUE = `
-  query GetExtractionQueue {
-    getExtractionQueue {
-      key
-      step
-      current
-      total
-    }
-  }
-`
-
-const GET_PROCESSED_KEYS = `
-  query GetProcessedKeys($keys: [String!]!) {
-    getProcessedKeys(keys: $keys)
-  }
-`
-
 const LIST_RECENT_RECORDINGS = `
   query ListRecentRecordings($input: ListRecentRecordingsInput!) {
     listRecentRecordings(input: $input) {
@@ -72,7 +27,6 @@ const LIST_RECENT_RECORDINGS = `
         key
         size
         lastModified
-        hasConversation
       }
       totalCount
     }
@@ -87,27 +41,6 @@ const GET_SPEECH_SCORES = `
       totalDurationSec
       speechDurationSec
       status
-    }
-  }
-`
-
-const GET_RECORDING_SEGMENTS_BY_KEY = `
-  query RecordingSegmentsByKey($s3Key: String!) {
-    recordingSegmentsByKey(s3Key: $s3Key) {
-      id
-      porteId
-      porteNumero
-      porteEtage
-      immeubleAdresse
-      statut
-      startTime
-      endTime
-      durationSec
-      transcription
-      speechScore
-      status
-      streamingUrl
-      createdAt
     }
   }
 `
@@ -204,55 +137,6 @@ export class RecordingService {
     }
   }
 
-  /**
-   * Télécharge un enregistrement
-   */
-  static async getConversationStreamingUrl(key: string): Promise<string | null> {
-    try {
-      const data = await graphqlClient.request(GET_CONVERSATION_STREAMING_URL, { key })
-      return data.getConversationStreamingUrl || null
-    } catch {
-      return null
-    }
-  }
-
-  static async triggerConversationExtraction(key: string): Promise<boolean> {
-    const data = await graphqlClient.request(TRIGGER_CONVERSATION_EXTRACTION, { key })
-    return data.triggerConversationExtraction
-  }
-
-  static async getExtractionProgress(key: string): Promise<{ step: string; current: number; total: number } | null> {
-    try {
-      const data = await graphqlClient.request(GET_EXTRACTION_PROGRESS, { key })
-      return data.getExtractionProgress || null
-    } catch {
-      return null
-    }
-  }
-
-  static async triggerBatchExtraction(keys: string[]): Promise<number> {
-    const data = await graphqlClient.request(TRIGGER_BATCH_EXTRACTION, { keys })
-    return data.triggerBatchExtraction
-  }
-
-  static async getExtractionQueue(): Promise<{ key: string; step: string; current: number; total: number }[]> {
-    try {
-      const data = await graphqlClient.request(GET_EXTRACTION_QUEUE)
-      return data.getExtractionQueue || []
-    } catch {
-      return []
-    }
-  }
-
-  static async getProcessedKeys(keys: string[]): Promise<Set<string>> {
-    try {
-      const data = await graphqlClient.request(GET_PROCESSED_KEYS, { keys })
-      return new Set(data.getProcessedKeys || [])
-    } catch {
-      return new Set()
-    }
-  }
-
   static async getRecentRecordings(
     limit = 60
   ): Promise<{ items: RecordingData[]; totalCount: number }> {
@@ -282,6 +166,9 @@ export class RecordingService {
     }
   }
 
+  /**
+   * Télécharge un enregistrement
+   */
   static downloadRecording(url: string, filename?: string): void {
     if (!url) return
 
@@ -292,19 +179,6 @@ export class RecordingService {
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
-  }
-
-  static async getSegmentsByKey(s3Key: string): Promise<any[]> {
-    try {
-      const response = await graphqlClient.request<{ recordingSegmentsByKey: any[] }>(
-        GET_RECORDING_SEGMENTS_BY_KEY,
-        { s3Key },
-      )
-      return response.recordingSegmentsByKey || []
-    } catch (error) {
-      Logger.error('Failed to load recording segments', error)
-      return []
-    }
   }
 }
 

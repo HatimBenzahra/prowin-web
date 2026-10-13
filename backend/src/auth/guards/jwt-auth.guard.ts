@@ -5,9 +5,9 @@ import {
   UnauthorizedException,
   Logger,
 } from '@nestjs/common';
-import { GqlExecutionContext } from '@nestjs/graphql';
 import axios from 'axios';
 import { PrismaService } from '../../prisma.service';
+import { requestFromContext } from './request-from-context';
 
 @Injectable()
 export class JwtAuthGuard implements CanActivate {
@@ -20,9 +20,7 @@ export class JwtAuthGuard implements CanActivate {
   constructor(private readonly prisma: PrismaService) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    const gqlContext = GqlExecutionContext.create(context);
-    const ctx = gqlContext.getContext();
-    const request = ctx.req;
+    const request = requestFromContext(context);
 
     // Extraire le token du header Authorization
     const authHeader = request.headers.authorization;

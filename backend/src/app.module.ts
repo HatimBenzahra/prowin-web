@@ -22,6 +22,7 @@ import { SearchModule } from './search/search.module';
 import { GpsTrackingModule } from './gps-tracking/gps-tracking.module';
 import { AcquiscanModule } from './acquiscan/acquiscan.module';
 import { NotificationsModule } from './notifications/notifications.module';
+import { KioskProxyModule } from './kiosk-proxy/kiosk-proxy.module';
 
 @Module({
   imports: [
@@ -50,6 +51,7 @@ import { NotificationsModule } from './notifications/notifications.module';
     GpsTrackingModule,
     AcquiscanModule,
     NotificationsModule,
+    KioskProxyModule,
   ],
   controllers: [AppController],
   providers: [AppService, PrismaService],

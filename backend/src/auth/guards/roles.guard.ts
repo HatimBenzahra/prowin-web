@@ -6,8 +6,8 @@ import {
   Logger,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { GqlExecutionContext } from '@nestjs/graphql';
 import { ROLES_KEY } from '../decorators/roles.decorator';
+import { requestFromContext } from './request-from-context';
 
 @Injectable()
 export class RolesGuard implements CanActivate {
@@ -27,10 +27,8 @@ export class RolesGuard implements CanActivate {
       return true;
     }
 
-    // Récupérer l'utilisateur du contexte GraphQL
-    const gqlContext = GqlExecutionContext.create(context);
-    const ctx = gqlContext.getContext();
-    const user = ctx.req.user;
+    // Utilisateur posé par JwtAuthGuard sur la requête (GraphQL ou REST)
+    const user = requestFromContext(context).user;
 
     if (!user) {
       this.logger.error('❌ Utilisateur non authentifié');

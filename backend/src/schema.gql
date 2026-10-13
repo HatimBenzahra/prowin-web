@@ -633,19 +633,6 @@ type EtageInStatistics {
   etage: Int!
 }
 
-type ExtractionProgressDto {
-  current: Int!
-  step: String!
-  total: Int!
-}
-
-type ExtractionQueueItemDto {
-  current: Int!
-  key: String!
-  step: String!
-  total: Int!
-}
-
 type GlobalSearchResult {
   groups: [SearchResultGroup!]!
   totalCount: Int!
@@ -865,8 +852,6 @@ type Mutation {
   syncContrats: SyncContratsResult!
   syncManagerStats(managerId: Int!): String!
   syncOffres: SyncOffresResult!
-  triggerBatchExtraction(keys: [String!]!): Int!
-  triggerConversationExtraction(key: String!): Boolean!
   unassignUser(userId: Int!, userType: UserType!): Boolean!
   unassignZoneFromCommercial(commercialId: Int!, zoneId: Int!): Boolean!
   updateBadgeDefinition(id: Int!, input: UpdateBadgeDefinitionInput!): BadgeDefinitionType!
@@ -1008,10 +993,6 @@ type Query {
   egressState(egressId: String!): EgressState!
   getActiveRooms: [ActiveRoom!]!
   getActiveSessions: [MonitoringSession!]!
-  getConversationStreamingUrl(key: String!): String
-  getExtractionProgress(key: String!): ExtractionProgressDto
-  getExtractionQueue: [ExtractionQueueItemDto!]!
-  getProcessedKeys(keys: [String!]!): [String!]!
   getRecordingSpeechScores(keys: [String!]!): [SpeechScoreDto!]!
   getStreamingUrl(key: String!): String!
   globalSearch(limit: Int! = 5, query: String!): GlobalSearchResult!
@@ -1042,7 +1023,6 @@ type Query {
   ranking(contractStatuses: [ContractRankingStatus!] = [VALIDE], includeContratFinie: Boolean! = false, period: RankPeriod!, periodKey: String!): [RankSnapshotType!]!
   recordingSegmentsByCommercial(commercialId: Int!): [RecordingSegmentDto!]!
   recordingSegmentsByImmeuble(immeubleId: Int!): [RecordingSegmentDto!]!
-  recordingSegmentsByKey(s3Key: String!): [RecordingSegmentDto!]!
   recordingSegmentsByManager(managerId: Int!): [RecordingSegmentDto!]!
   recordingSegmentsByPorte(porteId: Int!): [RecordingSegmentDto!]!
   recordingSegmentsToday(limit: Int! = 20, statut: String): [RecordingSegmentDto!]!
@@ -1097,7 +1077,6 @@ type RankSnapshotType {
 }
 
 type RecordingItem {
-  hasConversation: Boolean
   key: String!
   lastModified: DateTime
   size: Float
@@ -1127,12 +1106,10 @@ type RecordingSegmentDto {
   porteNumero: String
   s3KeyOriginal: String
   s3KeySegment: String
-  speechScore: Int
   startTime: Float!
   status: String!
   statut: String
   streamingUrl: String
-  transcription: String
 }
 
 type RecordingUploadDetails {

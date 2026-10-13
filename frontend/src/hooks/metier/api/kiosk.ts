@@ -163,27 +163,6 @@ export function useKioskInspectApk() {
   })
 }
 
-export function useKioskToggleRelease() {
-  const queryClient = useQueryClient()
-  return useMutation({
-    mutationFn: ({ releaseId, active }: { releaseId: string; active: boolean }) =>
-      kioskApi.toggleRelease(releaseId, active),
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: kioskKeys.releases() })
-    },
-  })
-}
-
-export function useKioskDeleteRelease() {
-  const queryClient = useQueryClient()
-  return useMutation({
-    mutationFn: (releaseId: string) => kioskApi.deleteRelease(releaseId),
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: kioskKeys.releases() })
-    },
-  })
-}
-
 export function useKioskDeploy() {
   const queryClient = useQueryClient()
   return useMutation({

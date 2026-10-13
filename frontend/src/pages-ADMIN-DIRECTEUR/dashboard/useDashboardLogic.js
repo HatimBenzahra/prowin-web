@@ -24,8 +24,6 @@ const GET_SEGMENTS_TODAY = `
       commercialNom
       statut
       durationSec
-      transcription
-      speechScore
       status
       streamingUrl
       createdAt
@@ -73,15 +71,15 @@ export function useDashboardLogic() {
   const { data: portesModifiedToday, loading: loadingPortesModified } = usePortesModifiedToday()
   const { data: rdvToday, loading: loadingRdvToday } = usePortesRdvToday()
 
-  const fetchSegments = useCallback(async (statut, { silent = false } = {}) => {
-    if (!silent) setSegmentsLoading(true)
+  const fetchSegments = useCallback(async statut => {
+    setSegmentsLoading(true)
     try {
       const response = await gql(GET_SEGMENTS_TODAY, { statut, limit: 15 })
       setSegments(response.recordingSegmentsToday || [])
     } catch {
       setSegments([])
     } finally {
-      if (!silent) setSegmentsLoading(false)
+      setSegmentsLoading(false)
     }
   }, [])
 
@@ -89,15 +87,6 @@ export function useDashboardLogic() {
     sessionStorage.setItem('dashboard-segment-filter', segmentFilter || '')
     fetchSegments(segmentFilter === 'TOUS' ? null : segmentFilter)
   }, [segmentFilter, fetchSegments])
-
-  // Poll toutes les 5s tant qu'il y a des segments PENDING/PROCESSING
-  useEffect(() => {
-    const hasPending = segments.some(s => s.status === 'PENDING' || s.status === 'PROCESSING')
-    if (!hasPending) return
-    const statut = segmentFilter === 'TOUS' ? null : segmentFilter
-    const interval = setInterval(() => fetchSegments(statut, { silent: true }), 5000)
-    return () => clearInterval(interval)
-  }, [segments, segmentFilter, fetchSegments])
 
   const today = useMemo(() => {
     const d = new Date()

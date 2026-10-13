@@ -1,17 +1,11 @@
 import React from 'react'
 import { RefreshCw } from 'lucide-react'
-import {
-  useKioskReleases,
-  useKioskToggleRelease,
-  useKioskDeleteRelease,
-} from '@/hooks/metier/api/kiosk'
+import { useKioskReleases } from '@/hooks/metier/api/kiosk'
 import ReleasesTab from './components/ReleasesTab'
 import KioskErrorState from './components/KioskErrorState'
 
 export default function KioskReleasesPage() {
   const releasesQuery = useKioskReleases()
-  const toggleReleaseMutation = useKioskToggleRelease()
-  const deleteReleaseMutation = useKioskDeleteRelease()
 
   if (releasesQuery.isLoading) {
     return (
@@ -32,7 +26,7 @@ export default function KioskReleasesPage() {
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Releases</h1>
           <p className="text-muted-foreground mt-1">
-            Gestion des versions APK pour les déploiements OTA
+            Versions de ProWin et du kiosk distribuées aux tablettes
           </p>
         </div>
         <KioskErrorState error={releasesQuery.error} onRetry={() => releasesQuery.refetch()} />
@@ -45,16 +39,11 @@ export default function KioskReleasesPage() {
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Releases</h1>
         <p className="text-muted-foreground mt-1">
-          Gestion des versions APK pour les déploiements OTA
+          Versions de ProWin et du kiosk distribuées aux tablettes
         </p>
       </div>
 
-      <ReleasesTab
-        releases={releasesQuery.data || []}
-        loading={releasesQuery.isLoading}
-        onToggle={(releaseId, active) => toggleReleaseMutation.mutate({ releaseId, active })}
-        onDelete={releaseId => deleteReleaseMutation.mutate(releaseId)}
-      />
+      <ReleasesTab releases={releasesQuery.data || []} loading={releasesQuery.isLoading} />
     </div>
   )
 }
