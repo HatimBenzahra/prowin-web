@@ -69,8 +69,11 @@ function VerdictIcon({ status }) {
   return <XCircle className={cn(cls, 'text-red-600')} />
 }
 
-/** Preuves d'un critère : citations horodatées quand le moteur les a situées. */
-function CriterionEvidence({ criterion }) {
+/**
+ * Preuves d'un critère : citations horodatées quand le moteur les a situées. Avec
+ * `onSeek`, l'horodatage cale le lecteur de l'hôte sur la citation.
+ */
+function CriterionEvidence({ criterion, onSeek }) {
   const refs = criterion.evidenceRefs?.length
     ? criterion.evidenceRefs
     : (criterion.evidence || []).map(quote => ({ quote }))
@@ -81,8 +84,20 @@ function CriterionEvidence({ criterion }) {
         const at = formatTimestamp(e.startSec)
         return (
           <li key={i} className="text-xs italic text-muted-foreground">
-            {at && <span className="mr-1.5 font-mono not-italic tabular-nums">{at}</span>}«{' '}
-            {e.quote} »
+            {at &&
+              (onSeek ? (
+                <button
+                  type="button"
+                  onClick={() => onSeek(e.startSec)}
+                  className="mr-1.5 rounded font-mono not-italic tabular-nums text-primary underline-offset-2 hover:underline"
+                  title="Écouter ce passage"
+                >
+                  {at}
+                </button>
+              ) : (
+                <span className="mr-1.5 font-mono not-italic tabular-nums">{at}</span>
+              ))}
+            « {e.quote} »
           </li>
         )
       })}
@@ -123,6 +138,8 @@ function ListBlock({ icon: Icon, title, items, tone }) {
  * modal de la porte y met son propre lecteur d'enregistrement). Il défile avec
  * cette colonne, d'un seul tenant, plutôt que de coiffer les deux — sinon le
  * plan de vente ne démarre qu'en dessous et laisse un vide en haut à droite.
+ *
+ * `onSeek(sec)` : rend les horodatages des preuves cliquables (lecteur de l'hôte).
  */
 export default function CoachingResultPanel({
   analysis,
@@ -131,6 +148,7 @@ export default function CoachingResultPanel({
   showScoreFooter = false,
   lead = null,
   onAnalysisChange,
+  onSeek,
 }) {
   const [audioUrl, setAudioUrl] = useState(null)
   // Dernière correction du résultat de visite, tant que l'appelant ne fournit pas mieux.
@@ -424,7 +442,7 @@ export default function CoachingResultPanel({
                                 </span>
                               )}
                             </div>
-                            <CriterionEvidence criterion={c} />
+                            <CriterionEvidence criterion={c} onSeek={onSeek} />
                             {c.comment && (
                               <p className="mt-1.5 text-xs text-foreground/80">{c.comment}</p>
                             )}

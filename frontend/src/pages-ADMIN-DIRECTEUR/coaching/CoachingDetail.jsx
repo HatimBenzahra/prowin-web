@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { ArrowLeft, ChevronRight, Clock, Loader2, RotateCw, Star, X } from 'lucide-react'
 import { DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
@@ -32,12 +32,33 @@ const POLL_MS = 6000
  * tous les modaux : en-tête cohérent (fil d'ariane optionnel + titre + score +
  * favori + relancer + fermer) puis le corps `CoachingResultPanel`.
  * Autonome : gère localement le favori et le relancement.
+ *
+ * `embedded` : hors Dialog (panneau latéral de la page Coachings) ; l'hôte affiche
+ * déjà titre, porte et favori, il ne reste ici que l'état, le score et la relance.
+ * `showAudio` / `onSeek` : l'hôte peut garder son propre lecteur et y caler les preuves.
+ * `onAnalysisChange` : chaque nouvel état (suivi, relance, correction) remonte à l'hôte.
  */
-export default function CoachingDetail({ analysis, onBack, onClose, backLabel = 'Analysés' }) {
+export default function CoachingDetail({
+  analysis,
+  onBack,
+  onClose,
+  backLabel = 'Analysés',
+  embedded = false,
+  showAudio = true,
+  onSeek,
+  onAnalysisChange,
+}) {
   const [a, setA] = useState(analysis)
   const [favori, setFavori] = useState(analysis?.favori ?? false)
   const [relaunching, setRelaunching] = useState(false)
   const [confirmRelaunch, setConfirmRelaunch] = useState(false)
+  // Ref : le suivi en cours ne doit pas redémarrer quand l'hôte recrée son callback.
+  const onChangeRef = useRef(onAnalysisChange)
+  onChangeRef.current = onAnalysisChange
+  const update = useCallback(next => {
+    setA(next)
+    onChangeRef.current?.(next)
+  }, [])
 
   useEffect(() => {
     setA(analysis)
@@ -51,10 +72,10 @@ export default function CoachingDetail({ analysis, onBack, onClose, backLabel = 
     if (!running) return
     const t = setInterval(async () => {
       const fresh = await CoachingService.get(a.id)
-      if (fresh) setA(fresh)
+      if (fresh) update(fresh)
     }, POLL_MS)
     return () => clearInterval(t)
-  }, [running, a?.id])
+  }, [running, a?.id, update])
 
   if (!a) return null
 
@@ -78,7 +99,7 @@ export default function CoachingDetail({ analysis, onBack, onClose, backLabel = 
     setRelaunching(true)
     try {
       const updated = await CoachingService.relaunch(a.id)
-      if (updated) setA(updated)
+      if (updated) update(updated)
     } finally {
       setRelaunching(false)
     }
@@ -88,58 +109,71 @@ export default function CoachingDetail({ analysis, onBack, onClose, backLabel = 
     <>
       <div className="border-b p-5">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
-          <div className="min-w-0">
-            {onBack && (
-              <div className="mb-1 flex items-center gap-2 text-sm">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-7 shrink-0 gap-1 px-2"
-                  onClick={onBack}
-                >
-                  <ArrowLeft className="h-4 w-4" />
-                  Retour
-                </Button>
-                <span className="shrink-0 text-muted-foreground">{backLabel}</span>
-                <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-              </div>
-            )}
-            <DialogTitle className="truncate text-lg">{title}</DialogTitle>
-            <DialogDescription className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 [&>*+*]:before:mr-2 [&>*+*]:before:content-['·']">
-              {meta.address && meta.address !== title && <span>{meta.address}</span>}
-              {meta.date && <span>{formatDateTime(meta.date)}</span>}
-              {/* La durée n'existe qu'une fois l'audio transcrit. */}
-              {typeof a.transcriptDurationSec === 'number' && (
-                <span className="inline-flex items-center gap-1">
-                  <Clock className="h-3.5 w-3.5" />
-                  {formatDuration(a.transcriptDurationSec)}
-                </span>
-              )}
+          {embedded ? (
+            <div className="min-w-0">
+              <h3 className="text-sm font-semibold">Coaching IA</h3>
               {a.status === 'READY' && a.planSlug && (
-                <span>
+                <p className="mt-0.5 text-xs text-muted-foreground">
                   {a.planSlug} v{a.planVersion}
-                </span>
+                </p>
               )}
-            </DialogDescription>
-            {a.statutPorte && (
-              <div className="mt-2">
-                <PorteStatutPill statut={a.statutPorte} />
-              </div>
-            )}
-          </div>
+            </div>
+          ) : (
+            <div className="min-w-0">
+              {onBack && (
+                <div className="mb-1 flex items-center gap-2 text-sm">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 shrink-0 gap-1 px-2"
+                    onClick={onBack}
+                  >
+                    <ArrowLeft className="h-4 w-4" />
+                    Retour
+                  </Button>
+                  <span className="shrink-0 text-muted-foreground">{backLabel}</span>
+                  <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                </div>
+              )}
+              <DialogTitle className="truncate text-lg">{title}</DialogTitle>
+              <DialogDescription className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 [&>*+*]:before:mr-2 [&>*+*]:before:content-['·']">
+                {meta.address && meta.address !== title && <span>{meta.address}</span>}
+                {meta.date && <span>{formatDateTime(meta.date)}</span>}
+                {/* La durée n'existe qu'une fois l'audio transcrit. */}
+                {typeof a.transcriptDurationSec === 'number' && (
+                  <span className="inline-flex items-center gap-1">
+                    <Clock className="h-3.5 w-3.5" />
+                    {formatDuration(a.transcriptDurationSec)}
+                  </span>
+                )}
+                {a.status === 'READY' && a.planSlug && (
+                  <span>
+                    {a.planSlug} v{a.planVersion}
+                  </span>
+                )}
+              </DialogDescription>
+              {a.statutPorte && (
+                <div className="mt-2">
+                  <PorteStatutPill statut={a.statutPorte} />
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="flex flex-col items-start gap-2 sm:items-end">
             <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={toggleFavori}
-                className={cn(favori && 'border-amber-400 text-amber-600')}
-                aria-label={favori ? 'Retirer des favoris' : 'Ajouter aux favoris'}
-              >
-                <Star className={cn('h-4 w-4', favori && 'fill-amber-500 text-amber-500')} />
-                Favori
-              </Button>
+              {!embedded && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={toggleFavori}
+                  className={cn(favori && 'border-amber-400 text-amber-600')}
+                  aria-label={favori ? 'Retirer des favoris' : 'Ajouter aux favoris'}
+                >
+                  <Star className={cn('h-4 w-4', favori && 'fill-amber-500 text-amber-500')} />
+                  Favori
+                </Button>
+              )}
               <Button
                 variant="outline"
                 size="sm"
@@ -205,8 +239,9 @@ export default function CoachingDetail({ analysis, onBack, onClose, backLabel = 
         <CoachingResultPanel
           analysis={a}
           recordingKey={a.s3KeyOriginal}
-          showAudio
-          onAnalysisChange={setA}
+          showAudio={showAudio}
+          onAnalysisChange={update}
+          onSeek={onSeek}
         />
       </div>
       <ConfirmDialog

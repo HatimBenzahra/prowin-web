@@ -32,6 +32,7 @@ const ZoneDetails = lazy(() => import('@/pages-ADMIN-DIRECTEUR/zones/ZoneDetails
 const GPSTracking = lazy(() => import('@/pages-ADMIN-DIRECTEUR/gps-tracking/GPSTracking'))
 const Enregistrement = lazy(() => import('@/pages-ADMIN-DIRECTEUR/ecoutes/Enregistrement'))
 const CoachingIA = lazy(() => import('@/pages-ADMIN-DIRECTEUR/coaching/CoachingIA'))
+const Coachings = lazy(() => import('@/pages-ADMIN-DIRECTEUR/coachings/Coachings'))
 const Statistiques = lazy(() => import('@/pages-ADMIN-DIRECTEUR/statistiques/Statistiques'))
 const Gestion = lazy(() => import('@/pages-ADMIN-DIRECTEUR/gestion/Gestion'))
 const Gamification = lazy(() => import('@/pages-ADMIN-DIRECTEUR/gamification/Gamification'))
@@ -88,6 +89,7 @@ function AdminLayout() {
     'gps-tracking': { label: 'Suivi GPS', href: '/gps-tracking' },
     ecoutes: { label: 'Bibliothèque', href: '/ecoutes/enregistrement' },
     coaching: { label: 'Coaching IA', href: '/coaching' },
+    coachings: { label: 'Coachings', href: '/coachings' },
     statistiques: { label: 'Statistiques', href: '/statistiques' },
     gamification: { label: 'Gamification', href: '/gamification' },
     kiosk: { label: 'Kiosk', href: '/kiosk' },
@@ -130,7 +132,9 @@ function AdminLayout() {
   // Carte d'adresses = plein bord. Fiche détail commercial = largeur non plafonnée
   // (pas de max-w-1400) mais marges confortables conservées (w-11/12), pour le layout 2 colonnes.
   const isMapPage = location.pathname === '/adresses'
-  const isFullWidthPage = /^\/(commerciaux|managers)\/\d+$/.test(location.pathname)
+  // Coachings : liste + panneau d'écoute côte à côte, la largeur sert les deux.
+  const isFullWidthPage =
+    /^\/(commerciaux|managers)\/\d+$/.test(location.pathname) || location.pathname === '/coachings'
   // Tableau de bord : pleine largeur (pas de plafond 1400px), marges conservées.
   const isDashboard = location.pathname === '/'
 
@@ -343,6 +347,14 @@ function AdminLayout() {
                     element={
                       <SectionErrorBoundary>
                         <Enregistrement />
+                      </SectionErrorBoundary>
+                    }
+                  />
+                  <Route
+                    path="/coachings"
+                    element={
+                      <SectionErrorBoundary>
+                        <Coachings />
                       </SectionErrorBoundary>
                     }
                   />

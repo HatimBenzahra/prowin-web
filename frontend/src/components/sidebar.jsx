@@ -21,6 +21,7 @@ import {
   ScrollText,
   Target,
   GraduationCap,
+  AudioLines,
 } from 'lucide-react'
 import React from 'react'
 import { Link, useLocation } from 'react-router-dom'
@@ -99,6 +100,13 @@ const teamItems = [
 ]
 
 const performanceItems = [
+  {
+    // Même périmètre que Coaching IA : écouter et lire le coaching au même endroit.
+    title: 'Coachings',
+    url: '/coachings',
+    icon: AudioLines,
+    entity: 'coaching',
+  },
   {
     title: 'Statistiques',
     url: '/statistiques',

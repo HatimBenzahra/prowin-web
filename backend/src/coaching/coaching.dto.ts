@@ -352,6 +352,78 @@ export class CoachingManagementFilter {
   @Field({ nullable: true }) notAnalyzedOnly?: boolean; // uniquement les non-analysés
 }
 
+/** Statut d'un produit sur la visite, réduit à ce qu'affiche le journal. */
+@ObjectType()
+export class CoachingJournalProductDto {
+  @Field() key: string;
+  @Field() status: string;
+}
+
+@ObjectType()
+export class CoachingJournalAnalysisDto {
+  @Field(() => Int) id: number;
+  @Field() status: string;
+  @Field(() => String, { nullable: true }) quality?: string | null;
+  @Field(() => Float, { nullable: true }) score?: number | null;
+  @Field(() => String, { nullable: true }) band?: string | null;
+  @Field(() => Float, { nullable: true }) executionScore?: number | null;
+  @Field(() => Float, { nullable: true }) outcomeScore?: number | null;
+  @Field(() => String, { nullable: true }) visitResult?: string | null;
+  @Field(() => String, { nullable: true }) nonSaleReason?: string | null;
+  @Field(() => [CoachingJournalProductDto]) productStatuses: CoachingJournalProductDto[];
+}
+
+/** Un audio du journal des écoutes : 1 audio = 1 porte (celle du premier segment). */
+@ObjectType()
+export class CoachingJournalRowDto {
+  @Field() s3Key: string;
+  @Field(() => Int, { nullable: true }) recordingId?: number | null;
+  @Field() createdAt: string;
+  @Field() day: string; // YYYY-MM-DD, heure de Paris
+  @Field(() => Float, { nullable: true }) durationSec?: number | null;
+  @Field(() => Int, { nullable: true }) subjectId?: number | null;
+  @Field(() => String, { nullable: true }) subjectName?: string | null;
+  @Field(() => String, { nullable: true }) subjectRole?: string | null;
+  @Field(() => Int) porteId: number;
+  @Field() porteNumero: string;
+  @Field(() => Int) porteEtage: number;
+  @Field(() => String, { nullable: true }) statutPorte?: string | null;
+  @Field(() => Int) immeubleId: number;
+  @Field() adresse: string;
+  @Field() favori: boolean;
+  @Field(() => CoachingJournalAnalysisDto, { nullable: true }) analysis?: CoachingJournalAnalysisDto | null;
+}
+
+/** Une page du journal : des jours ENTIERS, du plus récent au plus ancien. */
+@ObjectType()
+export class CoachingJournalPageDto {
+  @Field(() => [CoachingJournalRowDto]) rows: CoachingJournalRowDto[];
+  @Field(() => [String]) days: string[];
+  @Field() hasMore: boolean;
+  // Curseur de la page suivante, à repasser tel quel dans `before`.
+  @Field(() => String, { nullable: true }) nextBefore?: string | null;
+}
+
+@InputType()
+export class CoachingJournalFilter {
+  @Field(() => Date, { nullable: true }) dateFrom?: Date | null;
+  @Field(() => Date, { nullable: true }) dateTo?: Date | null;
+  // Curseur : seuls les audios strictement antérieurs.
+  @Field(() => Date, { nullable: true }) before?: Date | null;
+  @Field(() => Int, { nullable: true, defaultValue: 5 }) days?: number;
+  @Field(() => Int, { nullable: true }) commercialId?: number | null;
+  @Field(() => Int, { nullable: true }) managerId?: number | null;
+  @Field(() => Int, { nullable: true }) immeubleId?: number | null;
+  @Field(() => String, { nullable: true }) search?: string | null; // adresse du bâtiment
+  @Field(() => [String], { nullable: true }) statutPorte?: string[] | null;
+  @Field(() => [String], { nullable: true }) visitResult?: string[] | null;
+  @Field(() => [String], { nullable: true }) band?: string[] | null;
+  @Field(() => String, { nullable: true }) productKey?: string | null;
+  @Field(() => Boolean, { nullable: true }) productAcceptedOnly?: boolean | null;
+  @Field(() => Boolean, { nullable: true }) favorisOnly?: boolean | null;
+  @Field(() => Boolean, { nullable: true }) nonAnalysesOnly?: boolean | null;
+}
+
 /** Sujet coachable (pour le menu déroulant de filtre). */
 @ObjectType()
 export class CoachableSubjectDto {

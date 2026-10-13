@@ -232,6 +232,25 @@ const MANAGEMENT_LIST = `
     }
   }
 `
+const JOURNAL = `
+  query CoachingJournal($filter: CoachingJournalFilter) {
+    coachingJournal(filter: $filter) {
+      days
+      hasMore
+      nextBefore
+      rows {
+        s3Key recordingId createdAt day durationSec
+        subjectId subjectName subjectRole
+        porteId porteNumero porteEtage statutPorte
+        immeubleId adresse favori
+        analysis {
+          id status quality score band executionScore outcomeScore
+          visitResult nonSaleReason productStatuses { key status }
+        }
+      }
+    }
+  }
+`
 const COACHABLE_SUBJECTS = `
   query CoachableSubjects {
     coachableSubjects { subjectId subjectName subjectRole }
@@ -377,6 +396,15 @@ export class CoachingService {
       console.error('Erreur coachingManagementList:', error)
       return { items: [], total: 0 }
     }
+  }
+
+  /**
+   * Journal des écoutes, paginé par jours entiers (`before` = curseur `nextBefore`).
+   * Lève l'erreur : l'écran distingue « aucun audio » d'un appel échoué.
+   */
+  static async journal(filter: any): Promise<{ days: string[]; hasMore: boolean; nextBefore: string | null; rows: any[] }> {
+    const data = await graphqlClient.request(JOURNAL, { filter })
+    return data.coachingJournal
   }
 
   /** Lance l'analyse manuelle (ignore le filtre durée) sur un lot de clés S3. */

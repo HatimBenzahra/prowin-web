@@ -22,6 +22,8 @@ import {
   CoachableSubjectDto,
   CoachingProductStatsDto,
   CoachingProductStatusInput,
+  CoachingJournalFilter,
+  CoachingJournalPageDto,
 } from './coaching.dto';
 @Resolver()
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -76,6 +78,15 @@ export class CoachingResolver {
     @Args('filter', { nullable: true }) filter?: CoachingManagementFilter,
   ): Promise<PaginatedCoachingManagement> {
     return this.query.coachingManagementList(filter ?? {});
+  }
+
+  /** Journal des écoutes, paginé par jours entiers (curseur `before`). */
+  @Query(() => CoachingJournalPageDto)
+  @Roles('admin', 'directeur')
+  coachingJournal(
+    @Args('filter', { nullable: true }) filter?: CoachingJournalFilter,
+  ): Promise<CoachingJournalPageDto> {
+    return this.query.coachingJournal(filter ?? {});
   }
 
   @Query(() => [CoachableSubjectDto])

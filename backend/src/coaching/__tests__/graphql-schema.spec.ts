@@ -83,6 +83,7 @@ describe('schéma GraphQL coaching', () => {
   it('expose la correction du résultat de visite aux admins, directeurs et managers', () => {
     expect(sdl).toContain('updateCoachingVisitOutcome(analysisId: Int!');
     expect(sdl).toContain('coachingProductStats(startDate: DateTime, endDate: DateTime): CoachingProductStatsDto!');
+    expect(sdl).toContain('coachingJournal(filter: CoachingJournalFilter): CoachingJournalPageDto!');
     const roles = Reflect.getMetadata(ROLES_KEY, (CoachingResolver.prototype as any).updateCoachingVisitOutcome);
     expect(roles).toEqual(['admin', 'directeur', 'manager']);
   });

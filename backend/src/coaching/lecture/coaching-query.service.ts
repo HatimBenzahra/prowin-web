@@ -20,6 +20,10 @@ import {
   CoachingStepAverageDto,
   CoachingViolationDto,
   CoachingProductStatsDto,
+  CoachingJournalAnalysisDto,
+  CoachingJournalFilter,
+  CoachingJournalPageDto,
+  CoachingJournalRowDto,
 } from '../coaching.dto';
 import { CriterionScore, StepScore } from '../shared/coaching.types';
 import { CRM_SOURCE, CRM_TENANT } from '../shared/crm-scope';
@@ -32,6 +36,61 @@ function matchDurationTier(sec: number, tier: string): boolean {
   if (tier === '1to3') return d >= 60 && d < 180;
   if (tier === 'gt3') return d >= 180;
   return true; // tier inconnu → pas de filtrage
+}
+
+const JOURNAL_WINDOW_MS = 14 * 24 * 3600 * 1000;
+const PARIS_DAY = new Intl.DateTimeFormat('en-CA', {
+  timeZone: 'Europe/Paris',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+});
+/** Jour calendaire (YYYY-MM-DD) à Paris : un audio de 00h30 appartient au jour qui commence. */
+export const parisDay = (d: Date) => PARIS_DAY.format(d);
+
+/** Bande d'une analyse prête ; calculée depuis le score pour les analyses antérieures au recalibrage. */
+function journalBand(a: CoachingJournalAnalysisDto): string | null {
+  if (a.status !== CoachingStatus.READY) return null;
+  if (a.band) return a.band;
+  if (a.score == null) return 'non_evaluable';
+  if (a.score >= 85) return 'maitrise';
+  if (a.score >= 75) return 'correct';
+  if (a.score >= 60) return 'coaching';
+  return 'insuffisant';
+}
+
+/** Filtres du journal portant sur la ligne construite (porte principale, analyse). */
+function matchesJournalFilter(
+  r: CoachingJournalRowDto,
+  f: CoachingJournalFilter,
+): boolean {
+  const a = r.analysis ?? null;
+  if (f.favorisOnly && !r.favori) return false;
+  if (f.nonAnalysesOnly && a) return false;
+  if (f.immeubleId != null && r.immeubleId !== f.immeubleId) return false;
+  const q = f.search?.trim().toLowerCase();
+  if (q && !r.adresse.toLowerCase().includes(q)) return false;
+  if (f.statutPorte?.length && !f.statutPorte.includes(r.statutPorte ?? ''))
+    return false;
+  if (
+    f.visitResult?.length &&
+    !(a?.visitResult && f.visitResult.includes(a.visitResult))
+  )
+    return false;
+  if (f.band?.length) {
+    const band = a ? journalBand(a) : null;
+    if (!band || !f.band.includes(band)) return false;
+  }
+  if (f.productKey) {
+    const statuses = f.productAcceptedOnly ? ['ACCEPTE'] : PROPOSED_STATUSES;
+    if (
+      !a?.productStatuses.some(
+        (p) => p.key === f.productKey && statuses.includes(p.status),
+      )
+    )
+      return false;
+  }
+  return true;
 }
 
 /**
@@ -524,6 +583,258 @@ export class CoachingQueryService {
       };
     });
     return { items, total };
+  }
+
+  /**
+   * Journal des écoutes : un audio par ligne (1 audio = 1 porte, celle du premier
+   * segment comme à l'enqueue), du plus récent au plus ancien, paginé par JOURS
+   * ENTIERS. Les fenêtres de 14 jours reculent depuis le curseur jusqu'à voir un jour
+   * de plus que demandé : les jours rendus sont alors complets, et `hasMore` exact.
+   * Même périmètre que la liste de gestion (admin, directeur, sans restriction d'équipe).
+   */
+  async coachingJournal(
+    filter: CoachingJournalFilter,
+  ): Promise<CoachingJournalPageDto> {
+    const wanted = Math.min(Math.max(filter.days ?? 5, 1), 31);
+    const subjectWhere: Prisma.RecordingSegmentWhereInput = {
+      ...(filter.commercialId != null
+        ? { commercialId: filter.commercialId }
+        : {}),
+      ...(filter.managerId != null ? { managerId: filter.managerId } : {}),
+    };
+    const bounds = await this.prisma.recordingSegment.aggregate({
+      where: {
+        ...subjectWhere,
+        createdAt: {
+          ...(filter.dateFrom ? { gte: filter.dateFrom } : {}),
+          ...(filter.dateTo ? { lte: filter.dateTo } : {}),
+          ...(filter.before ? { lt: filter.before } : {}),
+        },
+      },
+      _min: { createdAt: true },
+      _max: { createdAt: true },
+    });
+    const floor = bounds._min.createdAt?.getTime();
+    const ceiling = bounds._max.createdAt?.getTime();
+    if (floor == null || ceiling == null)
+      return { rows: [], days: [], hasMore: false, nextBefore: null };
+
+    const reference = await this.references.getActive();
+    const collected: CoachingJournalRowDto[] = [];
+    const days = new Set<string>();
+    // Un audio à cheval sur deux fenêtres n'est compté qu'une fois.
+    const seen = new Set<string>();
+    let windowEnd = ceiling + 1; // borne exclusive
+    while (windowEnd > floor && days.size <= wanted) {
+      const windowStart = Math.max(floor, windowEnd - JOURNAL_WINDOW_MS);
+      const rows = await this.journalWindow(
+        subjectWhere,
+        new Date(windowStart),
+        new Date(windowEnd),
+        reference?.id ?? null,
+      );
+      for (const row of rows) {
+        if (seen.has(row.s3Key)) continue;
+        seen.add(row.s3Key);
+        if (!matchesJournalFilter(row, filter)) continue;
+        collected.push(row);
+        days.add(row.day);
+      }
+      windowEnd = windowStart;
+    }
+
+    collected.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    const kept = [...days].sort().reverse().slice(0, wanted);
+    const keptSet = new Set(kept);
+    const rows = collected.filter((r) => keptSet.has(r.day));
+    const hasMore = days.size > wanted;
+    return {
+      rows,
+      days: kept,
+      hasMore,
+      // Le plus ancien audio rendu : tout ce qui le précède appartient à un jour non rendu.
+      nextBefore:
+        hasMore && rows.length ? rows[rows.length - 1].createdAt : null,
+    };
+  }
+
+  /** Lignes du journal d'une fenêtre [start, end[, en 5 requêtes batch (pas de N+1). */
+  private async journalWindow(
+    subjectWhere: Prisma.RecordingSegmentWhereInput,
+    start: Date,
+    end: Date,
+    referenceId: number | null,
+  ): Promise<CoachingJournalRowDto[]> {
+    const segments = await this.prisma.recordingSegment.findMany({
+      where: { ...subjectWhere, createdAt: { gte: start, lt: end } },
+      select: {
+        id: true,
+        s3KeyOriginal: true,
+        commercialId: true,
+        managerId: true,
+        statut: true,
+        durationSec: true,
+        createdAt: true,
+        porte: {
+          select: {
+            id: true,
+            numero: true,
+            etage: true,
+            statut: true,
+            coachingFavori: true,
+            immeubleId: true,
+            immeuble: { select: { adresse: true } },
+          },
+        },
+      },
+      orderBy: { id: 'asc' },
+    });
+    if (!segments.length) return [];
+
+    // Premier segment = porte principale ; les suivants ne complètent que durée et date.
+    const byKey = new Map<
+      string,
+      {
+        primary: (typeof segments)[number];
+        durationSec: number;
+        createdAt: Date;
+      }
+    >();
+    for (const seg of segments) {
+      const prev = byKey.get(seg.s3KeyOriginal);
+      if (!prev) {
+        byKey.set(seg.s3KeyOriginal, {
+          primary: seg,
+          durationSec: seg.durationSec ?? 0,
+          createdAt: seg.createdAt,
+        });
+        continue;
+      }
+      if ((seg.durationSec ?? 0) > prev.durationSec)
+        prev.durationSec = seg.durationSec ?? 0;
+      if (seg.createdAt < prev.createdAt) prev.createdAt = seg.createdAt;
+    }
+    const keys = [...byKey.keys()];
+    const entries = [...byKey.values()];
+    const commercialIds = [
+      ...new Set(
+        entries
+          .map((e) => e.primary.commercialId)
+          .filter((x): x is number => x != null),
+      ),
+    ];
+    const managerIds = [
+      ...new Set(
+        entries
+          .map((e) => e.primary.managerId)
+          .filter((x): x is number => x != null),
+      ),
+    ];
+    type OwnerRow = {
+      id: number;
+      nom: string;
+      prenom: string;
+      status: UserStatus;
+    };
+
+    // Sans référentiel actif, aucune analyse : l'id -1 n'existe pas.
+    const [recordings, analyses, commercials, managers] = await Promise.all([
+      this.prisma.recording.findMany({
+        where: { s3Key: { in: keys } },
+        select: { id: true, s3Key: true },
+      }),
+      this.prisma.coachingAnalysis.findMany({
+        where: {
+          source: this.CRM_SOURCE,
+          tenantId: CRM_TENANT,
+          s3KeyOriginal: { in: keys },
+          referenceId: referenceId ?? -1,
+        },
+        select: {
+          id: true,
+          s3KeyOriginal: true,
+          status: true,
+          quality: true,
+          score: true,
+          band: true,
+          executionScore: true,
+          outcomeScore: true,
+          visitResult: true,
+          nonSaleReason: true,
+          productStatuses: true,
+          transcriptDurationSec: true,
+        },
+      }),
+      commercialIds.length
+        ? this.prisma.commercial.findMany({
+            where: { id: { in: commercialIds } },
+            select: { id: true, nom: true, prenom: true, status: true },
+          })
+        : Promise.resolve([] as OwnerRow[]),
+      managerIds.length
+        ? this.prisma.manager.findMany({
+            where: { id: { in: managerIds } },
+            select: { id: true, nom: true, prenom: true, status: true },
+          })
+        : Promise.resolve([] as OwnerRow[]),
+    ]);
+    const recordingByKey = new Map(recordings.map((r) => [r.s3Key, r.id]));
+    const analysisByKey = new Map(analyses.map((a) => [a.s3KeyOriginal, a]));
+    const cMap = new Map(commercials.map((c) => [c.id, c]));
+    const mMap = new Map(managers.map((m) => [m.id, m]));
+
+    const out: CoachingJournalRowDto[] = [];
+    for (const [s3Key, { primary, durationSec, createdAt }] of byKey) {
+      const owner =
+        primary.commercialId != null && cMap.has(primary.commercialId)
+          ? { ...cMap.get(primary.commercialId)!, role: 'commercial' }
+          : primary.managerId != null && mMap.has(primary.managerId)
+            ? { ...mMap.get(primary.managerId)!, role: 'manager' }
+            : null;
+      // Les utilisateurs de test ne polluent pas l'historique d'écoute.
+      if (owner?.status === UserStatus.UTILISATEUR_TEST) continue;
+      const a = analysisByKey.get(s3Key);
+      const ready = a?.status === CoachingStatus.READY;
+      out.push({
+        s3Key,
+        recordingId: recordingByKey.get(s3Key) ?? null,
+        createdAt: createdAt.toISOString(),
+        day: parisDay(createdAt),
+        durationSec: a?.transcriptDurationSec ?? (durationSec || null),
+        subjectId: owner?.id ?? null,
+        subjectName: owner ? `${owner.prenom} ${owner.nom}`.trim() : null,
+        subjectRole: owner?.role ?? null,
+        porteId: primary.porte.id,
+        porteNumero: primary.porte.numero,
+        porteEtage: primary.porte.etage,
+        // Statut au moment de l'échange ; celui de la porte sinon (segments anciens).
+        statutPorte: primary.statut ?? primary.porte.statut,
+        immeubleId: primary.porte.immeubleId,
+        adresse: primary.porte.immeuble?.adresse ?? '',
+        favori: primary.porte.coachingFavori,
+        analysis: a
+          ? {
+              id: a.id,
+              status: a.status,
+              quality: a.quality ?? null,
+              // Comme le détail : aucun score avant la fin de l'analyse.
+              score: ready ? (a.score ?? null) : null,
+              band: a.band ?? null,
+              executionScore: ready ? (a.executionScore ?? null) : null,
+              outcomeScore: ready ? (a.outcomeScore ?? null) : null,
+              visitResult: a.visitResult ?? null,
+              nonSaleReason: a.nonSaleReason ?? null,
+              productStatuses: (
+                (a.productStatuses as unknown as ProductStatus[] | null) ?? []
+              ).map((p) => ({
+                key: p.key,
+                status: p.status,
+              })),
+            }
+          : null,
+      });
+    }
+    return out;
   }
 
   /**
