@@ -81,9 +81,14 @@ function AnalysisCell({ row, launching, onLaunch }) {
 }
 
 /** Agrégats d'un groupe : portes, score moyen coloré, ventes. */
-function GroupStats({ stats }) {
+function GroupStats({ stats, onDark = false }) {
   return (
-    <span className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
+    <span
+      className={cn(
+        'flex shrink-0 items-center gap-2 text-xs',
+        onDark ? 'text-sidebar-foreground/75' : 'text-muted-foreground'
+      )}
+    >
       <span className="tabular-nums">
         {stats.nbPortes} porte{stats.nbPortes > 1 ? 's' : ''}
       </span>
@@ -96,7 +101,9 @@ function GroupStats({ stats }) {
         </span>
       )}
       {stats.nbVentes > 0 && (
-        <span className="font-medium tabular-nums text-green-600">
+        <span
+          className={cn('font-medium tabular-nums', onDark ? 'text-green-400' : 'text-green-600')}
+        >
           {stats.nbVentes} vente{stats.nbVentes > 1 ? 's' : ''}
         </span>
       )}
@@ -222,7 +229,7 @@ export default function CoachingsTree({
             <button
               type="button"
               onClick={() => onToggleCollapse(day.day)}
-              className="sticky top-0 z-10 flex w-full items-center gap-2 border-b bg-background/95 px-3 py-2 text-left backdrop-blur"
+              className="sticky top-0 z-10 flex w-full items-center gap-2 border-b border-sidebar-border bg-sidebar px-3 py-2 text-left text-sidebar-foreground"
             >
               <ChevronRight
                 className={cn('h-4 w-4 shrink-0 transition-transform', dayOpen && 'rotate-90')}
@@ -230,7 +237,7 @@ export default function CoachingsTree({
               <span className="flex-1 text-sm font-semibold first-letter:uppercase">
                 {dayLabel(day.day)}
               </span>
-              <GroupStats stats={day.stats} />
+              <GroupStats stats={day.stats} onDark />
             </button>
 
             {dayOpen &&

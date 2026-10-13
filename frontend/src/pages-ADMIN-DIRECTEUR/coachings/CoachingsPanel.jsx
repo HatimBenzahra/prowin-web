@@ -105,14 +105,14 @@ export default function CoachingsPanel({
 
   return (
     <div>
-      <div className="p-4 pb-3">
+      <div className="bg-sidebar p-4 pb-3 text-sidebar-foreground">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <h2 className="truncate text-base font-semibold">
               {row?.adresse || meta.address || 'Enregistrement'}
             </h2>
-            <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground [&>*+*]:before:mr-2 [&>*+*]:before:content-['·']">
-              {row && <span className="font-medium text-foreground">{porteLabel(row)}</span>}
+            <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-sidebar-foreground/75 [&>*+*]:before:mr-2 [&>*+*]:before:content-['·']">
+              {row && <span className="font-medium text-sidebar-foreground">{porteLabel(row)}</span>}
               {row?.subjectName && (
                 <span className="inline-flex items-center gap-1">
                   <User2 className="h-3.5 w-3.5" />
@@ -150,7 +150,7 @@ export default function CoachingsPanel({
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-8 w-8 p-0"
+                className="h-8 w-8 p-0 text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground"
                 onClick={onClose}
                 aria-label="Fermer"
               >
