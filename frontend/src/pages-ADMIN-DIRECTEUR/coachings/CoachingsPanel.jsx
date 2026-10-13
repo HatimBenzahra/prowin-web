@@ -136,10 +136,13 @@ export default function CoachingsPanel({
           <div className="flex shrink-0 items-center gap-1">
             {row && (
               <Button
-                variant="outline"
+                variant="ghost"
                 size="sm"
                 onClick={() => onToggleFavori(row)}
-                className={cn(row.favori && 'border-amber-400 text-amber-600')}
+                className={cn(
+                  'border text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground',
+                  row.favori ? 'border-amber-400 text-amber-300' : 'border-sidebar-foreground/30'
+                )}
                 aria-label={row.favori ? 'Retirer des favoris' : 'Ajouter aux favoris'}
               >
                 <Star className={cn('h-4 w-4', row.favori && 'fill-amber-500 text-amber-500')} />
