@@ -14,6 +14,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet'
 import { StatTile } from '@/components/details/DetailPrimitives'
 import { useIsMobile } from '@/hooks/ui/use-mobile'
+import { cn } from '@/lib/utils'
 import { useErrorToast } from '@/hooks/utils/ui/use-error-toast'
 import CoachingService from '@/services/coaching/coaching.service'
 import { useActiveReference } from '../coaching/useActiveReference'
@@ -31,6 +32,22 @@ import {
   serializeFilters,
   visibleKeys,
 } from './coachings-utils'
+
+/**
+ * Surface « barre latérale » du journal : le bleu nuit de la sidebar, dans les deux
+ * modes. Les jetons du thème y sont rebranchés sur ceux de la sidebar et la variante
+ * `dark:` y est active (fond sombre) : pastilles, bordures et textes atténués de
+ * l'arbre s'y lisent sans retoucher chaque classe. Le panneau reste sur la carte.
+ */
+const SIDEBAR_SURFACE = cn(
+  'dark bg-sidebar text-sidebar-foreground',
+  '[--background:var(--sidebar)] [--foreground:var(--sidebar-foreground)]',
+  '[--card:var(--sidebar)] [--card-foreground:var(--sidebar-foreground)]',
+  '[--muted:var(--sidebar-accent)] [--muted-foreground:color-mix(in_oklch,var(--sidebar-foreground)_70%,var(--sidebar))]',
+  '[--accent:var(--sidebar-accent)] [--accent-foreground:var(--sidebar-accent-foreground)]',
+  '[--primary:var(--sidebar-primary)] [--primary-foreground:var(--sidebar-primary-foreground)]',
+  '[--border:var(--sidebar-border)] [--input:var(--sidebar-border)] [--ring:var(--sidebar-ring)]'
+)
 
 /** Une frappe dans un champ ne doit jamais changer de porte. */
 const isTyping = target =>
@@ -185,7 +202,7 @@ export default function Coachings() {
       />
 
       <div className="grid min-h-0 flex-1 gap-4 lg:grid-cols-[minmax(340px,2fr)_3fr]">
-        <div className="min-h-0 rounded-xl border bg-card lg:overflow-y-auto">
+        <div className={cn('min-h-0 rounded-xl border lg:overflow-y-auto', SIDEBAR_SURFACE)}>
           {journal.loading ? (
             <div className="space-y-3 p-3">
               {[0, 1, 2].map(i => (

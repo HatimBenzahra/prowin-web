@@ -152,7 +152,11 @@ function DoorRow({
       onClick={() => onSelect(row.s3Key)}
       className={cn(
         'group flex cursor-pointer items-center gap-2 border-l-2 px-3 py-2 text-sm transition-colors',
-        selected ? 'border-l-primary bg-primary/10' : 'border-l-transparent hover:bg-primary/5'
+        // Comme l'entrée active de la sidebar : fond accent (relevé d'une pointe de la
+        // couleur primaire de la sidebar, sinon trop proche du fond) et filet orange.
+        selected
+          ? 'border-l-orange-500 bg-[color-mix(in_oklch,var(--sidebar-primary)_18%,var(--sidebar-accent))] text-sidebar-accent-foreground'
+          : 'border-l-transparent hover:bg-sidebar-accent/50'
       )}
     >
       <div className="min-w-0 flex-1">
