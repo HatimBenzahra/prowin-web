@@ -1,43 +1,24 @@
-import React, { useState, useMemo } from 'react'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
-import {
-  Table,
-  TableHeader,
-  TableBody,
-  TableRow,
-  TableHead,
-  TableCell,
-} from '@/components/ui/table'
-import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from '@/components/ui/dialog'
-import { Package, Power, Trash2, Copy, Check, GitCommit } from 'lucide-react'
-import { ChannelBadge } from './versionPresentation'
+import React, { useMemo } from 'react'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Package, GitCommit } from 'lucide-react'
+import { ChannelBadge, VersionText } from './versionPresentation'
 
-const formatDateTime = value => {
-  if (!value) return 'Inconnu'
+// « 12/10/2026 à 15:42 » : le serveur publie l'APK à la fin de son build.
+const formatBuildDate = value => {
   const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return 'Inconnu'
-  return date.toLocaleString('fr-FR', {
+  if (!value || Number.isNaN(date.getTime())) return 'date inconnue'
+  const day = date.toLocaleDateString('fr-FR', {
     day: '2-digit',
     month: '2-digit',
     year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
   })
+  const time = date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
+  return `${day} à ${time}`
 }
 
 const formatRelativeTime = value => {
-  if (!value) return 'Inconnu'
   const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return 'Inconnu'
+  if (!value || Number.isNaN(date.getTime())) return 'inconnu'
   const diff = Date.now() - date.getTime()
   const minutes = Math.floor(diff / 60000)
   const hours = Math.floor(minutes / 60)
@@ -48,347 +29,93 @@ const formatRelativeTime = value => {
   return "à l'instant"
 }
 
-const parseSizeMB = sizeHuman => {
-  if (!sizeHuman) return 0
-  const match = sizeHuman.match(/([\d.]+)\s*(MB|GB|KB)/i)
-  if (!match) return 0
-  const value = parseFloat(match[1])
-  const unit = match[2].toUpperCase()
-  if (unit === 'GB') return value * 1024
-  if (unit === 'KB') return value / 1024
-  return value
+// On distingue l'app ProWin (prospection) de l'agent Kiosk via le packageName /
+// appName remonté par la release. Pas de hardcode de package.
+const APPS = [
+  { key: 'prowin', label: 'ProWin' },
+  { key: 'kiosk', label: 'Kiosk' },
+]
+const classifyApp = release => {
+  const s = `${release.packageName || ''} ${release.appName || ''}`.toLowerCase()
+  return s.includes('kiosk') ? 'kiosk' : 'prowin'
 }
 
-export default function ReleasesTab({ releases, loading, onToggle, onDelete }) {
-  const [confirmDeleteId, setConfirmDeleteId] = useState(null)
-  const [copiedId, setCopiedId] = useState(null)
-  const [activeApp, setActiveApp] = useState('all')
-
-  // On distingue les MàJ de l'app ProWin (prospection) et celles de l'agent Kiosk
-  // via le packageName/appName remonté par le release. Pas de hardcode de package.
-  const classifyApp = release => {
-    const s = `${release.packageName || ''} ${release.appName || ''}`.toLowerCase()
-    return s.includes('kiosk') ? 'kiosk' : 'prowin'
-  }
-
-  const appCounts = useMemo(() => {
-    const counts = { all: releases?.length || 0, prowin: 0, kiosk: 0 }
-    ;(releases || []).forEach(r => {
-      counts[classifyApp(r)] += 1
-    })
-    return counts
-  }, [releases])
-
-  const appTabs = useMemo(() => {
-    const tabs = [{ key: 'all', label: 'Toutes' }]
-    if (appCounts.prowin > 0) tabs.push({ key: 'prowin', label: 'ProWin' })
-    if (appCounts.kiosk > 0) tabs.push({ key: 'kiosk', label: 'Kiosk' })
-    return tabs
-  }, [appCounts])
-
-  const visibleReleases = useMemo(
-    () => (releases || []).filter(r => activeApp === 'all' || classifyApp(r) === activeApp),
-    [releases, activeApp]
-  )
-
-  const handleCopySha256 = (id, sha256) => {
-    if (!sha256) return
-    navigator.clipboard.writeText(sha256)
-    setCopiedId(id)
-    setTimeout(() => setCopiedId(null), 2000)
-  }
-
-  const handleConfirmDelete = () => {
-    if (confirmDeleteId) {
-      onDelete(confirmDeleteId)
-      setConfirmDeleteId(null)
-    }
-  }
+/** Dernier build d'une application : c'est lui que les tablettes reçoivent. */
+function AppReleaseCard({ label, releases }) {
+  const latest = releases.find(r => r.active) ?? releases[0]
 
   return (
-    <>
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <CardTitle>Gestion des APK</CardTitle>
-            {releases?.length > 0 && (
-              <Badge variant="secondary" className="rounded-full tabular-nums px-2 py-0.5 text-xs">
-                {releases.length}
-              </Badge>
-            )}
-          </div>
-        </CardHeader>
+    <div className="rounded-lg border p-4">
+      <div className="flex items-center gap-2">
+        <div className="rounded-md bg-primary/10 p-1.5">
+          <Package className="h-4 w-4 text-primary" />
+        </div>
+        <span className="font-semibold">{label}</span>
+        <ChannelBadge channel={latest.channel} />
+      </div>
 
-        <CardContent>
-          {loading ? (
-            <div className="py-16 flex flex-col items-center gap-3 text-center text-muted-foreground">
-              <Package className="h-10 w-10 opacity-30 animate-pulse" />
-              <p className="text-sm">Chargement des releases...</p>
-            </div>
-          ) : !releases?.length ? (
-            <div className="py-20 flex flex-col items-center gap-4 text-center">
-              <div className="rounded-full bg-muted p-5">
-                <Package className="h-10 w-10 text-muted-foreground" />
-              </div>
-              <div className="space-y-1">
-                <p className="font-semibold text-foreground">Aucune release</p>
-                <p className="text-sm text-muted-foreground">
-                  Les releases sont publiées via le pipeline versionné (npm run deploy)
-                </p>
-              </div>
-            </div>
-          ) : (
-            <>
-              <div className="mb-4 inline-flex items-center gap-1 rounded-lg border bg-muted/40 p-1">
-                {appTabs.map(tab => (
-                  <button
-                    key={tab.key}
-                    type="button"
-                    onClick={() => setActiveApp(tab.key)}
-                    className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm transition-colors ${
-                      activeApp === tab.key
-                        ? 'bg-background font-medium text-foreground shadow-sm'
-                        : 'text-muted-foreground hover:text-foreground'
-                    }`}
-                  >
-                    {tab.label}
-                    <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] tabular-nums text-muted-foreground">
-                      {appCounts[tab.key]}
-                    </span>
-                  </button>
-                ))}
-              </div>
-              {!visibleReleases.length ? (
-                <div className="py-14 flex flex-col items-center gap-2 text-center text-muted-foreground">
-                  <Package className="h-8 w-8 opacity-30" />
-                  <p className="text-sm">Aucune release pour cette application.</p>
-                </div>
-              ) : (
-                <div className="rounded-md border overflow-hidden">
-                  <Table>
-                    <TableHeader>
-                      <TableRow className="bg-muted/40 hover:bg-muted/40">
-                        <TableHead className="font-semibold pl-4">Application</TableHead>
-                        <TableHead className="font-semibold">Version</TableHead>
-                        <TableHead className="font-semibold">Commit</TableHead>
-                        <TableHead className="font-semibold">Taille</TableHead>
-                        <TableHead className="font-semibold">Date</TableHead>
-                        <TableHead className="font-semibold">Actif</TableHead>
-                        <TableHead className="font-semibold">APK SHA-256</TableHead>
-                        <TableHead className="font-semibold text-right pr-4">Actions</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {visibleReleases.map((release, index) => {
-                        const sizeMB = parseSizeMB(release.sizeHuman)
-                        const isLarge = sizeMB > 100
-                        const sha256Short = release.apkSha256
-                          ? release.apkSha256.slice(0, 12)
-                          : null
-                        const gitShaShort = release.gitSha ? release.gitSha.slice(0, 7) : null
-
-                        return (
-                          <TableRow
-                            key={release.id}
-                            className={`transition-colors hover:bg-muted/50 ${
-                              index % 2 !== 0 ? 'bg-muted/20' : ''
-                            }`}
-                          >
-                            <TableCell className="pl-4">
-                              <div className="flex items-center gap-2.5">
-                                <div className="rounded-md bg-primary/10 p-1.5 shrink-0">
-                                  <Package className="h-4 w-4 text-primary" />
-                                </div>
-                                <div>
-                                  <p className="font-semibold text-sm leading-tight">
-                                    {release.appName || '—'}
-                                  </p>
-                                  <p className="text-xs text-muted-foreground leading-tight mt-0.5">
-                                    {release.packageName || ''}
-                                  </p>
-                                </div>
-                              </div>
-                            </TableCell>
-
-                            <TableCell>
-                              <div className="flex flex-col gap-1">
-                                <div className="flex items-center gap-2">
-                                  <span className="font-mono text-sm font-semibold tabular-nums">
-                                    {release.versionName || '—'}
-                                  </span>
-                                  <ChannelBadge channel={release.channel} />
-                                </div>
-                                <span className="text-xs text-muted-foreground tabular-nums pl-0.5">
-                                  code {release.versionCode ?? '—'}
-                                </span>
-                              </div>
-                            </TableCell>
-
-                            <TableCell>
-                              {gitShaShort ? (
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <span className="inline-flex items-center gap-1 font-mono text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded cursor-default">
-                                      <GitCommit className="h-3 w-3" />
-                                      {gitShaShort}
-                                    </span>
-                                  </TooltipTrigger>
-                                  <TooltipContent>
-                                    <span className="text-xs break-words max-w-xs block">
-                                      {release.gitMessage || release.gitSha}
-                                    </span>
-                                  </TooltipContent>
-                                </Tooltip>
-                              ) : (
-                                <span className="text-xs text-muted-foreground">—</span>
-                              )}
-                            </TableCell>
-
-                            <TableCell>
-                              <span
-                                className={`text-sm font-medium ${
-                                  isLarge ? 'text-destructive' : 'text-foreground'
-                                }`}
-                              >
-                                {release.sizeHuman || '—'}
-                              </span>
-                            </TableCell>
-
-                            <TableCell>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <span className="text-sm cursor-default border-b border-dashed border-muted-foreground/40 text-muted-foreground">
-                                    {formatRelativeTime(release.uploadedAt)}
-                                  </span>
-                                </TooltipTrigger>
-                                <TooltipContent>
-                                  {formatDateTime(release.uploadedAt)}
-                                </TooltipContent>
-                              </Tooltip>
-                            </TableCell>
-
-                            <TableCell>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <button
-                                    type="button"
-                                    onClick={() => onToggle(release.id, !release.active)}
-                                    className="flex items-center gap-1.5 cursor-pointer group"
-                                  >
-                                    {release.active ? (
-                                      <span className="h-3.5 w-3.5 rounded-full bg-chart-2 shadow-sm shadow-chart-2/50 ring-2 ring-chart-2/20 transition-transform group-hover:scale-110" />
-                                    ) : (
-                                      <span className="h-3.5 w-3.5 rounded-full border-2 border-muted-foreground/30 transition-transform group-hover:scale-110" />
-                                    )}
-                                  </button>
-                                </TooltipTrigger>
-                                <TooltipContent>
-                                  {release.active ? 'Désactiver' : 'Activer'}
-                                </TooltipContent>
-                              </Tooltip>
-                            </TableCell>
-
-                            <TableCell>
-                              {sha256Short ? (
-                                <div className="flex items-center gap-1">
-                                  <Tooltip>
-                                    <TooltipTrigger asChild>
-                                      <span className="font-mono text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded cursor-default">
-                                        {sha256Short}…
-                                      </span>
-                                    </TooltipTrigger>
-                                    <TooltipContent>
-                                      <span className="font-mono text-xs break-all max-w-xs">
-                                        {release.apkSha256}
-                                      </span>
-                                    </TooltipContent>
-                                  </Tooltip>
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-6 w-6"
-                                    onClick={() => handleCopySha256(release.id, release.apkSha256)}
-                                  >
-                                    {copiedId === release.id ? (
-                                      <Check className="h-3 w-3 text-chart-2" />
-                                    ) : (
-                                      <Copy className="h-3 w-3 text-muted-foreground" />
-                                    )}
-                                  </Button>
-                                </div>
-                              ) : (
-                                <span className="text-xs text-muted-foreground">—</span>
-                              )}
-                            </TableCell>
-
-                            <TableCell className="pr-4">
-                              <div className="flex items-center justify-end gap-0.5">
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <Button
-                                      variant="ghost"
-                                      size="icon"
-                                      className="h-8 w-8"
-                                      onClick={() => onToggle(release.id, !release.active)}
-                                    >
-                                      <Power
-                                        className={`h-4 w-4 ${
-                                          release.active ? 'text-chart-2' : 'text-muted-foreground'
-                                        }`}
-                                      />
-                                    </Button>
-                                  </TooltipTrigger>
-                                  <TooltipContent>
-                                    {release.active ? 'Désactiver' : 'Activer'}
-                                  </TooltipContent>
-                                </Tooltip>
-
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <Button
-                                      variant="ghost"
-                                      size="icon"
-                                      className="h-8 w-8 hover:bg-destructive/10 hover:text-destructive"
-                                      onClick={() => setConfirmDeleteId(release.id)}
-                                    >
-                                      <Trash2 className="h-4 w-4" />
-                                    </Button>
-                                  </TooltipTrigger>
-                                  <TooltipContent>Supprimer</TooltipContent>
-                                </Tooltip>
-                              </div>
-                            </TableCell>
-                          </TableRow>
-                        )
-                      })}
-                    </TableBody>
-                  </Table>
-                </div>
-              )}
-            </>
-          )}
-        </CardContent>
-      </Card>
-
-      <Dialog open={!!confirmDeleteId} onOpenChange={open => !open && setConfirmDeleteId(null)}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Confirmer la suppression</DialogTitle>
-          </DialogHeader>
-          <p className="text-sm text-muted-foreground">
-            Cette action est irréversible. La release sera définitivement supprimée.
+      <div className="mt-3 space-y-1.5">
+        <VersionText
+          versionName={latest.versionName}
+          versionCode={latest.versionCode}
+          className="font-mono text-lg font-semibold"
+        />
+        <p className="text-sm text-muted-foreground">
+          Build du {formatBuildDate(latest.uploadedAt)} ({formatRelativeTime(latest.uploadedAt)})
+        </p>
+        {latest.gitSha && (
+          <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <GitCommit className="h-3.5 w-3.5 shrink-0" />
+            <span className="font-mono">{latest.gitSha.slice(0, 7)}</span>
+            {latest.gitMessage && <span className="truncate">{latest.gitMessage}</span>}
           </p>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setConfirmDeleteId(null)}>
-              Annuler
-            </Button>
-            <Button variant="destructive" onClick={handleConfirmDelete} className="gap-2">
-              <Trash2 className="h-4 w-4" />
-              Supprimer
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </>
+        )}
+      </div>
+    </div>
+  )
+}
+
+export default function ReleasesTab({ releases, loading }) {
+  const releasesByApp = useMemo(() => {
+    const sorted = [...(releases || [])].sort(
+      (a, b) => new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime()
+    )
+    return APPS.map(app => ({
+      ...app,
+      releases: sorted.filter(r => classifyApp(r) === app.key),
+    })).filter(app => app.releases.length > 0)
+  }, [releases])
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Dernier build</CardTitle>
+        <CardDescription>
+          Distribué aux tablettes. Publié par{' '}
+          <code className="text-xs">./deploy mobile|kiosk-app</code>. Pour revenir en arrière,
+          redéployez l'ancien commit.
+        </CardDescription>
+      </CardHeader>
+
+      <CardContent>
+        {loading ? (
+          <div className="flex flex-col items-center gap-3 py-16 text-center text-muted-foreground">
+            <Package className="h-10 w-10 animate-pulse opacity-30" />
+            <p className="text-sm">Chargement des versions...</p>
+          </div>
+        ) : releasesByApp.length === 0 ? (
+          <div className="flex flex-col items-center gap-2 py-16 text-center text-muted-foreground">
+            <Package className="h-10 w-10 opacity-30" />
+            <p className="text-sm">Aucune version publiée.</p>
+          </div>
+        ) : (
+          <div className="grid gap-4 md:grid-cols-2">
+            {releasesByApp.map(app => (
+              <AppReleaseCard key={app.key} label={app.label} releases={app.releases} />
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
   )
 }

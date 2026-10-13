@@ -70,12 +70,6 @@ export const kioskApi = {
   inspectApk: (formData: FormData) =>
     kioskClient.upload<KioskApkInspectResponse>('/api/releases/inspect', formData),
 
-  toggleRelease: (releaseId: string, active: boolean) =>
-    kioskClient.patch<KioskSuccessResponse>(`/api/releases/${releaseId}`, { active }),
-
-  deleteRelease: (releaseId: string) =>
-    kioskClient.del<KioskSuccessResponse>(`/api/releases/${releaseId}`),
-
   deployToDevice: (deviceId: string, releaseId: string) =>
     kioskClient.post<KioskSuccessResponse>('/api/versions/deploy', { deviceId, releaseId }),
 
