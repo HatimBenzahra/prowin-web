@@ -242,13 +242,18 @@ const JOURNAL = `
         s3Key recordingId createdAt day durationSec
         subjectId subjectName subjectRole
         porteId porteNumero porteEtage statutPorte
-        immeubleId adresse favori
+        immeubleId adresse favori archived archivedAt
         analysis {
           id status quality score band executionScore outcomeScore
           visitResult nonSaleReason productStatuses { key status }
         }
       }
     }
+  }
+`
+const SET_ARCHIVE = `
+  mutation SetCoachingArchive($s3Key: String!, $archived: Boolean!) {
+    setCoachingArchive(s3Key: $s3Key, archived: $archived)
   }
 `
 const COACHABLE_SUBJECTS = `
@@ -405,6 +410,12 @@ export class CoachingService {
   static async journal(filter: any): Promise<{ days: string[]; hasMore: boolean; nextBefore: string | null; rows: any[] }> {
     const data = await graphqlClient.request(JOURNAL, { filter })
     return data.coachingJournal
+  }
+
+  /** Archive (« non intéressant ») ou désarchive un audio du journal. Lève l'erreur. */
+  static async setArchive(s3Key: string, archived: boolean): Promise<boolean> {
+    const data = await graphqlClient.request(SET_ARCHIVE, { s3Key, archived })
+    return data.setCoachingArchive
   }
 
   /** Lance l'analyse manuelle (ignore le filtre durée) sur un lot de clés S3. */

@@ -3,6 +3,8 @@ import {
   parisDay,
 } from '../lecture/coaching-query.service';
 import { CoachingResolver } from '../coaching.resolver';
+import { CoachingService } from '../coaching.service';
+import { NotFoundException } from '@nestjs/common';
 import { ROLES_KEY } from '../../auth/decorators/roles.decorator';
 
 /** Journal des écoutes : 1 audio = 1 ligne, pagination par jours entiers, filtres. */
@@ -40,6 +42,7 @@ describe('coachingJournal', () => {
     segments: any[],
     analyses: any[] = [],
     commercials: any[] = [],
+    archives: any[] = [],
   ) {
     const inRange = (s: any, where: any) => {
       const c = where.createdAt ?? {};
@@ -99,6 +102,11 @@ describe('coachingJournal', () => {
         ),
       },
       manager: { findMany: jest.fn(async () => []) },
+      coachingArchive: {
+        findMany: jest.fn(async ({ where }: any) =>
+          archives.filter((x) => where.s3Key.in.includes(x.s3Key)),
+        ),
+      },
     };
     const query = new CoachingQueryService(
       prisma,
@@ -291,10 +299,94 @@ describe('coachingJournal', () => {
     expect(parisDay(at('2026-10-12T21:30:00Z'))).toBe('2026-10-12');
   });
 
+  it('masque les archivés par défaut, ne montre qu’eux avec archived=only', async () => {
+    const segments = [
+      seg(1, 'garde.mp4', '2026-10-13T10:00:00Z', porte(1)),
+      seg(2, 'archive.mp4', '2026-10-13T09:00:00Z', porte(2)),
+    ];
+    const archives = [
+      { s3Key: 'archive.mp4', archivedAt: at('2026-10-13T12:00:00Z') },
+    ];
+    const f = fixture(segments, [], [], archives);
+    const hidden = await f.query.coachingJournal({});
+    expect(hidden.rows.map((r) => [r.s3Key, r.archived])).toEqual([
+      ['garde.mp4', false],
+    ]);
+    const only = await f.query.coachingJournal({ archived: 'only' });
+    expect(only.rows).toHaveLength(1);
+    expect(only.rows[0]).toMatchObject({
+      s3Key: 'archive.mp4',
+      archived: true,
+      archivedAt: '2026-10-13T12:00:00.000Z',
+    });
+  });
+
   it('même périmètre que la liste de gestion', () => {
     const roles = (m: string) =>
       Reflect.getMetadata(ROLES_KEY, (CoachingResolver.prototype as any)[m]);
     expect(roles('coachingJournal')).toEqual(roles('coachingManagementList'));
     expect(roles('coachingJournal')).toEqual(['admin', 'directeur']);
+    expect(roles('setCoachingArchive')).toEqual(roles('coachingJournal'));
+  });
+});
+
+describe('setCoachingArchive', () => {
+  function fixture(known = true) {
+    const prisma: any = {
+      recordingSegment: {
+        findFirst: jest.fn(async () => (known ? { id: 1 } : null)),
+      },
+      coachingArchive: {
+        upsert: jest.fn(async () => ({})),
+        deleteMany: jest.fn(async () => ({ count: 1 })),
+      },
+    };
+    const service = new CoachingService(
+      prisma,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+    );
+    return { service, prisma };
+  }
+
+  it('archive en traçant qui, sans écraser une archive existante', async () => {
+    const f = fixture();
+    await expect(
+      f.service.setCoachingArchive('a.mp4', true, {
+        id: 2,
+        role: 'directeur',
+        email: ' dir@prowin.fr ',
+      }),
+    ).resolves.toBe(true);
+    expect(f.prisma.coachingArchive.upsert).toHaveBeenCalledWith({
+      where: { s3Key: 'a.mp4' },
+      create: { s3Key: 'a.mp4', archivedBy: 'dir@prowin.fr' },
+      update: {},
+    });
+    await f.service.setCoachingArchive('a.mp4', true, { id: 1, role: 'admin' });
+    expect(
+      f.prisma.coachingArchive.upsert.mock.calls[1][0].create.archivedBy,
+    ).toBe('admin#1');
+  });
+
+  it('désarchive en supprimant la ligne', async () => {
+    const f = fixture();
+    await expect(
+      f.service.setCoachingArchive('a.mp4', false, { id: 1, role: 'admin' }),
+    ).resolves.toBe(false);
+    expect(f.prisma.coachingArchive.deleteMany).toHaveBeenCalledWith({
+      where: { s3Key: 'a.mp4' },
+    });
+  });
+
+  it('refuse un audio inconnu du journal', async () => {
+    const f = fixture(false);
+    await expect(
+      f.service.setCoachingArchive('x.mp4', true, { id: 1, role: 'admin' }),
+    ).rejects.toBeInstanceOf(NotFoundException);
+    expect(f.prisma.coachingArchive.upsert).not.toHaveBeenCalled();
   });
 });

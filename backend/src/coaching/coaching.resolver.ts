@@ -179,6 +179,17 @@ export class CoachingResolver {
     return this.coaching.launchMany(s3Keys, requestBearer(context));
   }
 
+  /** Archive (« non intéressant ») ou désarchive un audio du journal des écoutes. */
+  @Mutation(() => Boolean)
+  @Roles('admin', 'directeur')
+  setCoachingArchive(
+    @Args('s3Key') s3Key: string,
+    @Args('archived') archived: boolean,
+    @CurrentUser() user: { id: number; role: string; email?: string | null },
+  ): Promise<boolean> {
+    return this.coaching.setCoachingArchive(s3Key, archived, user);
+  }
+
   @Mutation(() => Boolean)
   @Roles('admin', 'directeur')
   setCoachingFavori(

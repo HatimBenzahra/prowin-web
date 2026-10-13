@@ -859,6 +859,15 @@ enum CoachingStatus {
   FAILED
 }
 
+// Enregistrement archivé (« non intéressant ») dans le journal des écoutes. Clé = la clé
+// S3 de l'audio, comme les lignes du journal : tous les audios n'ont pas de Recording.
+// Désarchiver supprime la ligne.
+model CoachingArchive {
+  s3Key      String   @id
+  archivedAt DateTime @default(now())
+  archivedBy String?
+}
+
 // Config singleton du coaching (éditable depuis la page de gestion).
 model CoachingConfig {
   id                     Int       @id @default(1)

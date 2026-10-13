@@ -36,6 +36,7 @@ export const DEFAULT_FILTERS = {
   produit: '',
   accepte: false,
   nonAnalyses: false,
+  archives: false, // n'afficher que les enregistrements archivés
   group: 'batiment',
 }
 
@@ -65,6 +66,7 @@ export function parseFilters(params) {
     produit: get('produit'),
     accepte: get('accepte') === '1',
     nonAnalyses: get('nonAnalyses') === '1',
+    archives: get('archives') === '1',
     group,
   }
 }
@@ -89,6 +91,7 @@ export function serializeFilters(filters, selection = '') {
   set('produit', f.produit)
   set('accepte', f.produit && f.accepte ? '1' : '')
   set('nonAnalyses', f.nonAnalyses ? '1' : '')
+  set('archives', f.archives ? '1' : '')
   if (f.group !== DEFAULT_FILTERS.group) set('vue', f.group)
   set('s', selection)
   return params
@@ -102,6 +105,7 @@ export function activeFiltersCount(filters) {
     filters.immeubles.length,
     filters.favoris,
     filters.nonAnalyses,
+    filters.archives,
     filters.statuts.length,
     filters.resultats.length,
     filters.bands.length,
@@ -156,6 +160,8 @@ export function toJournalFilter(filters, now = new Date()) {
     productAcceptedOnly: filters.produit && filters.accepte ? true : null,
     favorisOnly: filters.favoris || null,
     nonAnalysesOnly: filters.nonAnalyses || null,
+    // Sans valeur, le serveur masque les archivés.
+    archived: filters.archives ? 'only' : null,
   }
 }
 

@@ -191,6 +191,26 @@ export class CoachingService {
     return n;
   }
 
+  /**
+   * Archive (« non intéressant ») ou désarchive un audio du journal des écoutes. Seul
+   * un audio connu du journal (au moins un segment de porte) peut l'être.
+   */
+  async setCoachingArchive(s3Key: string, archived: boolean, actor: Actor): Promise<boolean> {
+    const known = s3Key ? await this.prisma.recordingSegment.findFirst({ where: { s3KeyOriginal: s3Key }, select: { id: true } }) : null;
+    if (!known) throw new NotFoundException(`Enregistrement introuvable: ${s3Key}`);
+    if (!archived) {
+      await this.prisma.coachingArchive.deleteMany({ where: { s3Key } });
+      return false;
+    }
+    const archivedBy = actor.email?.trim() || `${actor.role}#${actor.id}`;
+    await this.prisma.coachingArchive.upsert({
+      where: { s3Key },
+      create: { s3Key, archivedBy },
+      update: {}, // déjà archivé : on garde qui et quand
+    });
+    return true;
+  }
+
   /** SQL brut EXPRÈS : le favori ne doit pas bumper `Porte.updatedAt`. */
   async setCoachingFavori(porteId: number, favori: boolean): Promise<boolean> {
     await this.prisma.$executeRaw`

@@ -99,6 +99,22 @@ export function useCoachingJournal(filters) {
     }
   }, [])
 
+  /**
+   * Archive ou désarchive : dans les deux vues, la ligne quitte la liste affichée
+   * (archivés masqués, ou seulement eux). `restoreRow` la remet en place (annulation).
+   */
+  const setArchived = useCallback(async (row, archived) => {
+    await CoachingService.setArchive(row.s3Key, archived)
+    setRows(prev => prev.filter(r => r.s3Key !== row.s3Key))
+  }, [])
+  const restoreRow = useCallback(row => {
+    setRows(prev =>
+      prev.some(r => r.s3Key === row.s3Key)
+        ? prev
+        : [...prev, row].sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    )
+  }, [])
+
   /** Une analyse nouvelle ou suivie remplace le résumé de sa ligne. */
   const setAnalysis = useCallback((s3Key, analysis) => {
     setRows(prev =>
@@ -147,6 +163,8 @@ export function useCoachingJournal(filters) {
 
   return {
     rows,
+    setArchived,
+    restoreRow,
     launch,
     launching,
     loading,

@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { AlertTriangle, Headphones, RotateCw } from 'lucide-react'
+import { AlertTriangle, Archive, Headphones, RotateCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet'
+import { useToast } from '@/components/ui/toast'
 import { useIsMobile } from '@/hooks/ui/use-mobile'
 import { useErrorToast } from '@/hooks/utils/ui/use-error-toast'
 import CoachingService from '@/services/coaching/coaching.service'
@@ -40,6 +41,7 @@ export default function Coachings() {
   const selectedKey = searchParams.get('s') || ''
   const isMobile = useIsMobile()
   const { showError } = useErrorToast()
+  const { toast, dismiss } = useToast()
 
   // La vue ne change que le regroupement, pas la requête.
   const serverFilters = useMemo(() => ({ ...filters, group: undefined }), [filters])
@@ -83,6 +85,48 @@ export default function Coachings() {
     }
   }
 
+  /**
+   * Archiver / désarchiver : la ligne quitte la vue courante. Si elle était
+   * sélectionnée, la sélection passe à la suivante (la précédente en bout de liste).
+   * Le toast propose d'annuler, qui remet la ligne et la sélection.
+   */
+  const toggleArchive = async row => {
+    const archived = !row.archived
+    const wasSelected = row.s3Key === selectedKey
+    const rest = keys.filter(k => k !== row.s3Key)
+    const index = keys.indexOf(row.s3Key)
+    const nextKey = wasSelected ? (rest[Math.min(index, rest.length - 1)] ?? '') : selectedKey
+    try {
+      await journal.setArchived(row, archived)
+    } catch (error) {
+      showError(error, 'Coachings.toggleArchive')
+      return
+    }
+    if (wasSelected) select(nextKey)
+    const undo = async () => {
+      dismiss(id)
+      try {
+        await CoachingService.setArchive(row.s3Key, row.archived)
+        journal.restoreRow(row)
+        if (wasSelected) select(row.s3Key)
+      } catch (error) {
+        showError(error, 'Coachings.undoArchive')
+      }
+    }
+    const id = toast({
+      variant: 'success',
+      title: archived ? 'Enregistrement archivé' : 'Enregistrement désarchivé',
+      description: archived
+        ? 'Il n’apparaît plus dans le journal ; filtre « Archivés » pour le retrouver.'
+        : 'Il est de retour dans le journal.',
+      action: (
+        <Button variant="outline" size="sm" className="h-7" onClick={undo}>
+          Annuler
+        </Button>
+      ),
+    })
+  }
+
   const launchRow = async row => {
     try {
       await journal.launch(row.s3Key)
@@ -119,6 +163,7 @@ export default function Coachings() {
       row={selectedRow}
       onClose={isMobile ? undefined : () => select('')}
       onToggleFavori={toggleFavori}
+      onToggleArchive={toggleArchive}
       onLaunch={journal.launch}
       onAnalysisChange={journal.setAnalysis}
     />
@@ -154,6 +199,13 @@ export default function Coachings() {
         </div>
 
         <div className="min-h-0 flex-1 lg:overflow-y-auto">
+          {filters.archives && (
+            <p className="flex items-center gap-1.5 border-b bg-muted/40 px-3 py-1.5 text-xs text-muted-foreground">
+              <Archive className="h-3.5 w-3.5" />
+              Enregistrements archivés (non intéressants) — « Désarchiver » les remet dans le
+              journal.
+            </p>
+          )}
           {journal.loading ? (
             <div className="space-y-3 p-3">
               {[0, 1, 2].map(i => (
@@ -189,6 +241,7 @@ export default function Coachings() {
               collapsed={collapsed}
               onToggleCollapse={toggleCollapse}
               onToggleFavori={toggleFavori}
+              onToggleArchive={toggleArchive}
               onFilterBuilding={immeubles => updateFilters({ immeubles })}
               launching={journal.launching}
               onLaunch={launchRow}

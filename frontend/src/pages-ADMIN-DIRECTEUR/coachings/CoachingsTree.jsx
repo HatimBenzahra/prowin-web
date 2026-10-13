@@ -1,5 +1,15 @@
 import { useEffect, useRef } from 'react'
-import { Building2, ChevronRight, Filter, Loader2, Sparkles, Star, User2 } from 'lucide-react'
+import {
+  Archive,
+  ArchiveRestore,
+  Building2,
+  ChevronRight,
+  Filter,
+  Loader2,
+  Sparkles,
+  Star,
+  User2,
+} from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import {
@@ -118,6 +128,7 @@ function DoorRow({
   selected,
   onSelect,
   onToggleFavori,
+  onToggleArchive,
   launching,
   onLaunch,
 }) {
@@ -131,7 +142,9 @@ function DoorRow({
       onClick={() => onSelect(row.s3Key)}
       className={cn(
         'group flex cursor-pointer items-center gap-2 border-l-2 px-3 py-2 text-sm transition-colors',
-        selected ? 'border-l-primary bg-primary/10' : 'border-l-transparent hover:bg-muted/50'
+        selected ? 'border-l-primary bg-primary/10' : 'border-l-transparent hover:bg-muted/50',
+        // Archivé : présent, mais en retrait.
+        row.archived && !selected && 'text-muted-foreground opacity-70'
       )}
     >
       <div className="min-w-0 flex-1">
@@ -161,6 +174,22 @@ function DoorRow({
       <span className="w-10 shrink-0 text-right text-xs tabular-nums text-muted-foreground">
         {formatDuration(row.durationSec)}
       </span>
+      {/* Au survol sur grand écran ; toujours visible au doigt et sur un archivé. */}
+      <button
+        type="button"
+        onClick={e => {
+          e.stopPropagation()
+          onToggleArchive(row)
+        }}
+        className={cn(
+          'shrink-0 rounded p-0.5 text-muted-foreground/60 hover:bg-muted hover:text-foreground focus-visible:opacity-100',
+          !row.archived && !selected && 'lg:opacity-0 lg:group-hover:opacity-100'
+        )}
+        title={row.archived ? 'Désarchiver' : 'Masquer cet enregistrement (non intéressant)'}
+        aria-label={row.archived ? 'Désarchiver' : 'Archiver'}
+      >
+        {row.archived ? <ArchiveRestore className="h-4 w-4" /> : <Archive className="h-4 w-4" />}
+      </button>
       <button
         type="button"
         onClick={e => {
@@ -194,6 +223,7 @@ export default function CoachingsTree({
   collapsed,
   onToggleCollapse,
   onToggleFavori,
+  onToggleArchive,
   onFilterBuilding,
   launching,
   onLaunch,
@@ -315,6 +345,7 @@ export default function CoachingsTree({
                             selected={row.s3Key === selectedKey}
                             onSelect={onSelect}
                             onToggleFavori={onToggleFavori}
+                            onToggleArchive={onToggleArchive}
                           />
                         ))}
                       </div>

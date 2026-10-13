@@ -391,6 +391,8 @@ export class CoachingJournalRowDto {
   @Field(() => Int) immeubleId: number;
   @Field() adresse: string;
   @Field() favori: boolean;
+  @Field() archived: boolean;
+  @Field(() => String, { nullable: true }) archivedAt?: string | null;
   @Field(() => CoachingJournalAnalysisDto, { nullable: true }) analysis?: CoachingJournalAnalysisDto | null;
 }
 
@@ -423,6 +425,8 @@ export class CoachingJournalFilter {
   @Field(() => Boolean, { nullable: true }) productAcceptedOnly?: boolean | null;
   @Field(() => Boolean, { nullable: true }) favorisOnly?: boolean | null;
   @Field(() => Boolean, { nullable: true }) nonAnalysesOnly?: boolean | null;
+  // 'hide' (défaut) : sans les archivés ; 'only' : seulement eux.
+  @Field(() => String, { nullable: true }) archived?: string | null;
 }
 
 /** Sujet coachable (pour le menu déroulant de filtre). */

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import {
+  Archive,
   Building2,
   ChevronDown,
   ClipboardCheck,
@@ -399,6 +400,14 @@ export default function CoachingsFilterBar({
             onClick={() => onChange({ nonAnalyses: !filters.nonAnalyses })}
           >
             Non analysés
+          </ToggleFilter>
+          <ToggleFilter
+            active={filters.archives}
+            icon={<Archive />}
+            onClick={() => onChange({ archives: !filters.archives })}
+            title="Afficher seulement les enregistrements archivés (non intéressants)"
+          >
+            Archivés
           </ToggleFilter>
 
           <div

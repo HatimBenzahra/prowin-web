@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Clock, Loader2, Sparkles, Star, User2, X } from 'lucide-react'
+import { Archive, ArchiveRestore, Clock, Loader2, Sparkles, Star, User2, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import AudioPlayer from '@/components/AudioPlayer'
@@ -29,6 +29,7 @@ export default function CoachingsPanel({
   row,
   onClose,
   onToggleFavori,
+  onToggleArchive,
   onLaunch,
   onAnalysisChange,
 }) {
@@ -149,6 +150,26 @@ export default function CoachingsPanel({
               >
                 <Star className={cn('h-4 w-4', row.favori && 'fill-amber-500 text-amber-500')} />
                 Favori
+              </Button>
+            )}
+            {row && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => onToggleArchive(row)}
+                className="border border-sidebar-foreground/30 text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground"
+                title={
+                  row.archived
+                    ? 'Remettre dans le journal'
+                    : 'Masquer cet enregistrement (non intéressant)'
+                }
+              >
+                {row.archived ? (
+                  <ArchiveRestore className="h-4 w-4" />
+                ) : (
+                  <Archive className="h-4 w-4" />
+                )}
+                {row.archived ? 'Désarchiver' : 'Archiver'}
               </Button>
             )}
             {onClose && (

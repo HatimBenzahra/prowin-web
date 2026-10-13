@@ -49,6 +49,7 @@ describe('filtres ⇄ URL', () => {
       produit: 'purea',
       accepte: true,
       nonAnalyses: true,
+      archives: true,
       group: 'commercial',
     }
     const params = serializeFilters(filters, 'recordings/a.mp4')
@@ -259,5 +260,16 @@ describe('compteur de filtres', () => {
         immeubles: [7, 9],
       })
     ).toBe(5)
+  })
+})
+
+describe('archivés', () => {
+  it('masqués par défaut, « archives=1 » ne montre qu’eux et compte comme filtre', () => {
+    expect(toJournalFilter(DEFAULT_FILTERS).archived).toBeNull()
+    const filters = parseFilters(new URLSearchParams('archives=1'))
+    expect(filters.archives).toBe(true)
+    expect(toJournalFilter(filters).archived).toBe('only')
+    expect(activeFiltersCount(filters)).toBe(1)
+    expect(serializeFilters(filters).toString()).toBe('archives=1')
   })
 })

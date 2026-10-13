@@ -81,6 +81,8 @@ function matchesJournalFilter(
   f: CoachingJournalFilter,
 ): boolean {
   const a = r.analysis ?? null;
+  // Archivés masqués par défaut ; « only » ne montre qu'eux.
+  if (r.archived !== (f.archived === 'only')) return false;
   if (f.favorisOnly && !r.favori) return false;
   if (f.nonAnalysesOnly && a) return false;
   if (f.immeubleIds?.length && !f.immeubleIds.includes(r.immeubleId))
@@ -675,7 +677,7 @@ export class CoachingQueryService {
     };
   }
 
-  /** Lignes du journal d'une fenêtre [start, end[, en 5 requêtes batch (pas de N+1). */
+  /** Lignes du journal d'une fenêtre [start, end[, en 6 requêtes batch (pas de N+1). */
   private async journalWindow(
     subjectWhere: Prisma.RecordingSegmentWhereInput,
     start: Date,
@@ -755,7 +757,7 @@ export class CoachingQueryService {
     };
 
     // Sans référentiel actif, aucune analyse : l'id -1 n'existe pas.
-    const [recordings, analyses, commercials, managers] = await Promise.all([
+    const [recordings, analyses, commercials, managers, archives] = await Promise.all([
       this.prisma.recording.findMany({
         where: { s3Key: { in: keys } },
         select: { id: true, s3Key: true },
@@ -794,11 +796,16 @@ export class CoachingQueryService {
             select: { id: true, nom: true, prenom: true, status: true },
           })
         : Promise.resolve([] as OwnerRow[]),
+      this.prisma.coachingArchive.findMany({
+        where: { s3Key: { in: keys } },
+        select: { s3Key: true, archivedAt: true },
+      }),
     ]);
     const recordingByKey = new Map(recordings.map((r) => [r.s3Key, r.id]));
     const analysisByKey = new Map(analyses.map((a) => [a.s3KeyOriginal, a]));
     const cMap = new Map(commercials.map((c) => [c.id, c]));
     const mMap = new Map(managers.map((m) => [m.id, m]));
+    const archivedAt = new Map(archives.map((x) => [x.s3Key, x.archivedAt]));
 
     const out: CoachingJournalRowDto[] = [];
     for (const [s3Key, { primary, durationSec, createdAt }] of byKey) {
@@ -829,6 +836,8 @@ export class CoachingQueryService {
         immeubleId: primary.porte.immeubleId,
         adresse: primary.porte.immeuble?.adresse ?? '',
         favori: primary.porte.coachingFavori,
+        archived: archivedAt.has(s3Key),
+        archivedAt: archivedAt.get(s3Key)?.toISOString() ?? null,
         analysis: a
           ? {
               id: a.id,
