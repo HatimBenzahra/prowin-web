@@ -215,6 +215,42 @@ export function useStatistiquesLogic() {
     }
   }, [startIso, endIso, scoreboardEnabled])
 
+  // ── Statistiques produit du coaching (proposition, transformation, pertes) ──
+  // Même principe que le comparatif : appel hors react-query, clé mémorisée.
+  const [productStats, setProductStats] = useState(null)
+  const [productStatsLoading, setProductStatsLoading] = useState(false)
+  const productStatsKeyRef = useRef(null)
+  const productStatsEnabled = needs('productStats')
+
+  useEffect(() => {
+    if (!productStatsEnabled) return
+
+    const key = `${startIso}|${endIso}`
+    if (productStatsKeyRef.current === key) return
+    productStatsKeyRef.current = key
+
+    let active = true
+    let settled = false
+    setProductStatsLoading(true)
+    CoachingService.productStats(startIso, endIso)
+      .then(data => {
+        if (!active) return
+        setProductStats(data)
+        if (!data) productStatsKeyRef.current = null
+      })
+      .finally(() => {
+        settled = true
+        if (active) setProductStatsLoading(false)
+      })
+
+    return () => {
+      active = false
+      // Requête abandonnée en vol (StrictMode, changement de période) : la clé est
+      // libérée pour que l'effet suivant la relance au lieu de rester en chargement.
+      if (!settled && productStatsKeyRef.current === key) productStatsKeyRef.current = null
+    }
+  }, [startIso, endIso, productStatsEnabled])
+
   /**
    * Chargement du **bandeau permanent** : la rangée de KPI, seule chose affichée
    * hors onglets. C'est elle, et elle seule, qui décide du squelette plein écran —
@@ -233,7 +269,8 @@ export function useStatistiquesLogic() {
     (needs('effort') && effortLoading) ||
     (needs('ownerActivity') && ownerActivityLoading) ||
     (needs('zoneStats') && zoneStatsLoading) ||
-    (needs('scoreboard') && scoreboardLoading)
+    (needs('scoreboard') && scoreboardLoading) ||
+    (needs('productStats') && productStatsLoading)
 
   const fetching = headerFetching || tabFetching || commercialsLoading || managersLoading
 
@@ -321,5 +358,7 @@ export function useStatistiquesLogic() {
     zoneStats: zoneStats || [],
     scoreboard,
     scoreboardLoading,
+    productStats,
+    productStatsLoading,
   }
 }

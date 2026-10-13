@@ -10,6 +10,8 @@ import {
   XCircle,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import {
   Sheet,
   SheetContent,
@@ -72,6 +74,7 @@ export default function ReferenceDraftSheet({ open, onOpenChange, onPublished })
   const [form, setForm] = useState({ open: false, product: null })
   const [removing, setRemoving] = useState(null)
   const [confirm, setConfirm] = useState(null) // 'publish' | 'discard' | 'remove'
+  const [effectiveFrom, setEffectiveFrom] = useState('') // AAAA-MM-JJ ; vide = dès la publication
   const { showError, showSuccess } = useErrorToast()
 
   useEffect(() => {
@@ -94,7 +97,10 @@ export default function ReferenceDraftSheet({ open, onOpenChange, onPublished })
   const blocked = issues.some(i => i.level === 'error')
 
   const publish = async () => {
-    const published = await CoachingService.publishReferenceDraft()
+    const published = await CoachingService.publishReferenceDraft(
+      effectiveFrom ? new Date(effectiveFrom).toISOString() : null
+    )
+    setEffectiveFrom('')
     showSuccess(`Référentiel v${published.version} publié : il note désormais les analyses.`)
     setDraft(null)
     onOpenChange(false)
@@ -277,7 +283,18 @@ export default function ReferenceDraftSheet({ open, onOpenChange, onPublished })
         description="Il devient la version active : les prochaines analyses et relances seront notées avec ce plan, ces produits et ces fiches."
         confirmLabel="Publier"
         onConfirm={publish}
-      />
+      >
+        <div className="space-y-1.5">
+          <Label htmlFor="reference-effective-from">Entrée en vigueur</Label>
+          <Input
+            id="reference-effective-from"
+            type="date"
+            value={effectiveFrom}
+            onChange={e => setEffectiveFrom(e.target.value)}
+          />
+          <p className="text-xs text-muted-foreground">Laisser vide : dès la publication.</p>
+        </div>
+      </ConfirmDialog>
       <ConfirmDialog
         open={confirm === 'discard'}
         onOpenChange={next => !next && setConfirm(null)}

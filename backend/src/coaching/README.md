@@ -51,6 +51,33 @@ Before deployment, the external engine must be configured with
 It accepts HTTPS only and does not follow redirects. No storage hostname is inferred
 or hardcoded, and no server configuration was changed during local implementation.
 
+## Recalibrage 2026 (résultat de visite, statuts produit, indicateurs)
+
+Migration additive `20261013120000_coaching_recalibrage`. `/coaching/evaluate` reçoit en plus
+`transcriptSegments` (`[{start,end,text}]`, depuis `transcriptMetadata.segments`, omis sinon).
+Le moteur peut rendre `executionScore`, `outcome`, `productStatuses`, `indicators`, `band`,
+`analysisConfidence`, `calculationChecks`, `contradictions`, `phaseTiming` : ils sont lus par
+`shared/visit-outcome.ts`, où tout champ absent (moteur antérieur) ou hors contrat devient null
+sans faire échouer l'analyse. Une analyse INEXPLOITABLE masque `executionScore`,
+`outcomeScore` et `indicators` comme `score`, et sa bande vaut `non_evaluable`. La remise en
+file vide ces colonnes avec les autres sorties.
+
+Le résultat de visite (`visitResult`, `nonSaleReason`, `nextAction`, `ribStatus`,
+`signatureStatus`, `productStatuses`) est pré-rempli par l'IA et corrigeable par
+`updateCoachingVisitOutcome` sur une analyse READY (admin et directeur ; manager pour les
+analyses de ses commerciaux, jamais les siennes) ; `outcomeOverriddenBy/At` tracent la
+correction, les scores ne sont pas recalculés et une relance efface la correction. Une vente
+suppose au moins un produit ACCEPTE. Limite connue : comme le reste du coaching (comparatif,
+lectures), le directeur n'est pas restreint à son équipe.
+Les visites de bande `non_evaluable` n'entrent dans aucune moyenne (stats, comparatif,
+synthèse). `transcriptSegments` est tout ou rien : un segment invalide et aucun ne part.
+Statistiques produit : le taux de proposition d'un produit se rapporte aux visites où il
+n'était pas NON_APPLICABLE ; les causes de perte ne comptent que les visites sans vente.
+`Commercial.niveau` (défaut OPERATIONNEL, éditable via `updateCommercial`) fixe
+`objectiveScore` : EN_FORMATION 75, OPERATIONNEL 80, CONFIRME 85, EXPERT 90.
+`publishReferenceDraft(effectiveFrom)` date l'entrée en vigueur (défaut : la publication).
+`coachingProductStats(startDate, endDate)` agrège les statuts produit des visites exploitables.
+
 ## Référentiel (plan de vente + catalogue de produits)
 
 The CRM owns one **référentiel** per tenant (`CoachingReference` +

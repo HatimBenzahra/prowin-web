@@ -58,6 +58,35 @@ describe('schéma GraphQL coaching', () => {
     },
   );
 
+  it.each([
+    'executionScore',
+    'outcomeScore',
+    'visitResult',
+    'nonSaleReason',
+    'nextAction',
+    'ribStatus',
+    'signatureStatus',
+    'productStatuses',
+    'indicators',
+    'band',
+    'analysisConfidence',
+    'calculationChecks',
+    'contradictions',
+    'phaseTiming',
+    'outcomeOverriddenBy',
+    'objectiveScore',
+  ])('expose CoachingAnalysisDto.%s (recalibrage)', (field) => {
+    const block = /type CoachingAnalysisDto \{([^}]*)\}/.exec(sdl);
+    expect(block![1]).toContain(`${field}:`);
+  });
+
+  it('expose la correction du résultat de visite aux admins, directeurs et managers', () => {
+    expect(sdl).toContain('updateCoachingVisitOutcome(analysisId: Int!');
+    expect(sdl).toContain('coachingProductStats(startDate: DateTime, endDate: DateTime): CoachingProductStatsDto!');
+    const roles = Reflect.getMetadata(ROLES_KEY, (CoachingResolver.prototype as any).updateCoachingVisitOutcome);
+    expect(roles).toEqual(['admin', 'directeur', 'manager']);
+  });
+
   // Sans la ligne du plan à l'écran, un manager ne peut pas discuter l'écart.
   it.each(['quote', 'sheetSays', 'planSays'])(
     'expose CoachingViolationDto.%s',
@@ -89,7 +118,7 @@ describe('schéma GraphQL coaching', () => {
     'saveReferenceDraftProduct(product: ReferenceProductInput!): ReferenceDraftDto!',
     'setReferenceDraftProductSheet(key: String!, markdown: String!): ReferenceDraftDto!',
     'removeReferenceDraftProduct(key: String!): ReferenceDraftDto!',
-    'publishReferenceDraft: ReferenceDto!',
+    'publishReferenceDraft(effectiveFrom: DateTime): ReferenceDto!',
     'discardReferenceDraft: Boolean!',
     'activateReferenceVersion(id: Int!): ReferenceDto!',
   ])('expose %s', (operation) => {

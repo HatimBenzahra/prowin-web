@@ -13,6 +13,7 @@ import { Immeuble } from '../immeuble/immeuble.dto';
 import { Zone } from '../zone/zone.dto';
 import { Statistic } from '../statistic/statistic.dto';
 import { UserStatus } from '../enumeration-Status/user-status.enum';
+import { CommercialNiveau } from '../enumeration-Status/commercial-niveau.enum';
 
 @ObjectType()
 export class Commercial {
@@ -42,6 +43,9 @@ export class Commercial {
 
   @Field(() => UserStatus)
   status: UserStatus;
+
+  @Field(() => CommercialNiveau)
+  niveau: CommercialNiveau;
 
   @Field()
   createdAt: Date;
@@ -149,6 +153,11 @@ export class UpdateCommercialInput {
   @IsOptional()
   @IsEnum(UserStatus)
   status?: UserStatus;
+
+  @Field(() => CommercialNiveau, { nullable: true })
+  @IsOptional()
+  @IsEnum(CommercialNiveau)
+  niveau?: CommercialNiveau;
 }
 
 @ObjectType()

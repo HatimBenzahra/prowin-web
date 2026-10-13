@@ -5,6 +5,7 @@ import { UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { CoachingService } from './coaching.service';
 import { CoachingConfigService } from './coaching-config.service';
 import { CoachingQueryService } from './lecture/coaching-query.service';
@@ -19,6 +20,8 @@ import {
   CoachingScoreboardDto,
   PaginatedCoachingManagement,
   CoachableSubjectDto,
+  CoachingProductStatsDto,
+  CoachingProductStatusInput,
 } from './coaching.dto';
 @Resolver()
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -101,6 +104,32 @@ export class CoachingResolver {
     @Args('endDate', { type: () => Date, nullable: true }) endDate?: Date,
   ): Promise<CoachingScoreboardDto> {
     return this.query.coachingScoreboard(startDate, endDate);
+  }
+
+  /** Statistiques produit (proposition, transformation, oublis, causes de perte). */
+  @Query(() => CoachingProductStatsDto)
+  @Roles('admin', 'directeur')
+  coachingProductStats(
+    @Args('startDate', { type: () => Date, nullable: true }) startDate?: Date,
+    @Args('endDate', { type: () => Date, nullable: true }) endDate?: Date,
+  ): Promise<CoachingProductStatsDto> {
+    return this.query.coachingProductStats(startDate, endDate);
+  }
+
+  /** Correction du résultat de visite pré-rempli par l'IA (périmètre vérifié par le service). */
+  @Mutation(() => CoachingAnalysisDto)
+  @Roles('admin', 'directeur', 'manager')
+  updateCoachingVisitOutcome(
+    @Args('analysisId', { type: () => Int }) analysisId: number,
+    @CurrentUser() user: { id: number; role: string; email?: string | null },
+    @Args('visitResult', { type: () => String, nullable: true }) visitResult?: string | null,
+    @Args('nonSaleReason', { type: () => String, nullable: true }) nonSaleReason?: string | null,
+    @Args('nextAction', { type: () => String, nullable: true }) nextAction?: string | null,
+    @Args('ribStatus', { type: () => String, nullable: true }) ribStatus?: string | null,
+    @Args('signatureStatus', { type: () => String, nullable: true }) signatureStatus?: string | null,
+    @Args('productStatuses', { type: () => [CoachingProductStatusInput], nullable: true }) productStatuses?: CoachingProductStatusInput[] | null,
+  ): Promise<CoachingAnalysisDto> {
+    return this.coaching.updateVisitOutcome(analysisId, { visitResult, nonSaleReason, nextAction, ribStatus, signatureStatus, productStatuses }, user);
   }
 
   @Mutation(() => CoachingConfigDto)

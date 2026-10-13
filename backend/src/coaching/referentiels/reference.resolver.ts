@@ -101,8 +101,11 @@ export class ReferenceResolver {
   /** Publie le brouillon : il devient la version active des prochaines analyses. */
   @Mutation(() => ReferenceDto)
   @Roles('admin')
-  async publishReferenceDraft(@CurrentUser() user: AuthenticatedUser): Promise<ReferenceDto> {
-    return this.toDto(await this.references.publishDraft(author(user)));
+  async publishReferenceDraft(
+    @CurrentUser() user: AuthenticatedUser,
+    @Args('effectiveFrom', { type: () => Date, nullable: true }) effectiveFrom?: Date | null,
+  ): Promise<ReferenceDto> {
+    return this.toDto(await this.references.publishDraft(author(user), effectiveFrom));
   }
 
   @Mutation(() => Boolean)
@@ -140,6 +143,7 @@ export class ReferenceResolver {
       updatedAt: reference.updatedAt,
       publishedBy: reference.publishedBy,
       publishedAt: reference.publishedAt,
+      effectiveFrom: reference.effectiveFrom,
       plan: this.toPlanDto(reference),
       products: reference.products.map(product => {
         const content = product.sheetContent as unknown as ProductContent | null;

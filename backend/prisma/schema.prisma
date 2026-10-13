@@ -64,6 +64,8 @@ model Commercial {
   age           Int?
   status        UserStatus @default(ACTIF)
   winleadPlusId String?    @unique // UUID du commercial côté WinLead+
+  // Niveau d'expérience : fixe l'objectif de score coaching attendu.
+  niveau        CommercialNiveau @default(OPERATIONNEL)
   managerId     Int?
   directeurId   Int?
   createdAt     DateTime   @default(now())
@@ -79,6 +81,13 @@ model Commercial {
   contratsValides  ContratValide[]
   recordings       Recording[]
   quartiers        Quartier[]
+}
+
+enum CommercialNiveau {
+  EN_FORMATION
+  OPERATIONNEL
+  CONFIRME
+  EXPERT
 }
 
 model Zone {
@@ -620,6 +629,8 @@ model CoachingReference {
   updatedAt       DateTime                @updatedAt
   publishedBy     String?
   publishedAt     DateTime?
+  // Date d'entrée en vigueur annoncée à la publication (défaut : la publication).
+  effectiveFrom   DateTime?
 
   products CoachingReferenceProduct[]
   analyses CoachingAnalysis[]
@@ -779,6 +790,24 @@ model CoachingAnalysis {
   detectedProducts      Json? // clés des offres PRÉSENTÉES par le commercial (passe 0)
   productMapping        Json? // trace complète de la passe 0, offres non présentées incluses
   productSheetVersions  Json? // ids des versions de fiche utilisées en passe 2 (traçabilité)
+  // Recalibrage 2026 : null sur les analyses antérieures et les moteurs qui ne les rendent pas.
+  executionScore        Float? // qualité d'exécution 0-100 (avant résultat commercial)
+  outcomeScore          Float? // points du résultat commercial (0..outcomeShare)
+  // Résultat de visite : pré-rempli par l'IA, corrigeable (outcomeOverriddenBy/At).
+  visitResult           String?
+  nonSaleReason         String?
+  nextAction            String?
+  ribStatus             String?
+  signatureStatus       String?
+  productStatuses       Json? // statut de chaque produit du catalogue (présenté, refusé, oublié…)
+  indicators            Json? // { qualiteCommerciale, respectPlan, conformite }
+  band                  String? // maitrise | correct | coaching | insuffisant | non_evaluable
+  analysisConfidence    Json? // { level, reasons }
+  calculationChecks     Json?
+  contradictions        Json?
+  phaseTiming           Json?
+  outcomeOverriddenBy   String?
+  outcomeOverriddenAt   DateTime?
   transcript            String?
   transcriptDurationSec Float?
   transcriptMetadata    Json?

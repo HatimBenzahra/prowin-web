@@ -14,6 +14,7 @@ export const GET_COMMERCIALS = `
       managerId
       directeurId
       status
+      niveau
       createdAt
       updatedAt
       statistics {
@@ -42,6 +43,7 @@ export const GET_COMMERCIAL = `
       managerId
       directeurId
       status
+      niveau
       createdAt
       updatedAt
     }
@@ -75,6 +77,7 @@ export const GET_COMMERCIAL_FULL = `
       managerId
       directeurId
       status
+      niveau
       createdAt
       updatedAt
       immeubles {

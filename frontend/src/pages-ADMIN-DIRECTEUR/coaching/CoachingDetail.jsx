@@ -6,6 +6,14 @@ import { cn } from '@/lib/utils'
 import CoachingService from '@/services/coaching/coaching.service'
 import CoachingResultPanel from './CoachingResultPanel'
 import {
+  NIVEAU_LABELS,
+  RELAUNCH_CORRECTION_WARNING,
+  objectiveGap,
+  showsScore,
+} from './coaching-calibration'
+import { ConfirmDialog } from './ReferenceDialogs'
+import {
+  BandPill,
   ScoreBar,
   StatusPill,
   QualityPill,
@@ -29,6 +37,7 @@ export default function CoachingDetail({ analysis, onBack, onClose, backLabel = 
   const [a, setA] = useState(analysis)
   const [favori, setFavori] = useState(analysis?.favori ?? false)
   const [relaunching, setRelaunching] = useState(false)
+  const [confirmRelaunch, setConfirmRelaunch] = useState(false)
 
   useEffect(() => {
     setA(analysis)
@@ -52,7 +61,8 @@ export default function CoachingDetail({ analysis, onBack, onClose, backLabel = 
   const meta = parseRecordingKey(a.s3KeyOriginal)
   const title = a.subjectName || meta.address || 'Enregistrement'
   const inProgress = isInProgress(a.status)
-  const hasScore = typeof a.score === 'number'
+  const hasScore = showsScore(a.score, a.band)
+  const gap = objectiveGap(a.score, a.objectiveScore, a.band)
 
   const toggleFavori = async () => {
     if (!a.porteId) return
@@ -133,7 +143,7 @@ export default function CoachingDetail({ analysis, onBack, onClose, backLabel = 
               <Button
                 variant="outline"
                 size="sm"
-                onClick={relaunch}
+                onClick={() => (a.outcomeOverriddenAt ? setConfirmRelaunch(true) : relaunch())}
                 disabled={relaunching || inProgress}
               >
                 {relaunching ? (
@@ -172,15 +182,42 @@ export default function CoachingDetail({ analysis, onBack, onClose, backLabel = 
                 )}
               </div>
             )}
+            {a.status === 'READY' && <BandPill score={a.score} band={a.band} />}
+            {gap && (
+              <div
+                className={cn(
+                  'max-w-64 text-right text-xs',
+                  gap.below ? 'font-medium text-amber-600' : 'text-muted-foreground'
+                )}
+              >
+                {NIVEAU_LABELS[a.commercialNiveau] || a.commercialNiveau} · objectif{' '}
+                {a.objectiveScore}
+                {gap.below && ' — en dessous du standard attendu pour son niveau'}
+              </div>
+            )}
           </div>
         </div>
-        {hasScore && <ScoreBar value={a.score} className="mt-3" />}
+        {hasScore && <ScoreBar value={a.score} band={a.band} className="mt-3" />}
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden px-5 py-4">
         {/* Pas de pied de score : l'en-tête porte déjà score, barre et pastilles. */}
-        <CoachingResultPanel analysis={a} recordingKey={a.s3KeyOriginal} showAudio />
+        <CoachingResultPanel
+          analysis={a}
+          recordingKey={a.s3KeyOriginal}
+          showAudio
+          onAnalysisChange={setA}
+        />
       </div>
+      <ConfirmDialog
+        open={confirmRelaunch}
+        onOpenChange={setConfirmRelaunch}
+        title="Relancer l’analyse ?"
+        description={RELAUNCH_CORRECTION_WARNING}
+        confirmLabel="Relancer"
+        destructive
+        onConfirm={relaunch}
+      />
     </>
   )
 }

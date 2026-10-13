@@ -25,7 +25,21 @@ const COACHING_FIELDS = `
   improvements
   recommendations
   subScores { key label weight applicable score }
-  criterionResults { stepKey criterionKey title status maxPoints score weightStep evidence comment }
+  criterionResults {
+    stepKey criterionKey title status maxPoints score weightStep evidence comment
+    level naReason naDetail dimension kind timing evidenceRefs { quote startSec endSec }
+  }
+  executionScore outcomeScore outcomeCategory outcomeComment outcomeEvidence
+  visitResult nonSaleReason nextAction ribStatus signatureStatus
+  outcomeOverriddenBy outcomeOverriddenAt
+  productStatuses { key label status opportunity naReason naDetail evidence }
+  indicators { qualiteCommerciale respectPlan conformite }
+  band
+  analysisConfidence { level reasons }
+  calculationChecks { quote inputs expression announced recomputed status comment }
+  contradictions { topic quoteA quoteB comment }
+  phaseTiming { stepKey timing evidence comment }
+  commercialNiveau objectiveScore
   transcriptDurationSec
   transcriptionAttempts evaluationAttempts stageStartedAt nextRetryAt
   transcriptionStartedAt transcriptionCompletedAt evaluationStartedAt evaluationCompletedAt
@@ -63,8 +77,40 @@ const RELAUNCH = `
     relaunchCoachingAnalysis(id: $id, retranscribe: $retranscribe) { ${COACHING_FIELDS} }
   }
 `
+const UPDATE_VISIT_OUTCOME = `
+  mutation UpdateCoachingVisitOutcome(
+    $analysisId: Int!
+    $visitResult: String
+    $nonSaleReason: String
+    $nextAction: String
+    $ribStatus: String
+    $signatureStatus: String
+    $productStatuses: [CoachingProductStatusInput!]
+  ) {
+    updateCoachingVisitOutcome(
+      analysisId: $analysisId
+      visitResult: $visitResult
+      nonSaleReason: $nonSaleReason
+      nextAction: $nextAction
+      ribStatus: $ribStatus
+      signatureStatus: $signatureStatus
+      productStatuses: $productStatuses
+    ) { ${COACHING_FIELDS} }
+  }
+`
+const PRODUCT_STATS = `
+  query CoachingProductStats($startDate: DateTime, $endDate: DateTime) {
+    coachingProductStats(startDate: $startDate, endDate: $endDate) {
+      nbVisites
+      produitsParVisite
+      products { key label nbVisites nbProposes nbAcceptes nbOublies tauxProposition tauxTransformation }
+      parIntervenant { subjectId subjectName subjectRole nbVisites nbProduitsVendus produitsParVisite }
+      causesPerte { reason count }
+    }
+  }
+`
 const REFERENCE_FIELDS = `
-  id status version isActive contentHash createdBy createdAt updatedAt publishedBy publishedAt
+  id status version isActive contentHash createdBy createdAt updatedAt publishedBy publishedAt effectiveFrom
   plan {
     slug title scoringScale rawMarkdown
     steps { key label weight appliesWhen criteria { key label points evidenceRequired appliesWhen } }
@@ -86,7 +132,7 @@ const ACTIVE_REFERENCE = `
 `
 const REFERENCE_VERSIONS = `
   query ReferenceVersions {
-    referenceVersions { id version isActive contentHash publishedAt publishedBy }
+    referenceVersions { id version isActive contentHash publishedAt publishedBy effectiveFrom }
   }
 `
 const REFERENCE_VERSION = `
@@ -130,8 +176,8 @@ const REMOVE_DRAFT_PRODUCT = `
   }
 `
 const PUBLISH_DRAFT = `
-  mutation PublishReferenceDraft {
-    publishReferenceDraft { ${REFERENCE_FIELDS} }
+  mutation PublishReferenceDraft($effectiveFrom: DateTime) {
+    publishReferenceDraft(effectiveFrom: $effectiveFrom) { ${REFERENCE_FIELDS} }
   }
 `
 const DISCARD_DRAFT = `
@@ -180,7 +226,7 @@ const MANAGEMENT_LIST = `
         statutPorte durationSec
         adresse porteNumero porteEtage
         favori
-        analysisId analysisStatus quality score
+        analysisId analysisStatus quality score band
       }
       total
     }
@@ -300,6 +346,26 @@ export class CoachingService {
   static async relaunch(id: number, retranscribe = false): Promise<any> {
     const data = await graphqlClient.request(RELAUNCH, { id, retranscribe })
     return data.relaunchCoachingAnalysis
+  }
+
+  /**
+   * Correction du résultat de visite (admin, directeur, manager de l'équipe). Seuls les
+   * champs fournis changent ; l'erreur est propagée pour être affichée.
+   */
+  static async updateVisitOutcome(analysisId: number, correction: any): Promise<any> {
+    const data = await graphqlClient.request(UPDATE_VISIT_OUTCOME, { analysisId, ...correction })
+    return data.updateCoachingVisitOutcome
+  }
+
+  /** Statistiques produit des visites analysées sur une période. */
+  static async productStats(startDate?: string, endDate?: string): Promise<any | null> {
+    try {
+      const data = await graphqlClient.request(PRODUCT_STATS, { startDate, endDate })
+      return data.coachingProductStats || null
+    } catch (error) {
+      console.error('Erreur coachingProductStats:', error)
+      return null
+    }
   }
 
   /** Liste de gestion : enregistrements coachables (paginée, filtrable). */
@@ -501,8 +567,9 @@ export class CoachingService {
     return data.removeReferenceDraftProduct
   }
 
-  static async publishReferenceDraft(): Promise<any> {
-    const data = await graphqlClient.request(PUBLISH_DRAFT)
+  /** `effectiveFrom` (ISO) : entrée en vigueur annoncée ; absente, le serveur prend la publication. */
+  static async publishReferenceDraft(effectiveFrom?: string | null): Promise<any> {
+    const data = await graphqlClient.request(PUBLISH_DRAFT, { effectiveFrom: effectiveFrom || null })
     return data.publishReferenceDraft
   }
 

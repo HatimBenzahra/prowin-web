@@ -16,6 +16,7 @@ import CoachingDetailModal from './CoachingDetailModal'
 import {
   PorteStatutPill,
   STATUT_FILTERS,
+  ScoreValue,
   formatDuration,
   isInProgress,
 } from './CoachingComponents'
@@ -31,7 +32,7 @@ const DURATION_TIERS = [
 ]
 
 // Indicateur d'état d'analyse d'un enregistrement.
-function AnalyseIndicator({ status, quality, score }) {
+function AnalyseIndicator({ status, quality, score, band }) {
   if (!status)
     return <span className="text-xs text-muted-foreground">Non analysé</span>
   if (status === 'PENDING')
@@ -49,11 +50,9 @@ function AnalyseIndicator({ status, quality, score }) {
   if (quality === 'INEXPLOITABLE')
     return <span className="text-xs text-slate-500">Inexploitable</span>
   // READY
-  return (
-    <span className="text-sm font-semibold tabular-nums text-green-600">
-      {typeof score === 'number' ? `${Math.round(score)}/100` : 'Analysé'}
-    </span>
-  )
+  if (typeof score !== 'number' && band !== 'non_evaluable')
+    return <span className="text-sm font-semibold">Analysé</span>
+  return <ScoreValue score={score} band={band} className="text-sm font-semibold" />
 }
 
 /**
@@ -312,6 +311,7 @@ export default function CoachingManagementList({
                     status={it.analysisStatus}
                     quality={it.quality}
                     score={it.score}
+                    band={it.band}
                   />
                 </div>
 

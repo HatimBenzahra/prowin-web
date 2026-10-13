@@ -20,6 +20,7 @@ import {
 import { useStatusBadge } from '@/hooks/utils/ui/useStatusBadge'
 import { useRanking } from '@/hooks/metier/api/gamification'
 import { currentMonthlyPeriodKey, indexRankingByUser, toRankInfo } from '@/lib/rank-wps'
+import { NIVEAU_LABELS, optionsOf } from '@/pages-ADMIN-DIRECTEUR/coaching/coaching-calibration'
 
 const getActivityTime = activity => {
   if (!activity?.changedAt) return 0
@@ -272,6 +273,14 @@ export function useCommerciauxLogic() {
       })),
       hint: 'Statut du commercial',
     },
+    {
+      key: 'niveau',
+      label: 'Niveau',
+      type: 'select',
+      section: 'Statut',
+      options: optionsOf(NIVEAU_LABELS),
+      hint: 'Fixe l’objectif de score coaching (75 / 80 / 85 / 90)',
+    },
   ]
 
   /**
@@ -300,6 +309,7 @@ export function useCommerciauxLogic() {
         age: editedData.age ? parseInt(editedData.age) : undefined,
         managerId: editedData.managerId ? parseInt(editedData.managerId) : undefined,
         status: editedData.status || undefined,
+        niveau: editedData.niveau || undefined,
       })
       await refetch()
       showSuccess('Commercial modifié avec succès')

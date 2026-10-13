@@ -6,6 +6,7 @@ import { ComputeRequest, FrozenReferences, ProductContent } from './coaching-api
 import { CoachingPricesService } from './coaching-prices.service';
 import { ReferenceService, ReferenceWithProducts } from './referentiels/reference.service';
 import { WinLeadPlusBinding } from './referentiels/product-sheet.types';
+import { transcriptSegmentsOf } from './shared/visit-outcome';
 
 /** Caller owns audio access and reference versions. No credentials cross HTTP. */
 @Injectable()
@@ -41,7 +42,8 @@ export class CoachingInputService {
 
   async request(row: CoachingAnalysis, references: FrozenReferences): Promise<ComputeRequest> {
     const url = typeof row.transcript === 'string' && row.transcriptDurationSec != null ? '' : await getSignedUrl(this.s3, new GetObjectCommand({ Bucket: process.env.S3_BUCKET_NAME, Key: row.s3KeyOriginal }), { expiresIn: 3600 });
-    return { ...references, requestKey: row.remoteRequestKey!, audio: { key: row.s3KeyOriginal, url }, statutPorte: row.statutPorte, transcript: row.transcript, transcriptDurationSec: row.transcriptDurationSec };
+    const transcriptSegments = transcriptSegmentsOf(row.transcriptMetadata);
+    return { ...references, requestKey: row.remoteRequestKey!, audio: { key: row.s3KeyOriginal, url }, statutPorte: row.statutPorte, transcript: row.transcript, transcriptDurationSec: row.transcriptDurationSec, ...(transcriptSegments ? { transcriptSegments } : {}) };
   }
 }
 

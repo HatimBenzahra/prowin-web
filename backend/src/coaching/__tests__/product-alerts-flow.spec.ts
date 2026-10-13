@@ -36,7 +36,9 @@ describe('product alerts compute → snapshot → GraphQL → frontend selection
           ...(certified ? { priceVerification: { status: 'verified', source: 'winleadplus_api', checkedAt: '2026-10-01T00:00:00Z', comment: 'Grille complète certifiée.', completeGrid: true, variantsCertified: true } } : {}) }] } };
     const model = { chatJson: jest.fn().mockResolvedValueOnce(JSON.stringify({ products: [{ key: 'orchard', presentedByCommercial: true, evidence: 'Orchard' }] }))
       .mockResolvedValueOnce(JSON.stringify({ criteria: [] })).mockResolvedValueOnce(JSON.stringify({ criteria: [], productAlerts: [{ productSlug: 'orchard', type: 'payment_unclear', quote,
-        referenceKind: 'sheet', reference: 'Entretien des arbres sans remplacement.', reason: 'Nature du paiement à clarifier.', contextQuote: quote, productEvidence: 'Orchard', relevanceReason: 'Paiement dans la vente du service.' }] })) };
+        referenceKind: 'sheet', reference: 'Entretien des arbres sans remplacement.', reason: 'Nature du paiement à clarifier.', contextQuote: quote, productEvidence: 'Orchard', relevanceReason: 'Paiement dans la vente du service.' }] }))
+      // Passe de cohérence des moteurs recalibrés (calculs, contradictions) : rien à signaler.
+      .mockResolvedValue(JSON.stringify({ calculationChecks: [], contradictions: [] })) };
     const engine = new ComputeService({}, model, new ScoringService());
     const computed = { ...await engine.compute(JSON.parse(JSON.stringify(request))), source: 'prowin', tenantId: '' };
     mutate?.(computed);

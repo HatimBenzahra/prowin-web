@@ -32,6 +32,7 @@ export const UPDATE_COMMERCIAL = `
       managerId
       directeurId
       status
+      niveau
       createdAt
       updatedAt
     }

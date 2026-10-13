@@ -14,6 +14,7 @@ import EffortCard from './components/EffortCard'
 import CoachingScoreboardCard from './components/CoachingScoreboardCard'
 import CoachingStepsCard from './components/CoachingStepsCard'
 import CoachingVsConversionCard from './components/CoachingVsConversionCard'
+import CoachingProductsCard from './components/CoachingProductsCard'
 import TeamComparisonTable from './components/TeamComparisonTable'
 import TerritoryCard from './components/TerritoryCard'
 import PipelineOverviewCard from './components/PipelineOverviewCard'
@@ -108,6 +109,8 @@ export default function Statistiques() {
     zoneStats,
     scoreboard,
     scoreboardLoading,
+    productStats,
+    productStatsLoading,
   } = useStatistiquesLogic()
 
   if (loading) return <PageSkeleton />
@@ -230,6 +233,7 @@ export default function Statistiques() {
                 <CoachingStepsCard scoreboard={scoreboard} loading={scoreboardLoading} />
                 <CoachingVsConversionCard scoreboard={scoreboard} ownerActivity={ownerActivity} />
               </div>
+              <CoachingProductsCard stats={productStats} loading={productStatsLoading} />
             </>
           )}
         </TabsContent>

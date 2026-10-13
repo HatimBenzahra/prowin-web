@@ -7,6 +7,7 @@ import { PrismaService } from '../prisma.service';
 import { CoachingApiClient, CoachingStageError, ComputeRequest, ComputeResult, FrozenReferences } from './coaching-api.client';
 import { CoachingInputService } from './coaching-input.service';
 import { CRM_SOURCE, CRM_TENANT } from './shared/crm-scope';
+import { recalibrageData } from './shared/visit-outcome';
 
 const TERMINAL: CoachingStatus[] = [CoachingStatus.READY, CoachingStatus.FAILED];
 const json = (value: unknown) => JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
@@ -84,6 +85,7 @@ export class CoachingSyncService {
         confidence: result.confidence, summary: result.summary, score: quality === CoachingQuality.INEXPLOITABLE ? null : result.score,
         scoreBeforeMalus: result.scoreBeforeMalus, malus: result.malus, remoteResultSnapshot: json(result),
         error: null, nextRetryAt: null, remoteSyncError: null, remoteNextSyncAt: null, remoteLeaseToken: null, remoteLeaseUntil: null,
+        ...recalibrageData(result as unknown as Record<string, unknown>, quality),
       };
       for (const key of ['subScores', 'strengths', 'improvements', 'recommendations', 'criterionResults', 'violations', 'detectedProducts', 'productMapping', 'productSheetVersions'] as const) data[key] = json(result[key]);
       const saved = await this.prisma.coachingAnalysis.updateMany({ where: owned(), data });

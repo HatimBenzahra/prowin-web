@@ -71,7 +71,7 @@ export class ReferenceService implements OnApplicationBootstrap {
     return this.prisma.coachingReference.findMany({
       where: { tenantId: CRM_TENANT, status: CoachingReferenceStatus.PUBLISHED },
       orderBy: { version: 'desc' },
-      select: { id: true, version: true, isActive: true, contentHash: true, publishedAt: true, publishedBy: true },
+      select: { id: true, version: true, isActive: true, contentHash: true, publishedAt: true, publishedBy: true, effectiveFrom: true },
     });
   }
 
@@ -153,9 +153,10 @@ export class ReferenceService implements OnApplicationBootstrap {
 
   /**
    * Publie le brouillon : il devient la version active. Un contenu identique à une
-   * version déjà publiée la réactive simplement, sans créer de doublon.
+   * version déjà publiée la réactive simplement, sans créer de doublon. La date
+   * d'entrée en vigueur est informative (défaut : maintenant).
    */
-  async publishDraft(author: string): Promise<ReferenceWithProducts> {
+  async publishDraft(author: string, effectiveFrom?: Date | null): Promise<ReferenceWithProducts> {
     const id = await this.locked(async tx => {
       const draft = await this.findDraft(tx);
       if (!draft) throw new NotFoundException('Aucun brouillon de référentiel');
@@ -169,10 +170,10 @@ export class ReferenceService implements OnApplicationBootstrap {
       await tx.coachingReference.updateMany({ where: { tenantId: CRM_TENANT, isActive: true, NOT: { id: target } }, data: { isActive: false } });
       if (same) {
         await tx.coachingReference.delete({ where: { id: draft.id } });
-        await tx.coachingReference.update({ where: { id: same.id }, data: { isActive: true } });
+        await tx.coachingReference.update({ where: { id: same.id }, data: { isActive: true, ...(effectiveFrom ? { effectiveFrom } : {}) } });
       } else {
         const last = await tx.coachingReference.aggregate({ where: { tenantId: CRM_TENANT, status: CoachingReferenceStatus.PUBLISHED }, _max: { version: true } });
-        await tx.coachingReference.update({ where: { id: draft.id }, data: { status: CoachingReferenceStatus.PUBLISHED, version: (last._max.version ?? 0) + 1, contentHash: parsed.contentHash, isActive: true, publishedBy: author, publishedAt: new Date() } });
+        await tx.coachingReference.update({ where: { id: draft.id }, data: { status: CoachingReferenceStatus.PUBLISHED, version: (last._max.version ?? 0) + 1, contentHash: parsed.contentHash, isActive: true, publishedBy: author, publishedAt: new Date(), effectiveFrom: effectiveFrom ?? new Date() } });
       }
       return target;
     });

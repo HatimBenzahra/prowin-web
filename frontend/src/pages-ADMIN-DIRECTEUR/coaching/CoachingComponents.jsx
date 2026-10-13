@@ -1,17 +1,13 @@
 import { cn } from '@/lib/utils'
+import { BAND_META, scoreBand, showsScore } from './coaching-calibration'
 
-// Barre de score 0-100 (vert ≥50, ambre ≥20, rouge sinon) — même logique visuelle
-// que SpeechScoreBar de la Bibliothèque.
-export function ScoreBar({ value, className }) {
+export { CRITERION_META, criterionMeta } from './coaching-calibration'
+
+// Barre de score 0-100, colorée par bande (85 / 75 / 60) : `band` du moteur quand il
+// est fourni, sinon calculée depuis la valeur.
+export function ScoreBar({ value, band, className }) {
   const v = typeof value === 'number' ? Math.max(0, Math.min(100, value)) : null
-  const color =
-    v == null
-      ? 'bg-muted'
-      : v >= 50
-        ? 'bg-green-500'
-        : v >= 20
-          ? 'bg-amber-500'
-          : 'bg-red-500'
+  const color = v == null ? 'bg-muted' : BAND_META[scoreBand(v, band)].bar
   return (
     <div className={cn('h-2 w-full rounded-full bg-muted/60 overflow-hidden', className)}>
       <div className={cn('h-full rounded-full transition-all', color)} style={{ width: `${v ?? 0}%` }} />
@@ -38,12 +34,27 @@ export const QUALITY_META = {
   FAILED: { label: 'Échec', pill: 'bg-red-500/10 text-red-600' },
 }
 
-// Statut d'un critère jugé par le LLM.
-export const CRITERION_META = {
-  atteint: { label: 'Atteint', dot: 'bg-green-500', text: 'text-green-600' },
-  partiel: { label: 'Partiel', dot: 'bg-amber-500', text: 'text-amber-600' },
-  absent: { label: 'Absent', dot: 'bg-red-500', text: 'text-red-600' },
-  non_applicable: { label: 'N/A', dot: 'bg-slate-300', text: 'text-muted-foreground' },
+/** Bande du score (Maîtrisé, Correct / perfectible, Coaching nécessaire, Insuffisant, Non évaluable). */
+export function BandPill({ score, band, className }) {
+  const meta = BAND_META[scoreBand(score, band)]
+  return (
+    <span className={cn('inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium', meta.pill, className)}>
+      <span className={cn('h-1.5 w-1.5 rounded-full', meta.dot)} />
+      {meta.label}
+    </span>
+  )
+}
+
+/** Score « n/100 » coloré selon sa bande, pour les listes ; jamais de chiffre si non évaluable. */
+export function ScoreValue({ score, band, className }) {
+  if (band === 'non_evaluable')
+    return <span className={cn('text-muted-foreground', className)}>{BAND_META.non_evaluable.label}</span>
+  if (!showsScore(score, band)) return <span className={cn('text-muted-foreground', className)}>—</span>
+  return (
+    <span className={cn('tabular-nums', BAND_META[scoreBand(score, band)].text, className)}>
+      {Math.round(score)}/100
+    </span>
+  )
 }
 
 // Gravité d'une violation de conformité produit.

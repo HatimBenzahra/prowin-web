@@ -2,10 +2,17 @@ import { ViolationSeverity } from '../referentiels/product-sheet.types';
 
 /** Statut d'un critère, jugé par le LLM. */
 export type CriterionStatus =
-  | 'atteint'
+  | 'atteint' // legacy, = maitrise
+  | 'maitrise'
+  | 'correct'
   | 'partiel'
+  | 'faible'
   | 'absent'
-  | 'non_applicable';
+  | 'obtenue_question'
+  | 'obtenue_spontanement'
+  | 'manquante'
+  | 'non_applicable'
+  | 'non_evaluable';
 
 /** Résultat brut (normalisé) renvoyé par le LLM pour un critère. */
 export interface LlmCriterionResult {

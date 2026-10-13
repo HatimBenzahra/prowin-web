@@ -1,4 +1,6 @@
 import {
+  BadRequestException,
+  ForbiddenException,
   Injectable,
   Logger,
   NotFoundException,
@@ -11,9 +13,32 @@ import { CoachingConfigService } from './coaching-config.service';
 import { CoachingQueryService } from './lecture/coaching-query.service';
 import { CoachingApiClient } from './coaching-api.client';
 import { CoachingInputService } from './coaching-input.service';
+import {
+  CLEARED_RECALIBRAGE,
+  NEXT_ACTIONS,
+  NON_SALE_REASONS,
+  PRODUCT_STATUSES,
+  ProductStatus,
+  RIB_STATUSES,
+  SALE_RESULTS,
+  SIGNATURE_STATUSES,
+  VISIT_RESULTS,
+} from './shared/visit-outcome';
 import { randomUUID } from 'crypto';
 
 import { CoachingAnalysisDto } from './coaching.dto';
+
+/** Correction du résultat de visite : un champ absent reste inchangé, null l'efface. */
+export interface VisitOutcomeCorrection {
+  visitResult?: string | null;
+  nonSaleReason?: string | null;
+  nextAction?: string | null;
+  ribStatus?: string | null;
+  signatureStatus?: string | null;
+  productStatuses?: Array<{ key: string; status: string }> | null;
+}
+
+type Actor = { id: number; role: string; email?: string | null };
 
 export interface EnqueueCoachingInput {
   s3Key: string;
@@ -220,6 +245,67 @@ export class CoachingService {
     return this.query.getAnalysis(created.id);
   }
 
+  /**
+   * Correction du résultat de visite pré-rempli par l'IA (admin, directeur, ou manager
+   * du commercial), sur une analyse prête. Les scores ne sont pas recalculés : seule la
+   * donnée CRM change, et une relance l'efface.
+   */
+  async updateVisitOutcome(analysisId: number, correction: VisitOutcomeCorrection, actor: Actor): Promise<CoachingAnalysisDto> {
+    const analysis = await this.prisma.coachingAnalysis.findUnique({ where: { id: analysisId } });
+    if (!analysis || analysis.source !== CRM_SOURCE || analysis.tenantId !== CRM_TENANT) throw new NotFoundException('Analyse coaching introuvable');
+    await this.ensureOutcomeScope(analysis, actor);
+    if (analysis.status !== CoachingStatus.READY) throw new BadRequestException('Seule une analyse terminée peut être corrigée');
+
+    const checked = (field: keyof Omit<VisitOutcomeCorrection, 'productStatuses'>, allowed: string[]) => {
+      const value = correction[field];
+      if (value != null && !allowed.includes(value)) throw new BadRequestException(`Valeur invalide pour ${field} : ${value}`);
+      return value === undefined ? {} : { [field]: value };
+    };
+    const data: Prisma.CoachingAnalysisUpdateInput = {
+      ...checked('visitResult', VISIT_RESULTS),
+      ...checked('nonSaleReason', NON_SALE_REASONS),
+      ...checked('nextAction', NEXT_ACTIONS),
+      ...checked('ribStatus', RIB_STATUSES),
+      ...checked('signatureStatus', SIGNATURE_STATUSES),
+    };
+    if (correction.productStatuses) {
+      const current = (analysis.productStatuses as unknown as ProductStatus[] | null) ?? [];
+      const byKey = new Map(current.map(p => [p.key, p]));
+      for (const { key, status } of correction.productStatuses) {
+        if (!PRODUCT_STATUSES.includes(status)) throw new BadRequestException(`Statut produit invalide : ${status}`);
+        const existing = byKey.get(key);
+        if (!existing) throw new BadRequestException(`Produit inconnu sur cette analyse : ${key}`);
+        // Un produit désormais proposé n'est plus une opportunité oubliée.
+        byKey.set(key, { ...existing, status, opportunity: ['PRESENTE', 'REFUSE', 'ACCEPTE'].includes(status) ? null : existing.opportunity });
+      }
+      data.productStatuses = JSON.parse(JSON.stringify([...byKey.values()])) as Prisma.InputJsonValue;
+    }
+    // Une vente sans aucun produit accepté serait incohérente (statistiques comprises).
+    const visitResult = correction.visitResult !== undefined ? correction.visitResult : analysis.visitResult;
+    const products = (data.productStatuses ?? analysis.productStatuses) as unknown as ProductStatus[] | null;
+    if ((correction.visitResult !== undefined || correction.productStatuses) && visitResult && SALE_RESULTS.includes(visitResult) && !products?.some(p => p.status === 'ACCEPTE')) {
+      throw new BadRequestException('Une vente suppose au moins un produit accepté');
+    }
+    await this.prisma.coachingAnalysis.update({
+      where: { id: analysisId },
+      data: { ...data, outcomeOverriddenBy: actor.email?.trim() || `${actor.role}#${actor.id}`, outcomeOverriddenAt: new Date() },
+    });
+    return this.query.getAnalysis(analysisId);
+  }
+
+  /**
+   * Admin et directeur : toutes les analyses, comme le reste du coaching (le directeur
+   * n'y est pas cantonné à son équipe). Manager : les analyses de ses commerciaux,
+   * jamais les siennes.
+   */
+  private async ensureOutcomeScope(analysis: { userId: number | null }, actor: Actor): Promise<void> {
+    if (actor.role === 'admin' || actor.role === 'directeur') return;
+    const commercial = actor.role === 'manager' && analysis.userId != null
+      ? await this.prisma.commercial.findUnique({ where: { id: analysis.userId }, select: { managerId: true } })
+      : null;
+    if (!commercial || commercial.managerId !== actor.id) throw new ForbiddenException('Accès refusé');
+  }
+
   private requeueData(retranscribe = false) {
     return {
       status: CoachingStatus.PENDING,
@@ -246,6 +332,7 @@ export class CoachingService {
       productMapping: Prisma.DbNull,
       productSheetVersions: Prisma.DbNull,
       remoteResultSnapshot: Prisma.DbNull,
+      ...CLEARED_RECALIBRAGE,
       // References are replaced atomically with the new generation below.
       remoteAnalysisId: null,
       // Relance explicite : gating levé et transcript recalculé.

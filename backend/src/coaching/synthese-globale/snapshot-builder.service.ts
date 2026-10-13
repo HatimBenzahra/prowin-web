@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { CRM_SOURCE, CRM_TENANT } from '../shared/crm-scope';
+import { SCORABLE } from '../shared/visit-outcome';
 import { CoachingStatus, UserType } from '@prisma/client';
 import { PrismaService } from '../../prisma.service';
 import { calculateStatsForStatus } from '../../porte/porte-status.constants';
@@ -91,6 +92,7 @@ export class SnapshotBuilderService {
       select: {
         id: true,
         score: true,
+        band: true,
         statutPorte: true,
         summary: true,
         strengths: true,
@@ -108,6 +110,9 @@ export class SnapshotBuilderService {
       },
       orderBy: { createdAt: 'desc' },
     });
+
+    // Une visite non évaluable n'a pas de score à moyenner ni à citer.
+    for (const a of analyses) if (a.band === 'non_evaluable') a.score = null;
 
     // Historique terrain (source de vérité activité, TOUTES portes), 1 requête.
     const history = await this.prisma.statusHistorique.findMany({
@@ -152,12 +157,13 @@ export class SnapshotBuilderService {
     for (const a of analyses) {
       const crits = (a.criterionResults as any[]) ?? [];
       for (const c of crits) {
-        if (c.status === 'non_applicable') continue;
+        if (c.status === 'non_applicable' || c.status === 'non_evaluable') continue;
         const key = c.criterionKey || c.title;
         const cur =
           critMap.get(key) ?? { titre: c.title, atteint: 0, partiel: 0, absent: 0 };
-        if (c.status === 'atteint') cur.atteint++;
-        else if (c.status === 'partiel') cur.partiel++;
+        // Échelle à 5 niveaux et découverte ramenées aux trois comptes de la synthèse.
+        if (['atteint', 'maitrise', 'correct', 'obtenue_question', 'obtenue_spontanement'].includes(c.status)) cur.atteint++;
+        else if (c.status === 'partiel' || c.status === 'faible') cur.partiel++;
         else cur.absent++;
         critMap.set(key, cur);
       }
@@ -502,11 +508,16 @@ export class SnapshotBuilderService {
     // --- Bloc équipe (manager uniquement) ------------------------------------
     let equipe: Record<string, unknown> | undefined;
     if (subjectType === 'manager' && teamIds) {
-      const [byAnalyse, byContrat, perso] = await Promise.all([
+      const [byAnalyse, avgByUser, byContrat, perso, persoAvg] = await Promise.all([
         this.prisma.coachingAnalysis.groupBy({
           by: ['userId'],
           where: { source: CRM_SOURCE, tenantId: CRM_TENANT, userId: { in: teamIds }, status: CoachingStatus.READY },
           _count: { _all: true },
+        }),
+        // Moyennes sans les visites non évaluables, qui restent comptées comme analyses.
+        this.prisma.coachingAnalysis.groupBy({
+          by: ['userId'],
+          where: { source: CRM_SOURCE, tenantId: CRM_TENANT, userId: { in: teamIds }, status: CoachingStatus.READY, ...SCORABLE },
           _avg: { score: true },
         }),
         this.prisma.contratValide.groupBy({
@@ -517,9 +528,13 @@ export class SnapshotBuilderService {
         this.prisma.coachingAnalysis.aggregate({
           where: { source: CRM_SOURCE, tenantId: CRM_TENANT, managerId: subjectId, status: CoachingStatus.READY },
           _count: { _all: true },
+        }),
+        this.prisma.coachingAnalysis.aggregate({
+          where: { source: CRM_SOURCE, tenantId: CRM_TENANT, managerId: subjectId, status: CoachingStatus.READY, ...SCORABLE },
           _avg: { score: true },
         }),
       ]);
+      const avgOf = new Map(avgByUser.map((r) => [r.userId, r._avg.score]));
       const contratByComm = new Map<number, number>(
         byContrat
           .filter((r) => r.commercialId != null)
@@ -530,7 +545,7 @@ export class SnapshotBuilderService {
         .map((r) => ({
           nom: teamNames.get(r.userId as number) ?? `#${r.userId}`,
           nbAnalyses: r._count._all,
-          scoreMoyen: r._avg.score != null ? round(r._avg.score) : null,
+          scoreMoyen: avgOf.get(r.userId) != null ? round(avgOf.get(r.userId) as number) : null,
           nbContrats: contratByComm.get(r.userId as number) ?? 0,
         }))
         .sort((a, b) => b.nbAnalyses - a.nbAnalyses)
@@ -540,7 +555,7 @@ export class SnapshotBuilderService {
         parCommercial: equipeParCommercial,
         activiteManagerPerso: {
           nbAnalyses: perso._count._all,
-          scoreMoyen: perso._avg.score != null ? round(perso._avg.score) : null,
+          scoreMoyen: persoAvg._avg.score != null ? round(persoAvg._avg.score) : null,
         },
       };
     }

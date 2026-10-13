@@ -15,17 +15,94 @@ export class CoachingSubScoreDto {
   @Field(() => Float, { nullable: true }) score?: number | null;
 }
 
+/** Citation d'une preuve, horodatée quand le transcript l'est. */
+@ObjectType()
+export class CoachingEvidenceRefDto {
+  @Field() quote: string;
+  @Field(() => Float, { nullable: true }) startSec?: number | null;
+  @Field(() => Float, { nullable: true }) endSec?: number | null;
+}
+
 @ObjectType()
 export class CoachingCriterionResultDto {
   @Field() stepKey: string;
   @Field() criterionKey: string;
   @Field() title: string;
+  // maitrise | correct | partiel | faible | absent | non_applicable | non_evaluable,
+  // découverte : obtenue_question | obtenue_spontanement | manquante ; legacy : atteint.
   @Field() status: string;
   @Field(() => Int) maxPoints: number;
   @Field(() => Float) score: number;
   @Field(() => Int) weightStep: number;
   @Field(() => [String]) evidence: string[];
   @Field(() => String, { nullable: true }) comment?: string;
+  // Recalibrage 2026 : absents des analyses antérieures.
+  @Field(() => Int, { nullable: true }) level?: number | null; // 0-4
+  @Field(() => String, { nullable: true }) naReason?: string | null;
+  @Field(() => String, { nullable: true }) naDetail?: string | null;
+  @Field(() => String, { nullable: true }) dimension?: string | null; // qualite | plan | conformite
+  @Field(() => String, { nullable: true }) kind?: string | null; // standard | discovery
+  @Field(() => String, { nullable: true }) timing?: string | null; // on_time | late | reordered_justified
+  @Field(() => [CoachingEvidenceRefDto], { nullable: true }) evidenceRefs?: CoachingEvidenceRefDto[] | null;
+}
+
+/** Statut d'un produit du catalogue sur la visite (proposition, refus, oubli…). */
+@ObjectType()
+export class CoachingProductStatusDto {
+  @Field() key: string;
+  @Field() label: string;
+  @Field() status: string; // NON_PRESENTE | MENTIONNE | PRESENTE | REFUSE | ACCEPTE | NON_APPLICABLE
+  @Field(() => String, { nullable: true }) opportunity?: string | null; // oubliee | volontairement_non_presente
+  @Field(() => String, { nullable: true }) naReason?: string | null;
+  @Field(() => String, { nullable: true }) naDetail?: string | null;
+  @Field(() => [String]) evidence: string[];
+}
+
+@InputType()
+export class CoachingProductStatusInput {
+  @Field() key: string;
+  @Field() status: string;
+}
+
+@ObjectType()
+export class CoachingIndicatorsDto {
+  @Field(() => Float, { nullable: true }) qualiteCommerciale?: number | null;
+  @Field(() => Float, { nullable: true }) respectPlan?: number | null;
+  @Field(() => Float, { nullable: true }) conformite?: number | null;
+}
+
+@ObjectType()
+export class CoachingAnalysisConfidenceDto {
+  @Field() level: string; // haute | moyenne | faible
+  @Field(() => [String]) reasons: string[];
+}
+
+/** Un calcul annoncé au client, recalculé par le moteur. */
+@ObjectType()
+export class CoachingCalculationCheckDto {
+  @Field() quote: string;
+  @Field(() => [String]) inputs: string[];
+  @Field() expression: string;
+  @Field(() => Float, { nullable: true }) announced?: number | null;
+  @Field(() => Float, { nullable: true }) recomputed?: number | null;
+  @Field() status: string; // coherent | incoherent | non_verifiable
+  @Field() comment: string;
+}
+
+@ObjectType()
+export class CoachingContradictionDto {
+  @Field() topic: string;
+  @Field() quoteA: string;
+  @Field() quoteB: string;
+  @Field() comment: string;
+}
+
+@ObjectType()
+export class CoachingPhaseTimingDto {
+  @Field() stepKey: string;
+  @Field(() => String, { nullable: true }) timing?: string | null;
+  @Field(() => [String]) evidence: string[];
+  @Field() comment: string;
 }
 
 /**
@@ -123,6 +200,30 @@ export class CoachingAnalysisDto {
   @Field(() => String, { nullable: true }) subjectRole?: string | null; // 'commercial' | 'manager'
   @Field(() => Int, { nullable: true }) subjectId?: number | null;
   @Field() favori: boolean; // porte marquée favorite
+
+  // Recalibrage 2026 : null sur les analyses antérieures.
+  @Field(() => Float, { nullable: true }) executionScore?: number | null;
+  @Field(() => Float, { nullable: true }) outcomeScore?: number | null;
+  @Field(() => String, { nullable: true }) outcomeCategory?: string | null;
+  @Field(() => String, { nullable: true }) outcomeComment?: string | null;
+  @Field(() => [String]) outcomeEvidence?: string[];
+  @Field(() => String, { nullable: true }) visitResult?: string | null;
+  @Field(() => String, { nullable: true }) nonSaleReason?: string | null;
+  @Field(() => String, { nullable: true }) nextAction?: string | null;
+  @Field(() => String, { nullable: true }) ribStatus?: string | null;
+  @Field(() => String, { nullable: true }) signatureStatus?: string | null;
+  @Field(() => String, { nullable: true }) outcomeOverriddenBy?: string | null;
+  @Field(() => String, { nullable: true }) outcomeOverriddenAt?: string | null;
+  @Field(() => [CoachingProductStatusDto]) productStatuses?: CoachingProductStatusDto[];
+  @Field(() => CoachingIndicatorsDto, { nullable: true }) indicators?: CoachingIndicatorsDto | null;
+  @Field(() => String, { nullable: true }) band?: string | null; // maitrise | correct | coaching | insuffisant | non_evaluable
+  @Field(() => CoachingAnalysisConfidenceDto, { nullable: true }) analysisConfidence?: CoachingAnalysisConfidenceDto | null;
+  @Field(() => [CoachingCalculationCheckDto]) calculationChecks?: CoachingCalculationCheckDto[];
+  @Field(() => [CoachingContradictionDto]) contradictions?: CoachingContradictionDto[];
+  @Field(() => [CoachingPhaseTimingDto]) phaseTiming?: CoachingPhaseTimingDto[];
+  // Niveau du commercial et score attendu à ce niveau (null pour un manager).
+  @Field(() => String, { nullable: true }) commercialNiveau?: string | null;
+  @Field(() => Int, { nullable: true }) objectiveScore?: number | null;
 }
 
 @ObjectType()
@@ -230,6 +331,7 @@ export class CoachingManagementItemDto {
   @Field(() => String, { nullable: true }) analysisStatus?: string | null;
   @Field(() => String, { nullable: true }) quality?: string | null;
   @Field(() => Float, { nullable: true }) score?: number | null;
+  @Field(() => String, { nullable: true }) band?: string | null;
 }
 
 @ObjectType()
@@ -300,4 +402,44 @@ export class CoachingAnalysesFilter {
   @Field(() => Int, { nullable: true }) managerId?: number;
   @Field(() => Int, { nullable: true }) porteId?: number;
   @Field(() => String, { nullable: true }) status?: string;
+}
+
+/** Un produit du catalogue sur la période : proposé, vendu, oublié. */
+@ObjectType()
+export class CoachingProductRateDto {
+  @Field() key: string;
+  @Field() label: string;
+  @Field(() => Int) nbVisites: number; // visites où le produit était applicable
+  @Field(() => Int) nbProposes: number; // PRESENTE + REFUSE + ACCEPTE
+  @Field(() => Int) nbAcceptes: number;
+  @Field(() => Int) nbOublies: number; // opportunité oubliée
+  @Field(() => Float, { nullable: true }) tauxProposition?: number | null; // % des visites où il était applicable
+  @Field(() => Float, { nullable: true }) tauxTransformation?: number | null; // % des propositions
+}
+
+@ObjectType()
+export class CoachingSubjectSalesDto {
+  @Field(() => Int) subjectId: number;
+  @Field() subjectName: string;
+  @Field() subjectRole: string;
+  @Field(() => Int) nbVisites: number;
+  @Field(() => Int) nbProduitsVendus: number;
+  @Field(() => Float, { nullable: true }) produitsParVisite?: number | null;
+}
+
+@ObjectType()
+export class CoachingLossCauseDto {
+  @Field() reason: string;
+  @Field(() => Int) count: number;
+}
+
+/** Statistiques produit des visites analysées (statuts produit du recalibrage). */
+@ObjectType()
+export class CoachingProductStatsDto {
+  /** Visites analysées portant des statuts produit (analyses antérieures exclues). */
+  @Field(() => Int) nbVisites: number;
+  @Field(() => [CoachingProductRateDto]) products: CoachingProductRateDto[];
+  @Field(() => Float, { nullable: true }) produitsParVisite?: number | null;
+  @Field(() => [CoachingSubjectSalesDto]) parIntervenant: CoachingSubjectSalesDto[];
+  @Field(() => [CoachingLossCauseDto]) causesPerte: CoachingLossCauseDto[];
 }

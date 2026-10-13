@@ -20,9 +20,12 @@ import {
   StatusPill,
   QualityPill,
   SeverityPill,
-  CRITERION_META,
+  BandPill,
+  criterionMeta,
   isInProgress,
 } from './CoachingComponents'
+import { NA_REASON_LABELS, TIMING_META, formatTimestamp, showsScore } from './coaching-calibration'
+import { ConsistencySection, ScoreBreakdown, VisitOutcomeSection } from './CoachingOutcomeSections'
 
 /** Proven contradiction against the product sheet or supplied price grid. */
 function ViolationCard({ violation }) {
@@ -59,11 +62,32 @@ function ViolationCard({ violation }) {
 
 function VerdictIcon({ status }) {
   const cls = 'h-4 w-4 shrink-0'
-  if (status === 'atteint') return <CheckCircle2 className={cn(cls, 'text-green-600')} />
-  if (status === 'partiel') return <MinusCircle className={cn(cls, 'text-amber-600')} />
-  if (status === 'non_applicable')
-    return <CircleDashed className={cn(cls, 'text-muted-foreground')} />
+  const meta = criterionMeta(status)
+  if (meta.verdict === 'ok') return <CheckCircle2 className={cn(cls, meta.text)} />
+  if (meta.verdict === 'partial') return <MinusCircle className={cn(cls, meta.text)} />
+  if (meta.verdict === 'na') return <CircleDashed className={cn(cls, 'text-muted-foreground')} />
   return <XCircle className={cn(cls, 'text-red-600')} />
+}
+
+/** Preuves d'un critère : citations horodatées quand le moteur les a situées. */
+function CriterionEvidence({ criterion }) {
+  const refs = criterion.evidenceRefs?.length
+    ? criterion.evidenceRefs
+    : (criterion.evidence || []).map(quote => ({ quote }))
+  if (!refs.length) return null
+  return (
+    <ul className="mt-1.5 space-y-1 border-l-2 border-border/60 pl-3">
+      {refs.map((e, i) => {
+        const at = formatTimestamp(e.startSec)
+        return (
+          <li key={i} className="text-xs italic text-muted-foreground">
+            {at && <span className="mr-1.5 font-mono not-italic tabular-nums">{at}</span>}«{' '}
+            {e.quote} »
+          </li>
+        )
+      })}
+    </ul>
+  )
 }
 
 function ListBlock({ icon: Icon, title, items, tone }) {
@@ -106,8 +130,17 @@ export default function CoachingResultPanel({
   showAudio = true,
   showScoreFooter = false,
   lead = null,
+  onAnalysisChange,
 }) {
   const [audioUrl, setAudioUrl] = useState(null)
+  // Dernière correction du résultat de visite, tant que l'appelant ne fournit pas mieux.
+  const [corrected, setCorrected] = useState(null)
+  useEffect(() => setCorrected(null), [analysis])
+  const onOutcomeUpdated = updated => {
+    if (!updated) return
+    setCorrected(updated)
+    onAnalysisChange?.(updated)
+  }
 
   useEffect(() => {
     let active = true
@@ -150,15 +183,17 @@ export default function CoachingResultPanel({
   }, [analysis])
 
   if (!analysis) return null
+  const current = corrected?.id === analysis.id ? corrected : analysis
 
   const inProgress = isInProgress(analysis.status)
   // Tant que l'analyse n'est pas prête, il n'y a ni verdict de conformité ni
   // étape du plan : dire « aucun écart détecté » serait une affirmation fausse.
   const isReady = analysis.status === 'READY'
   const hasPlanSteps = stepGroups.shown.length > 0
-  const hasScore = typeof analysis.score === 'number'
+  // Une visite non évaluable n'affiche que sa pastille ⚪, jamais un chiffre.
+  const hasScore = showsScore(analysis.score, analysis.band)
   const malus = typeof analysis.malus === 'number' ? analysis.malus : 0
-  const hasMalus = malus > 0 && typeof analysis.scoreBeforeMalus === 'number'
+  const hasMalus = hasScore && malus > 0 && typeof analysis.scoreBeforeMalus === 'number'
   const violations = analysis.violations || []
   const productAlerts = analysis.productAlerts || []
   const compliance = productComplianceMessage(analysis)
@@ -170,7 +205,8 @@ export default function CoachingResultPanel({
         <QualityPill quality={analysis.quality} />
       </div>
       <div className="flex items-center gap-4">
-        {hasScore && <ScoreBar value={analysis.score} className="w-40" />}
+        {isReady && <BandPill score={analysis.score} band={analysis.band} />}
+        {hasScore && <ScoreBar value={analysis.score} band={analysis.band} className="w-40" />}
         <div className="text-right">
           <div className="text-3xl font-semibold leading-none tabular-nums">
             {hasScore ? Math.round(analysis.score) : '—'}
@@ -227,6 +263,10 @@ export default function CoachingResultPanel({
               <p className="text-sm text-foreground/90">{analysis.summary}</p>
             </div>
           )}
+
+          {isReady && <ScoreBreakdown analysis={analysis} />}
+          {isReady && <VisitOutcomeSection analysis={current} onUpdated={onOutcomeUpdated} />}
+          {isReady && <ConsistencySection analysis={analysis} />}
 
           {isReady && violations.length === 0 && (
             <Alert
@@ -334,6 +374,7 @@ export default function CoachingResultPanel({
                       <span className="text-sm font-medium">{step.label}</span>
                       {step.applicable && typeof step.score === 'number' ? (
                         <div className="flex items-center gap-2">
+                          {timingOf(analysis, step.key)}
                           <ScoreBar value={step.score} className="w-24" />
                           <span className="text-xs tabular-nums text-muted-foreground">
                             {Math.round(step.score)}
@@ -345,7 +386,8 @@ export default function CoachingResultPanel({
                     </div>
                     <ul className="divide-y divide-border/60">
                       {criteria.map(c => {
-                        const cm = CRITERION_META[c.status] || CRITERION_META.absent
+                        const cm = criterionMeta(c.status)
+                        const timing = TIMING_META[c.timing]
                         return (
                           <li key={c.criterionKey} className="px-3 py-2">
                             <div className="flex items-start justify-between gap-3">
@@ -355,24 +397,34 @@ export default function CoachingResultPanel({
                                 </span>
                                 <div>
                                   <div className="text-sm">{c.title}</div>
-                                  <div className={cn('text-xs', cm.text)}>{cm.label}</div>
+                                  <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                                    <span className={cn('text-xs', cm.text)}>{cm.label}</span>
+                                    {c.status === 'non_applicable' && c.naReason && (
+                                      <span className="text-xs text-muted-foreground">
+                                        {NA_REASON_LABELS[c.naReason] || c.naReason}
+                                        {c.naDetail ? ` — ${c.naDetail}` : ''}
+                                      </span>
+                                    )}
+                                    {timing && (
+                                      <span
+                                        className={cn(
+                                          'rounded-full px-1.5 py-px text-[11px] font-medium',
+                                          timing.pill
+                                        )}
+                                      >
+                                        {timing.label}
+                                      </span>
+                                    )}
+                                  </div>
                                 </div>
                               </div>
-                              {c.status !== 'non_applicable' && (
+                              {cm.verdict !== 'na' && (
                                 <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
                                   {Math.round(c.score)}/{c.maxPoints}
                                 </span>
                               )}
                             </div>
-                            {c.evidence?.length > 0 && (
-                              <ul className="mt-1.5 space-y-1 border-l-2 border-border/60 pl-3">
-                                {c.evidence.map((e, i) => (
-                                  <li key={i} className="text-xs italic text-muted-foreground">
-                                    « {e} »
-                                  </li>
-                                ))}
-                              </ul>
-                            )}
+                            <CriterionEvidence criterion={c} />
                             {c.comment && (
                               <p className="mt-1.5 text-xs text-foreground/80">{c.comment}</p>
                             )}
@@ -407,19 +459,22 @@ export default function CoachingResultPanel({
  * compte — ils ne sont pas des manquements.
  */
 function CriteriaRecap({ groups }) {
-  const counts = { atteint: 0, partiel: 0, absent: 0 }
+  // Validés (maîtrisé, correct, atteint, découverte obtenue), partiels (partiel,
+  // faible), manqués (absent, découverte manquante) ; N/A et non évaluables exclus.
+  const counts = { ok: 0, partial: 0, ko: 0 }
   for (const g of groups) {
     for (const c of g.criteria) {
-      if (c.status in counts) counts[c.status] += 1
+      const verdict = criterionMeta(c.status).verdict
+      if (verdict in counts) counts[verdict] += 1
     }
   }
-  const total = counts.atteint + counts.partiel + counts.absent
+  const total = counts.ok + counts.partial + counts.ko
   if (total === 0) return null
 
   const parts = [
-    { n: counts.atteint, label: 'atteints', dot: 'bg-green-500' },
-    { n: counts.partiel, label: 'partiels', dot: 'bg-amber-500' },
-    { n: counts.absent, label: 'absents', dot: 'bg-red-500' },
+    { n: counts.ok, label: 'validés', dot: 'bg-green-500' },
+    { n: counts.partial, label: 'partiels', dot: 'bg-amber-500' },
+    { n: counts.ko, label: 'manqués', dot: 'bg-red-500' },
   ].filter(p => p.n > 0)
 
   return (
@@ -432,5 +487,16 @@ function CriteriaRecap({ groups }) {
       ))}
       <span className="tabular-nums">sur {total} jugés</span>
     </div>
+  )
+}
+
+/** Badge d'ordre de l'étape : réalisée trop tard (plafonnée) ou réordonnée à bon droit. */
+function timingOf(analysis, stepKey) {
+  const timing = TIMING_META[(analysis.phaseTiming || []).find(t => t.stepKey === stepKey)?.timing]
+  if (!timing) return null
+  return (
+    <span className={cn('rounded-full px-1.5 py-px text-[11px] font-medium', timing.pill)}>
+      {timing.label}
+    </span>
   )
 }

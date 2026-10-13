@@ -26,6 +26,8 @@ export default function ReferenceHeader({ reference, onChanged }) {
               {reference.publishedAt &&
                 ` · publié le ${formatDateTime(new Date(reference.publishedAt))}`}
               {reference.publishedBy && ` par ${reference.publishedBy}`}
+              {reference.effectiveFrom &&
+                ` · en vigueur depuis le ${new Date(reference.effectiveFrom).toLocaleDateString('fr-FR')}`}
             </span>
           </>
         ) : (

@@ -129,6 +129,12 @@ export default function ReferenceHistorySheet({ canEdit, refreshKey, onActivated
                   <dd>{detail.publishedAt ? formatDateTime(new Date(detail.publishedAt)) : '—'}</dd>
                   <dt className="text-muted-foreground">Par</dt>
                   <dd>{detail.publishedBy || '—'}</dd>
+                  <dt className="text-muted-foreground">En vigueur le</dt>
+                  <dd>
+                    {detail.effectiveFrom
+                      ? new Date(detail.effectiveFrom).toLocaleDateString('fr-FR')
+                      : '—'}
+                  </dd>
                   <dt className="text-muted-foreground">Empreinte</dt>
                   <dd className="font-mono text-xs leading-5">{detail.contentHash}</dd>
                 </dl>
@@ -141,6 +147,7 @@ export default function ReferenceHistorySheet({ canEdit, refreshKey, onActivated
                     <th className="py-2 pr-3 font-medium">Version</th>
                     <th className="py-2 pr-3 font-medium">Publiée le</th>
                     <th className="py-2 pr-3 font-medium">Par</th>
+                    <th className="py-2 pr-3 font-medium">En vigueur le</th>
                     <th className="py-2" />
                   </tr>
                 </thead>
@@ -160,6 +167,11 @@ export default function ReferenceHistorySheet({ canEdit, refreshKey, onActivated
                       </td>
                       <td className="max-w-[12rem] truncate py-2 pr-3 text-muted-foreground">
                         {v.publishedBy || '—'}
+                      </td>
+                      <td className="py-2 pr-3 text-muted-foreground">
+                        {v.effectiveFrom
+                          ? new Date(v.effectiveFrom).toLocaleDateString('fr-FR')
+                          : '—'}
                       </td>
                       <td className="whitespace-nowrap py-2 text-right">
                         <Button

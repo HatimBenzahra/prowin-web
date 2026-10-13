@@ -79,6 +79,8 @@ export class ReferenceDto {
   @Field() updatedAt: Date;
   @Field(() => String, { nullable: true }) publishedBy: string | null;
   @Field(() => Date, { nullable: true }) publishedAt: Date | null;
+  /** Entrée en vigueur annoncée à la publication. */
+  @Field(() => Date, { nullable: true }) effectiveFrom: Date | null;
   @Field(() => SalesPlanDto, { nullable: true }) plan: SalesPlanDto | null;
   @Field(() => [ReferenceProductDto]) products: ReferenceProductDto[];
 }
@@ -108,6 +110,7 @@ export class ReferenceVersionDto {
   @Field() contentHash: string;
   @Field(() => Date, { nullable: true }) publishedAt: Date | null;
   @Field(() => String, { nullable: true }) publishedBy: string | null;
+  @Field(() => Date, { nullable: true }) effectiveFrom: Date | null;
 }
 
 @InputType()

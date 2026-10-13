@@ -1,6 +1,7 @@
 import { CoachingSyncService } from '../coaching-sync.service';
 import { CoachingService } from '../coaching.service';
 import { CoachingStageError } from '../coaching-api.client';
+import { CoachingInputService } from '../coaching-input.service';
 import { Prisma } from '@prisma/client';
 
 function fixture() {
@@ -120,5 +121,112 @@ describe('durable stage queue', () => {
     await f.worker().sync(7); await f.worker().sync(7);
     expect(f.row()).toMatchObject({ status: 'READY', score: null, quality: 'INEXPLOITABLE' });
     expect(f.api.transcribe).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('recalibrage 2026 : nouveaux champs du résultat', () => {
+  const recalibrage = {
+    executionScore: 82.5,
+    outcome: { visitResult: 'VENTE', outcomeCategory: 'vente_produit_principal', outcomeScore: 13, nonSaleReason: null, nextAction: 'SIGNATURE_A_FINALISER', rib: 'OUI', signature: 'LIEN_SMS', evidence: ['Je signe'], comment: 'Vente du purificateur' },
+    productStatuses: [
+      { key: 'purea', label: 'Purificateur', status: 'ACCEPTE', opportunity: null, naReason: null, naDetail: null, evidence: ['oui pour le purificateur'] },
+      { key: 'mondial-tv', label: 'Mondial TV', status: 'NON_PRESENTE', opportunity: 'oubliee', naReason: null, naDetail: null, evidence: [] },
+    ],
+    indicators: { qualiteCommerciale: 78, respectPlan: 85, conformite: 100 },
+    band: 'correct',
+    analysisConfidence: { level: 'haute', reasons: [] },
+    calculationChecks: [{ quote: '19,90 par mois', inputs: ['19,90'], expression: '19.9*12', announced: 238.8, recomputed: 238.8, status: 'coherent', comment: '' }],
+    contradictions: [{ topic: 'prix', quoteA: '19,90', quoteB: '24,90', comment: 'Deux prix' }],
+    phaseTiming: [{ stepKey: 'rib', timing: 'late', evidence: 'RIB demandé à la fin', comment: '' }],
+  };
+
+  it('persiste les nouveaux champs du moteur', async () => {
+    const f = fixture();
+    f.api.evaluate.mockImplementation(async (q: any) => ({ ...f.result(q), transcript: q.transcript.trim(), ...recalibrage }));
+    await f.worker().sync(7); await f.worker().sync(7);
+    expect(f.row()).toMatchObject({
+      status: 'READY', executionScore: 82.5, outcomeScore: 13, visitResult: 'VENTE', nonSaleReason: null,
+      nextAction: 'SIGNATURE_A_FINALISER', ribStatus: 'OUI', signatureStatus: 'LIEN_SMS', band: 'correct',
+      indicators: { qualiteCommerciale: 78, respectPlan: 85, conformite: 100 },
+      analysisConfidence: { level: 'haute', reasons: [] },
+      productStatuses: recalibrage.productStatuses,
+      calculationChecks: recalibrage.calculationChecks,
+      contradictions: recalibrage.contradictions,
+      phaseTiming: [{ stepKey: 'rib', timing: 'late', evidence: ['RIB demandé à la fin'], comment: '' }],
+    });
+  });
+
+  it('un moteur antérieur (champs absents) donne des nulls, sans échec', async () => {
+    const f = fixture(); await f.worker().sync(7); await f.worker().sync(7);
+    expect(f.row()).toMatchObject({
+      status: 'READY', score: 65, executionScore: null, outcomeScore: null, visitResult: null, ribStatus: null,
+      band: null, productStatuses: null, indicators: null, analysisConfidence: null, calculationChecks: null,
+      contradictions: null, phaseTiming: null,
+    });
+  });
+
+  it('des valeurs hors contrat deviennent null au lieu de faire échouer l’analyse', async () => {
+    const f = fixture();
+    f.api.evaluate.mockImplementation(async (q: any) => ({
+      ...f.result(q), transcript: q.transcript.trim(),
+      executionScore: 'beaucoup', outcome: { visitResult: 'GAGNE', rib: 'PEUT_ETRE' }, band: 'excellent',
+      productStatuses: [{ key: 'purea', status: 'VENDU' }, null, { key: 'depanssur', status: 'REFUSE' }],
+      indicators: 'n/a', analysisConfidence: { level: 'totale' }, calculationChecks: { a: 1 },
+    }));
+    await f.worker().sync(7); await f.worker().sync(7);
+    expect(f.row()).toMatchObject({
+      status: 'READY', executionScore: null, visitResult: null, ribStatus: null, band: null, indicators: null,
+      analysisConfidence: null, calculationChecks: null,
+      productStatuses: [{ key: 'depanssur', label: 'depanssur', status: 'REFUSE', opportunity: null, naReason: null, naDetail: null, evidence: [] }],
+    });
+  });
+
+  it('une analyse inexploitable masque aussi les nouveaux scores', async () => {
+    const f = fixture();
+    f.api.transcribe.mockImplementation(async (q: any) => ({ ...f.result(q), transcript: 'court', durationSec: 20 }));
+    f.api.evaluate.mockImplementation(async (q: any) => ({ ...f.result(q), transcript: q.transcript.trim(), durationSec: q.transcriptDurationSec, ...recalibrage }));
+    await f.worker().sync(7); await f.worker().sync(7);
+    expect(f.row()).toMatchObject({ quality: 'INEXPLOITABLE', score: null, executionScore: null, outcomeScore: null, indicators: null, band: 'non_evaluable', visitResult: 'VENTE' });
+  });
+
+  it('un moteur sans score d’exécution (score null) marque l’analyse inexploitable', async () => {
+    const f = fixture();
+    f.api.evaluate.mockImplementation(async (q: any) => ({ ...f.result(q), transcript: q.transcript.trim(), ...recalibrage, score: null, scoreBeforeMalus: null, executionScore: null, band: 'non_evaluable' }));
+    await f.worker().sync(7); await f.worker().sync(7);
+    expect(f.row()).toMatchObject({ status: 'READY', quality: 'INEXPLOITABLE', score: null, scoreBeforeMalus: null, executionScore: null, outcomeScore: null, band: 'non_evaluable' });
+  });
+
+  it('la remise en file efface les nouveaux champs', async () => {
+    const f = fixture();
+    f.api.evaluate.mockImplementation(async (q: any) => ({ ...f.result(q), transcript: q.transcript.trim(), ...recalibrage }));
+    await f.worker().sync(7); await f.worker().sync(7);
+    f.set({ outcomeOverriddenBy: 'admin@x', outcomeOverriddenAt: new Date() });
+    await f.service.relaunch(7);
+    expect(f.row()).toMatchObject({
+      status: 'PENDING', executionScore: null, outcomeScore: null, visitResult: null, nextAction: null, ribStatus: null,
+      signatureStatus: null, band: null, productStatuses: null, indicators: null, analysisConfidence: null,
+      calculationChecks: null, contradictions: null, phaseTiming: null, outcomeOverriddenBy: null, outcomeOverriddenAt: null,
+    });
+  });
+
+  it('envoie les segments horodatés du transcript à /evaluate, et rien sans segments valides', async () => {
+    const input = new CoachingInputService({} as any, {} as any);
+    const refs: any = { reference: { version: 1, contentHash: 'h', plan: {}, products: [] } };
+    const row: any = { remoteRequestKey: 'k', s3KeyOriginal: 'audio', statutPorte: null, transcript: 'Bonjour', transcriptDurationSec: 12,
+      transcriptMetadata: { segments: [
+        { start: 0, end: 2.5, text: 'Bonjour', words: [], no_speech_prob: 0.02, avg_logprob: -0.3 },
+        { start: 3, end: 4, text: 'Oui' },
+      ], quality: null } };
+    expect((await input.request(row, refs)).transcriptSegments).toEqual([
+      { start: 0, end: 2.5, text: 'Bonjour', no_speech_prob: 0.02, avg_logprob: -0.3 },
+      { start: 3, end: 4, text: 'Oui' },
+    ]);
+    // Tout ou rien : un seul segment invalide et aucun segment ne part.
+    for (const bad of [{ start: 'x', end: 3, text: 'bruit' }, { start: 5, end: 4, text: 'à rebours' }, { start: 6, end: 7, text: null }, { start: -1, end: 1, text: 'avant' }]) {
+      const withBad = { ...row, transcriptMetadata: { segments: [...row.transcriptMetadata.segments, bad] } };
+      expect('transcriptSegments' in (await input.request(withBad, refs))).toBe(false);
+    }
+    expect('transcriptSegments' in (await input.request({ ...row, transcriptMetadata: { segments: null } }, refs))).toBe(false);
+    expect('transcriptSegments' in (await input.request({ ...row, transcriptMetadata: null }, refs))).toBe(false);
   });
 });

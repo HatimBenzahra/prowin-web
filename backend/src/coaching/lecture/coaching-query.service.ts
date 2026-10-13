@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import {
   CoachingQuality,
   CoachingStatus,
+  Prisma,
   StatutPorte,
   UserStatus,
 } from '@prisma/client';
@@ -18,9 +19,11 @@ import {
   CoachingScoreboardRowDto,
   CoachingStepAverageDto,
   CoachingViolationDto,
+  CoachingProductStatsDto,
 } from '../coaching.dto';
 import { CriterionScore, StepScore } from '../shared/coaching.types';
 import { CRM_SOURCE, CRM_TENANT } from '../shared/crm-scope';
+import { isScorable, OBJECTIVE_BY_NIVEAU, PROPOSED_STATUSES, ProductStatus, SALE_RESULTS, SCORABLE } from '../shared/visit-outcome';
 
 // Filtre par tranche de durée (secondes) pour la liste de gestion.
 function matchDurationTier(sec: number, tier: string): boolean {
@@ -79,7 +82,7 @@ export class CoachingQueryService {
     });
     const agg = await this.prisma.coachingAnalysis.aggregate({
       _avg: { score: true },
-      where: { source: this.CRM_SOURCE, tenantId: CRM_TENANT, score: { not: null } },
+      where: { source: this.CRM_SOURCE, tenantId: CRM_TENANT, score: { not: null }, ...SCORABLE },
     });
     const avgScore =
       agg._avg.score != null ? Math.round(agg._avg.score * 10) / 10 : null;
@@ -113,7 +116,7 @@ export class CoachingQueryService {
     if (!row || row.source !== source || row.tenantId !== CRM_TENANT) {
       throw new NotFoundException('Analyse coaching introuvable');
     }
-    return this.toDto(row);
+    return (await this.withObjectives([this.toDto(row)]))[0];
   }
 
   async listAnalyses(
@@ -145,7 +148,7 @@ export class CoachingQueryService {
       }),
       this.prisma.coachingAnalysis.count({ where }),
     ]);
-    const items = rows.map((r) => this.toDto(r));
+    const items = await this.withObjectives(rows.map((r) => this.toDto(r)));
     const subjects = await this.resolveSubjects(rows);
     for (const it of items) {
       const s = subjects.get(it.id);
@@ -174,7 +177,21 @@ export class CoachingQueryService {
       },
       orderBy: { createdAt: 'desc' },
     });
-    return rows.map((r) => this.toDto(r));
+    return this.withObjectives(rows.map((r) => this.toDto(r)));
+  }
+
+  /** Objectif de score selon le niveau du commercial (une requête pour le lot). */
+  private async withObjectives(items: CoachingAnalysisDto[]): Promise<CoachingAnalysisDto[]> {
+    const ids = [...new Set(items.map((it) => it.userId).filter((x): x is number => x != null))];
+    if (!ids.length) return items;
+    const commercials = await this.prisma.commercial.findMany({ where: { id: { in: ids } }, select: { id: true, niveau: true } });
+    const niveaux = new Map(commercials.map((c) => [c.id, c.niveau as string]));
+    for (const it of items) {
+      const niveau = it.userId != null ? niveaux.get(it.userId) : undefined;
+      it.commercialNiveau = niveau ?? null;
+      it.objectiveScore = niveau ? OBJECTIVE_BY_NIVEAU[niveau] ?? null : null;
+    }
+    return items;
   }
 
   /**
@@ -434,7 +451,7 @@ export class CoachingQueryService {
     const reference = await this.references.getActive();
     const analysisByKey = new Map<
       string,
-      { id: number; status: string; quality: string | null; score: number | null }
+      { id: number; status: string; quality: string | null; score: number | null; band: string | null }
     >();
     if (reference && withOwner.length) {
       const analyses = await this.prisma.coachingAnalysis.findMany({
@@ -444,7 +461,7 @@ export class CoachingQueryService {
           s3KeyOriginal: { in: withOwner.map((r) => r.s3Key) },
           referenceId: reference.id,
         },
-        select: { s3KeyOriginal: true, id: true, status: true, quality: true, score: true },
+        select: { s3KeyOriginal: true, id: true, status: true, quality: true, score: true, band: true },
       });
       for (const a of analyses) {
         analysisByKey.set(a.s3KeyOriginal, {
@@ -452,6 +469,7 @@ export class CoachingQueryService {
           status: a.status,
           quality: a.quality,
           score: a.score,
+          band: a.band,
         });
       }
     }
@@ -502,6 +520,7 @@ export class CoachingQueryService {
         analysisStatus: a?.status ?? null,
         quality: a?.quality ?? null,
         score: a?.score ?? null,
+        band: a?.band ?? null,
       };
     });
     return { items, total };
@@ -590,6 +609,7 @@ export class CoachingQueryService {
       score: true,
       quality: true,
       subScores: true,
+      band: true,
       createdAt: true,
     } as const;
 
@@ -650,8 +670,8 @@ export class CoachingQueryService {
       derniereAnalyseAt?: Date;
     };
 
-    const scored = (row: { score: number | null; quality: string | null }) =>
-      row.score != null && row.quality !== CoachingQuality.INEXPLOITABLE;
+    const scored = (row: { score: number | null; quality: string | null; band?: string | null }) =>
+      isScorable(row) && row.quality !== CoachingQuality.INEXPLOITABLE;
 
     const accumulateSteps = (
       target: Map<string, { sum: number; count: number }>,
@@ -786,6 +806,66 @@ export class CoachingQueryService {
   }
 
   /**
+   * Statistiques produit sur une période : taux de proposition et de transformation par
+   * produit, opportunités oubliées, produits vendus par visite et par intervenant, causes
+   * de perte. Seules les visites exploitables portant des statuts produit comptent.
+   */
+  async coachingProductStats(startDate?: Date, endDate?: Date): Promise<CoachingProductStatsDto> {
+    const rows = await this.prisma.coachingAnalysis.findMany({
+      where: {
+        source: this.CRM_SOURCE,
+        tenantId: CRM_TENANT,
+        status: CoachingStatus.READY,
+        quality: { not: CoachingQuality.INEXPLOITABLE },
+        productStatuses: { not: Prisma.DbNull },
+        ...(startDate || endDate ? { createdAt: { ...(startDate ? { gte: startDate } : {}), ...(endDate ? { lte: endDate } : {}) } } : {}),
+      },
+      select: { id: true, userId: true, managerId: true, productStatuses: true, nonSaleReason: true, visitResult: true },
+    });
+    const subjects = await this.resolveSubjects(rows);
+    const production = await this.productionSubjectKeys(subjects);
+    const products = new Map<string, { key: string; label: string; nbVisites: number; nbProposes: number; nbAcceptes: number; nbOublies: number }>();
+    const bySubject = new Map<string, { subjectId: number; subjectName: string; subjectRole: string; nbVisites: number; nbProduitsVendus: number }>();
+    const causes = new Map<string, number>();
+    let nbVisites = 0;
+    let vendus = 0;
+    for (const row of rows) {
+      const subject = subjects.get(row.id);
+      if (!subject || !production.has(`${subject.role}:${subject.id}`)) continue;
+      nbVisites += 1;
+      let sold = 0;
+      for (const p of (row.productStatuses as unknown as ProductStatus[]) ?? []) {
+        const entry = products.get(p.key) ?? { key: p.key, label: p.label, nbVisites: 0, nbProposes: 0, nbAcceptes: 0, nbOublies: 0 };
+        // Le taux de proposition ne compte que les visites où le produit était applicable.
+        if (p.status !== 'NON_APPLICABLE') entry.nbVisites += 1;
+        if (PROPOSED_STATUSES.includes(p.status)) entry.nbProposes += 1;
+        if (p.status === 'ACCEPTE') { entry.nbAcceptes += 1; sold += 1; }
+        if (p.opportunity === 'oubliee') entry.nbOublies += 1;
+        products.set(p.key, entry);
+      }
+      vendus += sold;
+      const key = `${subject.role}:${subject.id}`;
+      const bucket = bySubject.get(key) ?? { subjectId: subject.id, subjectName: subject.name, subjectRole: subject.role, nbVisites: 0, nbProduitsVendus: 0 };
+      bucket.nbVisites += 1;
+      bucket.nbProduitsVendus += sold;
+      bySubject.set(key, bucket);
+      // Une cause de perte n'a de sens que pour une visite sans vente.
+      if (row.nonSaleReason && row.visitResult && !SALE_RESULTS.includes(row.visitResult)) causes.set(row.nonSaleReason, (causes.get(row.nonSaleReason) ?? 0) + 1);
+    }
+    const pct = (n: number, d: number) => (d ? Math.round((n / d) * 1000) / 10 : null);
+    const ratio = (n: number, d: number) => (d ? Math.round((n / d) * 100) / 100 : null);
+    return {
+      nbVisites,
+      products: [...products.values()].map((p) => ({ ...p, tauxProposition: pct(p.nbProposes, p.nbVisites), tauxTransformation: pct(p.nbAcceptes, p.nbProposes) })),
+      produitsParVisite: ratio(vendus, nbVisites),
+      parIntervenant: [...bySubject.values()]
+        .map((b) => ({ ...b, produitsParVisite: ratio(b.nbProduitsVendus, b.nbVisites) }))
+        .sort((a, b) => (b.produitsParVisite ?? 0) - (a.produitsParVisite ?? 0) || a.subjectName.localeCompare(b.subjectName)),
+      causesPerte: [...causes.entries()].map(([reason, count]) => ({ reason, count })).sort((a, b) => b.count - a.count),
+    };
+  }
+
+  /**
    * Clés `role:id` des sujets qui ne sont pas des utilisateurs de test.
    * Un commercial supprimé entre-temps disparaît aussi du comparatif.
    */
@@ -866,7 +946,11 @@ export class CoachingQueryService {
       improvements: (row.improvements as string[]) ?? [],
       recommendations: (row.recommendations as string[]) ?? [],
       subScores: (row.subScores as StepScore[]) ?? [],
-      criterionResults: (row.criterionResults as CriterionScore[]) ?? [],
+      // Une preuve mal formée ne doit pas annuler toute la réponse GraphQL.
+      criterionResults: ((row.criterionResults as CriterionScore[]) ?? []).map((c: any) => ({
+        ...c,
+        evidenceRefs: Array.isArray(c.evidenceRefs) ? c.evidenceRefs.filter((e: any) => typeof e?.quote === 'string') : null,
+      })),
       transcript: row.transcript ?? null,
       transcriptDurationSec: row.transcriptDurationSec ?? null,
       error: row.error ?? row.remoteSyncError ?? null,
@@ -876,7 +960,28 @@ export class CoachingQueryService {
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
       favori: row.porte?.coachingFavori ?? false,
-      // Enrichi après coup par resolveSubjects (listAnalyses).
+      executionScore: row.status === 'READY' ? row.executionScore ?? null : null,
+      outcomeScore: row.status === 'READY' ? row.outcomeScore ?? null : null,
+      outcomeCategory: row.remoteResultSnapshot?.outcome?.outcomeCategory ?? null,
+      outcomeComment: row.remoteResultSnapshot?.outcome?.comment ?? null,
+      outcomeEvidence: Array.isArray(row.remoteResultSnapshot?.outcome?.evidence) ? row.remoteResultSnapshot.outcome.evidence.filter((e: unknown) => typeof e === 'string') : [],
+      visitResult: row.visitResult ?? null,
+      nonSaleReason: row.nonSaleReason ?? null,
+      nextAction: row.nextAction ?? null,
+      ribStatus: row.ribStatus ?? null,
+      signatureStatus: row.signatureStatus ?? null,
+      outcomeOverriddenBy: row.outcomeOverriddenBy ?? null,
+      outcomeOverriddenAt: row.outcomeOverriddenAt?.toISOString() ?? null,
+      productStatuses: row.productStatuses ?? [],
+      indicators: row.indicators ?? null,
+      band: row.band ?? null,
+      analysisConfidence: row.analysisConfidence ?? null,
+      calculationChecks: row.calculationChecks ?? [],
+      contradictions: row.contradictions ?? [],
+      phaseTiming: row.phaseTiming ?? [],
+      // Enrichis après coup : niveau/objectif par withObjectives, sujet par resolveSubjects.
+      commercialNiveau: null,
+      objectiveScore: null,
       subjectName: null,
       subjectRole: null,
       subjectId: null,

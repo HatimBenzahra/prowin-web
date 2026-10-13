@@ -31,7 +31,7 @@ export const TAB_QUERIES = {
   pipeline: ['pipeline'],
   activite: ['timeline', 'effort'],
   contrats: ['timeline'],
-  coaching: ['ownerActivity', 'scoreboard'],
+  coaching: ['ownerActivity', 'scoreboard', 'productStats'],
   equipe: ['ownerActivity', 'scoreboard'],
   territoire: ['zoneStats'],
 }
@@ -44,4 +44,5 @@ export const DEFERRABLE_QUERIES = [
   'ownerActivity',
   'zoneStats',
   'scoreboard',
+  'productStats',
 ]

@@ -29,6 +29,7 @@ export function ConfirmDialog({
   confirmLabel,
   destructive = false,
   onConfirm,
+  children,
 }) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
@@ -57,6 +58,7 @@ export function ConfirmDialog({
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
+        {children}
         {error && (
           <p className="whitespace-pre-wrap break-words rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
             {error}

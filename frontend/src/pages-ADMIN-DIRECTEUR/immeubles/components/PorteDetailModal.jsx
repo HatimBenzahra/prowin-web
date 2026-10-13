@@ -11,6 +11,8 @@ import CoachingResultPanel from '@/pages-ADMIN-DIRECTEUR/coaching/CoachingResult
 import { isInProgress } from '@/pages-ADMIN-DIRECTEUR/coaching/CoachingComponents'
 import AnalysisProgress from '@/pages-ADMIN-DIRECTEUR/coaching/AnalysisProgress'
 import { cn } from '@/lib/utils'
+import { ConfirmDialog } from '@/pages-ADMIN-DIRECTEUR/coaching/ReferenceDialogs'
+import { RELAUNCH_CORRECTION_WARNING } from '@/pages-ADMIN-DIRECTEUR/coaching/coaching-calibration'
 
 // Cadence de suivi d'une analyse en cours, alignée sur les autres écrans coaching.
 const COACHING_POLL_MS = 6000
@@ -33,6 +35,7 @@ export default function PorteDetailModal({ door, open, onOpenChange, address = '
 
   // Coaching de la porte (analyse la plus récente) + favori.
   const [analysis, setAnalysis] = useState(null)
+  const [confirmRelaunch, setConfirmRelaunch] = useState(false)
   const [coachingLoading, setCoachingLoading] = useState(false)
   const [launching, setLaunching] = useState(false)
   const [favori, setFavori] = useState(false)
@@ -201,7 +204,14 @@ export default function PorteDetailModal({ door, open, onOpenChange, address = '
                 Favori
               </Button>
               {s3Key && !coachInProgress && (
-                <Button variant="outline" size="sm" onClick={launchCoaching} disabled={launching}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() =>
+                    analysis?.outcomeOverriddenAt ? setConfirmRelaunch(true) : launchCoaching()
+                  }
+                  disabled={launching}
+                >
                   {launching ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
                   ) : (
@@ -238,6 +248,7 @@ export default function PorteDetailModal({ door, open, onOpenChange, address = '
               showAudio={false}
               showScoreFooter
               lead={recordingBlock}
+              onAnalysisChange={setAnalysis}
             />
           ) : (
             <div className="min-h-0 flex-1 space-y-4 overflow-y-auto">
@@ -247,6 +258,15 @@ export default function PorteDetailModal({ door, open, onOpenChange, address = '
           )}
         </div>
       </DialogContent>
+      <ConfirmDialog
+        open={confirmRelaunch}
+        onOpenChange={setConfirmRelaunch}
+        title="Relancer l’analyse ?"
+        description={RELAUNCH_CORRECTION_WARNING}
+        confirmLabel="Relancer"
+        destructive
+        onConfirm={launchCoaching}
+      />
     </Dialog>
   )
 }

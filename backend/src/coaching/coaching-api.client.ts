@@ -6,6 +6,7 @@ import { ParsedSalesPlan } from './referentiels/sales-plan.types';
 import { ForbiddenClaim, ParsedProductSheet } from './referentiels/product-sheet.types';
 import { PriceSnapshot } from './coaching-prices.service';
 import { CoachingProductAlertDto, CoachingProductVerificationDto } from './coaching.dto';
+import type { TranscriptSegment } from './shared/visit-outcome';
 
 /** Le contenu jugeable d'une fiche, tel que le moteur l'a lu. */
 export interface ProductContent { facts: string[]; forbidden: ForbiddenClaim[] }
@@ -37,6 +38,8 @@ export type ComputeRequest = FrozenReferences & {
   statutPorte?: string | null;
   transcript?: string | null;
   transcriptDurationSec?: number | null;
+  /** Segments horodatés (secondes) : timestamps des preuves ; absents si la transcription n'en a pas. */
+  transcriptSegments?: TranscriptSegment[];
 };
 
 /** Un problème de cohérence du référentiel : une erreur bloque la publication. */
@@ -76,6 +79,9 @@ export interface ComputeResult {
   detectedProducts: Prisma.JsonValue; productMapping: Prisma.JsonValue; productSheetVersions: Prisma.JsonValue;
   productAlerts?: Array<CoachingProductAlertDto & { contextQuote: string; productEvidence: string; relevanceReason: string }>;
   productVerification?: CoachingProductVerificationDto;
+  /** Recalibrage 2026 : absents des moteurs antérieurs, lus défensivement (visit-outcome.ts). */
+  executionScore?: unknown; outcome?: unknown; productStatuses?: unknown; indicators?: unknown; band?: unknown;
+  analysisConfidence?: unknown; calculationChecks?: unknown; contradictions?: unknown; phaseTiming?: unknown;
 }
 export interface TranscriptResult {
   requestKey: string; source: string; tenantId: string; audioKey: string;

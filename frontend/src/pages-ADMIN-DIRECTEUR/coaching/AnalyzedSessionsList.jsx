@@ -8,7 +8,12 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { cn } from '@/lib/utils'
-import { PorteStatutPill, parseRecordingKey, formatDateTime } from './CoachingComponents'
+import {
+  PorteStatutPill,
+  ScoreValue,
+  parseRecordingKey,
+  formatDateTime,
+} from './CoachingComponents'
 
 const SORTS = [
   { value: 'date', label: 'Date (récent)' },
@@ -101,9 +106,7 @@ export default function AnalyzedSessionsList({ items, onSelect, sortable = false
                     </span>
                   </div>
                 </div>
-                <span className="shrink-0 font-serif text-lg tabular-nums">
-                  {typeof a.score === 'number' ? `${Math.round(a.score)}/100` : '—'}
-                </span>
+                <ScoreValue score={a.score} band={a.band} className="shrink-0 font-serif text-lg" />
                 <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
               </button>
             </li>

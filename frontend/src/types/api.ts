@@ -52,10 +52,14 @@ export interface Commercial extends BaseEntity {
   managerId?: number | null
   directeurId?: number | null
   status: UserStatus
+  /** Niveau d'expérience : fixe l'objectif de score coaching. */
+  niveau?: CommercialNiveau
   immeubles: Immeuble[]
   zones: Zone[]
   statistics: Statistic[]
 }
+
+export type CommercialNiveau = 'EN_FORMATION' | 'OPERATIONNEL' | 'CONFIRME' | 'EXPERT'
 
 export interface Zone extends BaseEntity {
   nom: string
@@ -441,6 +445,7 @@ export interface UpdateCommercialInput {
   managerId?: number
   directeurId?: number
   status?: UserStatus
+  niveau?: CommercialNiveau
 }
 
 export interface UpdateZoneInput {
