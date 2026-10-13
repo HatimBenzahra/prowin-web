@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Clock, Loader2, Sparkles, Star, User2, X } from 'lucide-react'
+import { Building2, Clock, Loader2, Sparkles, Star, User2, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import AudioPlayer from '@/components/AudioPlayer'
@@ -8,13 +8,9 @@ import { useErrorToast } from '@/hooks/utils/ui/use-error-toast'
 import CoachingService from '@/services/coaching/coaching.service'
 import RecordingService from '@/services/audio/recordings/recording.service'
 import CoachingDetail from '../coaching/CoachingDetail'
-import {
-  PorteStatutPill,
-  formatDateTime,
-  formatDuration,
-  parseRecordingKey,
-} from '../coaching/CoachingComponents'
+import { formatDateTime, formatDuration, parseRecordingKey } from '../coaching/CoachingComponents'
 import { porteLabel } from './coachings-utils'
+import { StatutBadge } from './CoachingsTree'
 
 /**
  * Panneau d'écoute de la porte sélectionnée : en-tête, lecteur compact épinglé
@@ -107,31 +103,36 @@ export default function CoachingsPanel({
     <div>
       <div className="p-4 pb-3">
         <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <h2 className="truncate text-base font-semibold">
-              {row?.adresse || meta.address || 'Enregistrement'}
-            </h2>
-            <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground [&>*+*]:before:mr-2 [&>*+*]:before:content-['·']">
-              {row && <span className="font-medium text-foreground">{porteLabel(row)}</span>}
-              {row?.subjectName && (
-                <span className="inline-flex items-center gap-1">
-                  <User2 className="h-3.5 w-3.5" />
-                  {row.subjectName}
-                </span>
-              )}
-              {date && <span>{formatDateTime(date)}</span>}
-              {row?.durationSec > 0 && (
-                <span className="inline-flex items-center gap-1">
-                  <Clock className="h-3.5 w-3.5" />
-                  {formatDuration(row.durationSec)}
-                </span>
+          <div className="flex min-w-0 items-start gap-3">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-blue-500/20 bg-blue-500/10 text-blue-600 dark:text-blue-400">
+              <Building2 className="h-4 w-4" />
+            </div>
+            <div className="min-w-0">
+              <h2 className="truncate text-base font-semibold">
+                {row?.adresse || meta.address || 'Enregistrement'}
+              </h2>
+              <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground [&>*+*]:before:mr-2 [&>*+*]:before:content-['·']">
+                {row && <span className="font-medium text-foreground">{porteLabel(row)}</span>}
+                {row?.subjectName && (
+                  <span className="inline-flex items-center gap-1">
+                    <User2 className="h-3.5 w-3.5" />
+                    {row.subjectName}
+                  </span>
+                )}
+                {date && <span>{formatDateTime(date)}</span>}
+                {row?.durationSec > 0 && (
+                  <span className="inline-flex items-center gap-1">
+                    <Clock className="h-3.5 w-3.5" />
+                    {formatDuration(row.durationSec)}
+                  </span>
+                )}
+              </div>
+              {row?.statutPorte && (
+                <div className="mt-2">
+                  <StatutBadge statut={row.statutPorte} className="text-xs" />
+                </div>
               )}
             </div>
-            {row?.statutPorte && (
-              <div className="mt-2">
-                <PorteStatutPill statut={row.statutPorte} />
-              </div>
-            )}
           </div>
           <div className="flex shrink-0 items-center gap-1">
             {row && (
@@ -139,7 +140,10 @@ export default function CoachingsPanel({
                 variant="outline"
                 size="sm"
                 onClick={() => onToggleFavori(row)}
-                className={cn(row.favori && 'border-amber-400 text-amber-600')}
+                className={cn(
+                  row.favori &&
+                    'border-amber-400/60 bg-amber-500/10 text-amber-700 hover:bg-amber-500/15 hover:text-amber-700 dark:text-amber-400'
+                )}
                 aria-label={row.favori ? 'Retirer des favoris' : 'Ajouter aux favoris'}
               >
                 <Star className={cn('h-4 w-4', row.favori && 'fill-amber-500 text-amber-500')} />
@@ -198,7 +202,9 @@ export default function CoachingsPanel({
         )
       ) : (
         <div className="flex flex-col items-center gap-3 px-5 py-10 text-center">
-          <Sparkles className="h-8 w-8 text-muted-foreground/60" />
+          <div className="flex h-12 w-12 items-center justify-center rounded-xl border border-violet-500/20 bg-violet-500/10 text-violet-600 dark:text-violet-400">
+            <Sparkles className="h-6 w-6" />
+          </div>
           <div>
             <p className="text-sm font-medium">Pas encore analysé</p>
             <p className="text-sm text-muted-foreground">

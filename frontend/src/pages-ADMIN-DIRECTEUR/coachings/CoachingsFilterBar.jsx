@@ -34,6 +34,7 @@ import DateRangeFilter from '@/components/DateRangeFilter'
 import ExpandableSearch from '@/components/ExpandableSearch'
 import { cn } from '@/lib/utils'
 import { BAND_META, BAND_RANGES, VISIT_RESULT_LABELS } from '../coaching/coaching-calibration'
+import { BAND_TONE } from '../coaching/coaching-tones'
 import { PORTE_STATUT_META } from '../coaching/CoachingComponents'
 import {
   BAND_FILTERS,
@@ -80,7 +81,11 @@ function MultiFilter({ icon, label, options, selected, onChange }) {
       <DropdownMenuTrigger asChild>
         <Button
           variant="outline"
-          className={cn('h-9 gap-2 font-normal', active && 'border-primary/30 text-primary')}
+          className={cn(
+            'h-9 gap-2 font-normal',
+            active &&
+              'border-primary/40 bg-primary/5 text-primary hover:bg-primary/10 hover:text-primary'
+          )}
         >
           {icon}
           {label}
@@ -231,7 +236,10 @@ export default function CoachingsFilterBar({
           onValueChange={v => onChange({ subject: v === ALL_VALUE ? '' : v })}
         >
           <SelectTrigger
-            className={cn('w-auto', filters.subject && 'border-primary/30 text-primary')}
+            className={cn(
+              'w-auto',
+              filters.subject && 'border-primary/40 bg-primary/5 text-primary'
+            )}
           >
             <User className="mr-2 h-4 w-4" />
             <SelectValue placeholder="Commercial..." />
@@ -307,7 +315,10 @@ export default function CoachingsFilterBar({
               }
             >
               <SelectTrigger
-                className={cn('w-auto', filters.produit && 'border-primary/30 text-primary')}
+                className={cn(
+                  'w-auto',
+                  filters.produit && 'border-primary/40 bg-primary/5 text-primary'
+                )}
               >
                 <Package className="mr-2 h-4 w-4" />
                 <SelectValue placeholder="Produit..." />
@@ -362,7 +373,7 @@ export default function CoachingsFilterBar({
                   className={cn(
                     'inline-flex h-9 items-center gap-1.5 rounded-md border px-2.5 text-xs font-medium tabular-nums transition-colors',
                     active
-                      ? cn(meta.pill, 'border-current')
+                      ? cn(BAND_TONE[band].chip, 'border-transparent ring-1 ring-inset')
                       : 'border-input bg-background text-muted-foreground hover:bg-muted/60 hover:text-foreground'
                   )}
                 >

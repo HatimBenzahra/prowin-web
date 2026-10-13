@@ -1,18 +1,30 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { AlertTriangle, Headphones, RotateCw } from 'lucide-react'
+import {
+  AlertTriangle,
+  DoorOpen,
+  Gauge,
+  Headphones,
+  RotateCw,
+  Sparkles,
+  Trophy,
+} from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet'
+import { StatTile } from '@/components/details/DetailPrimitives'
 import { useIsMobile } from '@/hooks/ui/use-mobile'
 import { useErrorToast } from '@/hooks/utils/ui/use-error-toast'
 import CoachingService from '@/services/coaching/coaching.service'
 import { useActiveReference } from '../coaching/useActiveReference'
+import { BAND_META } from '../coaching/coaching-calibration'
+import { BAND_TONE } from '../coaching/coaching-tones'
 import CoachingsFilterBar from './CoachingsFilterBar'
 import CoachingsTree from './CoachingsTree'
 import CoachingsPanel from './CoachingsPanel'
 import { useCoachingJournal } from './useCoachingJournal'
 import {
+  aggregate,
   groupRows,
   neighbourKey,
   parseFilters,
@@ -66,6 +78,14 @@ export default function Coachings() {
   const tree = useMemo(() => groupRows(journal.rows, filters.group), [journal.rows, filters.group])
   const keys = useMemo(() => visibleKeys(tree, collapsed), [tree, collapsed])
   const selectedRow = journal.rows.find(r => r.s3Key === selectedKey) ?? null
+  const kpis = useMemo(() => {
+    const rows = journal.rows
+    return {
+      ...aggregate(rows),
+      nbPretes: rows.filter(r => r.analysis?.status === 'READY').length,
+      nbSansAnalyse: rows.filter(r => !r.analysis).length,
+    }
+  }, [journal.rows])
 
   const toggleCollapse = key =>
     setCollapsed(prev => {
@@ -124,7 +144,9 @@ export default function Coachings() {
     />
   ) : (
     <div className="flex h-full flex-col items-center justify-center gap-3 p-8 text-center text-muted-foreground">
-      <Headphones className="h-10 w-10 text-muted-foreground/50" />
+      <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+        <Headphones className="h-7 w-7" />
+      </div>
       <div>
         <p className="text-sm font-medium text-foreground">Sélectionnez une porte pour l’écouter</p>
         <p className="mt-1 text-xs">
@@ -139,11 +161,19 @@ export default function Coachings() {
 
   return (
     <div className="flex flex-col gap-4 lg:h-[calc(100svh-7rem)]">
-      <div>
-        <h1 className="text-xl font-semibold">Coachings</h1>
-        <p className="text-sm text-muted-foreground">
-          Toutes les écoutes par jour et par bâtiment, avec leur coaching IA.
-        </p>
+      <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+        <div className="flex items-center gap-3">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+            <Headphones className="h-6 w-6" />
+          </div>
+          <div>
+            <h1 className="text-xl font-semibold">Coachings</h1>
+            <p className="text-sm text-muted-foreground">
+              Toutes les écoutes par jour et par bâtiment, avec leur coaching IA.
+            </p>
+          </div>
+        </div>
+        <CoachingsKpis kpis={kpis} loading={journal.loading} partial={journal.hasMore} />
       </div>
 
       <CoachingsFilterBar
@@ -155,7 +185,7 @@ export default function Coachings() {
       />
 
       <div className="grid min-h-0 flex-1 gap-4 lg:grid-cols-[minmax(340px,2fr)_3fr]">
-        <div className="min-h-0 rounded-xl border lg:overflow-y-auto">
+        <div className="min-h-0 rounded-xl border bg-card lg:overflow-y-auto">
           {journal.loading ? (
             <div className="space-y-3 p-3">
               {[0, 1, 2].map(i => (
@@ -211,9 +241,63 @@ export default function Coachings() {
             </SheetContent>
           </Sheet>
         ) : (
-          <div className="min-h-0 overflow-y-auto rounded-xl border">{panel}</div>
+          <div className="min-h-0 overflow-y-auto rounded-xl border bg-card">{panel}</div>
         )}
       </div>
+    </div>
+  )
+}
+
+/**
+ * Les chiffres de la fenêtre affichée, calculés sur les lignes chargées : tant que
+ * des jours restent à charger, l'indice le dit plutôt que de laisser croire au total.
+ */
+function CoachingsKpis({ kpis, loading, partial }) {
+  const scope = partial ? 'Jours chargés' : 'Sur la période'
+  const show = value => (loading ? '—' : value)
+  return (
+    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 xl:w-[720px] xl:shrink-0">
+      <StatTile
+        size="sm"
+        icon={DoorOpen}
+        accent="blue"
+        label="Portes écoutées"
+        value={show(kpis.nbPortes)}
+        hint={scope}
+      />
+      <StatTile
+        size="sm"
+        icon={Sparkles}
+        accent="violet"
+        label="Analysées"
+        value={show(kpis.nbPretes)}
+        hint={
+          kpis.nbSansAnalyse > 0
+            ? `${kpis.nbSansAnalyse} à analyser`
+            : `${kpis.nbAnalyses} notée${kpis.nbAnalyses > 1 ? 's' : ''}`
+        }
+      />
+      <StatTile
+        size="sm"
+        icon={Gauge}
+        accent="amber"
+        label="Score moyen"
+        value={show(
+          kpis.scoreMoyen == null
+            ? '—'
+            : kpis.scoreMoyen.toLocaleString('fr-FR', { maximumFractionDigits: 1 })
+        )}
+        valueClassName={!loading && kpis.band ? BAND_TONE[kpis.band].text : undefined}
+        hint={kpis.band ? BAND_META[kpis.band].label : 'Aucune analyse notée'}
+      />
+      <StatTile
+        size="sm"
+        icon={Trophy}
+        accent="emerald"
+        label="Ventes"
+        value={show(kpis.nbVentes)}
+        hint="Signées ou vente IA"
+      />
     </div>
   )
 }

@@ -32,6 +32,26 @@ import {
   showsScore,
 } from './coaching-calibration'
 import { ConsistencySection, ScoreBreakdown, VisitOutcomeSection } from './CoachingOutcomeSections'
+import { bandTone } from './coaching-tones'
+
+// Cartes Forces / À améliorer / Recommandations teintées (panneau d'écoute).
+const LIST_SURFACES = {
+  green: {
+    surface: 'border-green-500/25 bg-green-500/5',
+    title: 'text-green-700 dark:text-green-400',
+    bullet: 'bg-green-500',
+  },
+  amber: {
+    surface: 'border-amber-500/25 bg-amber-500/5',
+    title: 'text-amber-700 dark:text-amber-400',
+    bullet: 'bg-amber-500',
+  },
+  indigo: {
+    surface: 'border-indigo-500/25 bg-indigo-500/5',
+    title: 'text-indigo-700 dark:text-indigo-300',
+    bullet: 'bg-indigo-500',
+  },
+}
 
 /** Proven contradiction against the product sheet or supplied price grid. */
 function ViolationCard({ violation }) {
@@ -111,11 +131,13 @@ function CriterionEvidence({ criterion, onSeek }) {
   )
 }
 
-function ListBlock({ icon: Icon, title, items, tone }) {
+/** `surface` : teinte de carte (LIST_SURFACES) ; sinon carte neutre, titre en `tone`. */
+function ListBlock({ icon: Icon, title, items, tone, surface }) {
   const list = items || []
+  const s = LIST_SURFACES[surface]
   return (
-    <div className="rounded-lg border border-border/60 p-3">
-      <div className={cn('mb-2 flex items-center gap-1.5 text-sm font-medium', tone)}>
+    <div className={cn('rounded-lg border p-3', s ? s.surface : 'border-border/60')}>
+      <div className={cn('mb-2 flex items-center gap-1.5 text-sm font-medium', s ? s.title : tone)}>
         <Icon className="h-4 w-4" />
         {title}
       </div>
@@ -125,7 +147,11 @@ function ListBlock({ icon: Icon, title, items, tone }) {
         <ul className="space-y-1.5">
           {list.map((it, i) => (
             <li key={i} className="flex gap-1.5 text-sm text-foreground/90">
-              <span className="text-muted-foreground">•</span>
+              {s ? (
+                <span className={cn('mt-[7px] h-1.5 w-1.5 shrink-0 rounded-full', s.bullet)} />
+              ) : (
+                <span className="text-muted-foreground">•</span>
+              )}
               <span>{it}</span>
             </li>
           ))}
@@ -237,18 +263,26 @@ export default function CoachingResultPanel({
     analysis.improvements?.length ||
     analysis.recommendations?.length) > 0 && (
     <div className="grid gap-3 sm:grid-cols-3">
-      <ListBlock icon={ThumbsUp} title="Forces" items={analysis.strengths} tone="text-green-600" />
+      <ListBlock
+        icon={ThumbsUp}
+        title="Forces"
+        items={analysis.strengths}
+        tone="text-green-600"
+        surface={embedded ? 'green' : undefined}
+      />
       <ListBlock
         icon={TrendingUp}
         title="À améliorer"
         items={analysis.improvements}
         tone="text-amber-600"
+        surface={embedded ? 'amber' : undefined}
       />
       <ListBlock
         icon={Lightbulb}
         title="Recommandations"
         items={analysis.recommendations}
         tone="text-indigo-600"
+        surface={embedded ? 'indigo' : undefined}
       />
     </div>
   )
@@ -318,12 +352,18 @@ export default function CoachingResultPanel({
 
           {isReady && !embedded && <ScoreBreakdown analysis={analysis} />}
           {contradiction && (
-            <Alert className="border-amber-500/30 bg-amber-500/10 p-3 [&>svg]:text-amber-600">
+            <Alert className="border-amber-500/30 bg-amber-500/10 p-3 [&>svg]:text-amber-600 dark:[&>svg]:text-amber-400">
               <AlertTriangle className="h-4 w-4" />
               <AlertDescription>{contradiction}</AlertDescription>
             </Alert>
           )}
-          {isReady && <VisitOutcomeSection analysis={current} onUpdated={onOutcomeUpdated} />}
+          {isReady && (
+            <VisitOutcomeSection
+              analysis={current}
+              onUpdated={onOutcomeUpdated}
+              tinted={embedded}
+            />
+          )}
           {isReady && <ConsistencySection analysis={analysis} />}
           {embedded && summaryBlock}
           {embedded && listsBlock}
@@ -413,7 +453,14 @@ export default function CoachingResultPanel({
                         <div className="flex items-center gap-2">
                           {timingOf(analysis, step.key)}
                           <ScoreBar value={step.score} className="w-24" />
-                          <span className="text-xs tabular-nums text-muted-foreground">
+                          <span
+                            className={cn(
+                              'text-xs tabular-nums',
+                              embedded
+                                ? cn('font-semibold', bandTone(step.score).text)
+                                : 'text-muted-foreground'
+                            )}
+                          >
                             {Math.round(step.score)}
                           </span>
                         </div>

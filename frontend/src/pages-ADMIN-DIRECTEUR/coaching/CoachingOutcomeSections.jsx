@@ -25,6 +25,7 @@ import {
   SIGNATURE_LABELS,
   VISIT_RESULT_LABELS,
   BAND_META,
+  BAND_RANGES,
   NOT_RATED,
   isNotEvaluable,
   objectiveGap,
@@ -32,6 +33,7 @@ import {
   outcomeScoreLabel,
   scoreBand,
 } from './coaching-calibration'
+import { BAND_TONE, PRODUCT_TONE, TONE_MUTED, VISIT_RESULT_TONE, bandTone } from './coaching-tones'
 
 /*
  * Sections du recalibrage 2026 dans le panneau d'une analyse : décomposition du
@@ -128,10 +130,65 @@ export function ScoreBreakdown({ analysis }) {
   )
 }
 
+/** Anneau de score 0-100 à la couleur de la bande, chiffre au centre. */
+function ScoreRing({ score, band }) {
+  const tone = bandTone(score, band)
+  const r = 26
+  const circumference = 2 * Math.PI * r
+  const v = Math.max(0, Math.min(100, score))
+  return (
+    <div className="relative h-16 w-16 shrink-0" title={BAND_RANGES[scoreBand(score, band)]}>
+      <svg viewBox="0 0 64 64" className="h-16 w-16 -rotate-90" aria-hidden="true">
+        <circle cx="32" cy="32" r={r} fill="none" strokeWidth="6" className="stroke-muted" />
+        <circle
+          cx="32"
+          cy="32"
+          r={r}
+          fill="none"
+          strokeWidth="6"
+          strokeLinecap="round"
+          strokeDasharray={circumference}
+          strokeDashoffset={circumference * (1 - v / 100)}
+          className={cn('transition-[stroke-dashoffset] duration-700 ease-out', tone.stroke)}
+        />
+      </svg>
+      <span
+        className={cn(
+          'absolute inset-0 flex flex-col items-center justify-center text-xl font-bold leading-none tabular-nums',
+          tone.text
+        )}
+      >
+        {Math.round(score)}
+        <span className="mt-0.5 text-[10px] font-medium text-muted-foreground">/100</span>
+      </span>
+    </div>
+  )
+}
+
+/** Indicateur 0-100 : libellé, barre et chiffre à la couleur de sa bande. */
+function IndicatorRow({ label, value }) {
+  const scored = typeof value === 'number'
+  return (
+    <div className="flex items-center gap-3 text-xs">
+      <span className="w-36 shrink-0 text-muted-foreground">{label}</span>
+      <ScoreBar value={value} className="flex-1" />
+      <span
+        className={cn(
+          'w-8 text-right font-semibold tabular-nums',
+          scored ? bandTone(value).text : 'text-muted-foreground'
+        )}
+      >
+        {pct(value)}
+      </span>
+    </div>
+  )
+}
+
 /**
  * Bloc de score unique en tête du panneau d'écoute (page Coachings) : global, bande,
  * exécution et résultat commercial, indicateurs, confiance de l'analyse et objectif du
  * niveau — une seule fois. `actions` : boutons de l'hôte (relance), alignés à droite.
+ * Le bloc prend la teinte de la bande : le verdict se lit avant les chiffres.
  */
 export function ScoreSummary({ analysis, actions }) {
   const { executionScore, score, band, indicators, analysisConfidence } = analysis
@@ -139,97 +196,118 @@ export function ScoreSummary({ analysis, actions }) {
   const notEvaluable = ready && isNotEvaluable(analysis)
   const scored = ready && !notEvaluable && typeof score === 'number'
   const gap = scored ? objectiveGap(score, analysis.objectiveScore, band) : null
+  const tone = scored ? bandTone(score, band) : null
   const rows = [
     { label: 'Qualité commerciale', value: indicators?.qualiteCommerciale },
     { label: 'Respect du plan', value: indicators?.respectPlan },
     { label: 'Conformité', value: indicators?.conformite },
   ]
+  const confidence = ready && analysisConfidence && (
+    <span>
+      Confiance{' '}
+      <span
+        title={analysisConfidence.reasons?.join(' ; ') || undefined}
+        className={cn(
+          'font-medium text-foreground',
+          analysisConfidence.reasons?.length && 'cursor-help underline decoration-dotted',
+          analysisConfidence.level === 'faible' && 'text-amber-600 dark:text-amber-400'
+        )}
+      >
+        {(CONFIDENCE_LABELS[analysisConfidence.level] || analysisConfidence.level).toLowerCase()}
+      </span>
+    </span>
+  )
+  const bandChip = b => (
+    <span
+      className={cn(
+        'inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset',
+        BAND_TONE[b].chip
+      )}
+    >
+      <span className={cn('h-1.5 w-1.5 rounded-full', BAND_TONE[b].bar)} />
+      {BAND_META[b].label}
+    </span>
+  )
+
   return (
-    <div className="space-y-3">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <h3 className="text-sm font-semibold">Coaching IA</h3>
-          {!ready && <StatusPill status={analysis.status} />}
-          {notEvaluable && <BandPill band="non_evaluable" />}
-          {scored && <BandPill score={score} band={band} />}
+    <div className={cn('space-y-4', tone && cn('rounded-xl border p-4', tone.surface))}>
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-3">
+          {scored && <ScoreRing score={score} band={band} />}
+          <div className="min-w-0 space-y-1.5">
+            <div className="flex flex-wrap items-center gap-2">
+              <h3 className="text-sm font-semibold">Coaching IA</h3>
+              {!ready && <StatusPill status={analysis.status} />}
+              {notEvaluable && bandChip('non_evaluable')}
+              {scored && bandChip(scoreBand(score, band))}
+            </div>
+            {(confidence || gap) && (
+              <p className="flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground [&>*+*]:before:mr-2 [&>*+*]:before:content-['·']">
+                {confidence}
+                {gap && (
+                  <span
+                    className={cn(gap.below && 'font-medium text-amber-600 dark:text-amber-400')}
+                  >
+                    {NIVEAU_LABELS[analysis.commercialNiveau] || analysis.commercialNiveau} ·{' '}
+                    {gap.text}
+                  </span>
+                )}
+              </p>
+            )}
+          </div>
         </div>
-        {actions}
+        <div className="shrink-0">{actions}</div>
       </div>
 
       {scored && (
         <>
-          <dl className="grid grid-cols-3 gap-2 text-center">
-            <div className="rounded-md bg-muted/40 px-2 py-1.5">
-              <dt className="text-[11px] text-muted-foreground">Global</dt>
+          <dl className="grid grid-cols-2 gap-2">
+            <div
+              className={cn(
+                'rounded-lg border border-l-[3px] bg-background/70 px-3 py-2',
+                typeof executionScore === 'number'
+                  ? bandTone(executionScore).accent
+                  : 'border-l-border'
+              )}
+            >
+              <dt className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                Exécution
+              </dt>
               <dd
                 className={cn(
-                  'text-2xl font-semibold tabular-nums',
-                  BAND_META[scoreBand(score, band)].text
+                  'text-lg font-semibold tabular-nums',
+                  typeof executionScore === 'number' && bandTone(executionScore).text
                 )}
               >
-                {Math.round(score)}
-                <span className="text-xs font-normal text-muted-foreground">/100</span>
+                {pct(executionScore)}
               </dd>
             </div>
-            <div className="rounded-md bg-muted/40 px-2 py-1.5">
-              <dt className="text-[11px] text-muted-foreground">Exécution</dt>
-              <dd className="text-lg font-semibold tabular-nums">{pct(executionScore)}</dd>
-            </div>
-            <div className="rounded-md bg-muted/40 px-2 py-1.5">
-              <dt className="text-[11px] text-muted-foreground">Résultat commercial</dt>
+            <div className="rounded-lg border border-l-[3px] border-l-primary bg-background/70 px-3 py-2">
+              <dt className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                Résultat commercial
+              </dt>
               <dd
                 className={cn(
                   'tabular-nums',
                   typeof analysis.outcomeScore === 'number'
-                    ? 'text-lg font-semibold'
-                    : 'pt-1 text-xs text-muted-foreground'
+                    ? 'text-lg font-semibold text-primary'
+                    : 'pt-1.5 text-xs text-muted-foreground'
                 )}
               >
                 {outcomeScoreLabel(analysis)}
               </dd>
             </div>
           </dl>
-          <ScoreBar value={score} band={band} />
           {indicators ? (
             <div className="space-y-1.5">
               {rows.map(r => (
-                <div key={r.label} className="flex items-center gap-3 text-xs">
-                  <span className="w-36 shrink-0 text-muted-foreground">{r.label}</span>
-                  <ScoreBar value={r.value} className="flex-1" />
-                  <span className="w-8 text-right tabular-nums">{pct(r.value)}</span>
-                </div>
+                <IndicatorRow key={r.label} label={r.label} value={r.value} />
               ))}
             </div>
           ) : (
             <p className="text-xs text-muted-foreground">Indicateurs : {NOT_RATED.toLowerCase()}</p>
           )}
         </>
-      )}
-
-      {ready && analysisConfidence && (
-        <p className="text-xs text-muted-foreground">
-          Confiance de l’analyse :{' '}
-          <span
-            title={analysisConfidence.reasons?.join(' ; ') || undefined}
-            className={cn(
-              'font-medium',
-              analysisConfidence.reasons?.length && 'cursor-help underline decoration-dotted',
-              analysisConfidence.level === 'faible' && 'text-amber-600'
-            )}
-          >
-            {CONFIDENCE_LABELS[analysisConfidence.level] || analysisConfidence.level}
-          </span>
-        </p>
-      )}
-      {gap && (
-        <p
-          className={cn(
-            'text-xs',
-            gap.below ? 'font-medium text-amber-600' : 'text-muted-foreground'
-          )}
-        >
-          {NIVEAU_LABELS[analysis.commercialNiveau] || analysis.commercialNiveau} · {gap.text}
-        </p>
       )}
     </div>
   )
@@ -267,8 +345,10 @@ const PRODUCT_STATUS_LABELS = Object.fromEntries(
 /**
  * Résultat de visite pré-rempli par l'IA, et les statuts produit. Admin, directeur
  * et manager peuvent le corriger (le serveur vérifie le périmètre).
+ * `tinted` (panneau d'écoute de la page Coachings) : résultat et statuts produit en
+ * pastilles teintées, lisibles en mode sombre.
  */
-export function VisitOutcomeSection({ analysis, onUpdated }) {
+export function VisitOutcomeSection({ analysis, onUpdated, tinted = false }) {
   const { isAdmin, isDirecteur, isManager } = useRole()
   const canEdit = isAdmin || isDirecteur || isManager
   const { showError, showSuccess } = useErrorToast()
@@ -341,6 +421,15 @@ export function VisitOutcomeSection({ analysis, onUpdated }) {
                   labels={f.labels}
                   onChange={v => setForm(cur => ({ ...cur, [f.key]: v }))}
                 />
+              ) : tinted && f.key === 'visitResult' && analysis.visitResult ? (
+                <Pill
+                  className={cn(
+                    'ring-1 ring-inset',
+                    VISIT_RESULT_TONE[analysis.visitResult] || TONE_MUTED
+                  )}
+                >
+                  {f.labels[analysis.visitResult] ?? analysis.visitResult}
+                </Pill>
               ) : (
                 (f.labels[analysis[f.key]] ?? analysis[f.key]) || '—'
               )}
@@ -386,9 +475,22 @@ export function VisitOutcomeSection({ analysis, onUpdated }) {
                       />
                     ) : (
                       <div className="flex flex-wrap items-center gap-1.5">
-                        <Pill className={meta.pill}>{meta.label}</Pill>
+                        <Pill
+                          className={
+                            tinted
+                              ? cn('ring-1 ring-inset', PRODUCT_TONE[p.status] || TONE_MUTED)
+                              : meta.pill
+                          }
+                        >
+                          {meta.label}
+                        </Pill>
                         {p.opportunity === 'oubliee' && (
-                          <Pill className="bg-amber-500/10 text-amber-600">
+                          <Pill
+                            className={cn(
+                              'bg-amber-500/10 text-amber-600',
+                              tinted && 'dark:text-amber-400'
+                            )}
+                          >
                             Opportunité oubliée
                           </Pill>
                         )}
