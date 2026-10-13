@@ -141,7 +141,7 @@ export default function Coachings() {
     // Deux colonnes sur toute la hauteur : à gauche titre, filtres et liste dans un même
     // cadre ; à droite l'écoute et le coaching, du haut en bas de la page.
     <div className="grid gap-4 lg:h-[calc(100svh-7rem)] lg:grid-cols-[minmax(380px,2fr)_3fr]">
-      <div className="flex min-h-0 flex-col rounded-xl border">
+      <div className="flex min-h-0 flex-col rounded-xl border bg-card">
         <div className="space-y-3 border-b p-3">
           <div>
             <h1 className="text-xl font-semibold">Coachings</h1>
@@ -215,7 +215,7 @@ export default function Coachings() {
           </SheetContent>
         </Sheet>
       ) : (
-        <div className="min-h-0 overflow-y-auto rounded-xl border">{panel}</div>
+        <div className="min-h-0 overflow-y-auto rounded-xl border bg-card">{panel}</div>
       )}
     </div>
   )

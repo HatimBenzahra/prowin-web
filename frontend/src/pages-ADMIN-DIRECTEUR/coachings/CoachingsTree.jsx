@@ -245,9 +245,19 @@ export default function CoachingsTree({
                 const open = !collapsed.has(group.key)
                 const flat = groupBy === 'liste'
                 return (
-                  <div key={group.key} className={cn(!flat && 'mx-2 my-2 rounded-lg border')}>
+                  <div
+                    key={group.key}
+                    className={cn(
+                      !flat && 'mx-3 my-3 overflow-hidden rounded-lg border bg-card shadow-sm'
+                    )}
+                  >
                     {!flat && (
-                      <div className="flex items-center gap-2 px-3 py-2">
+                      <div
+                        className={cn(
+                          'flex items-center gap-2 bg-muted/50 px-3 py-2',
+                          open && 'border-b'
+                        )}
+                      >
                         <button
                           type="button"
                           onClick={() => onToggleCollapse(group.key)}
