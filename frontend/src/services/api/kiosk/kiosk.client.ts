@@ -1,3 +1,5 @@
+import { authService } from '@/services/auth'
+
 export type KioskErrorType = 'network' | 'auth' | 'server' | 'config' | 'unknown'
 
 export class KioskApiError extends Error {
@@ -70,13 +72,17 @@ export function classifyKioskError(error: unknown): KioskApiError {
   return new KioskApiError('Erreur inconnue.', 0, 'unknown')
 }
 
+/**
+ * Client des pages Kiosk. Le navigateur ne parle JAMAIS directement au serveur
+ * kiosk : il passe par le backend ProWin (`/kiosk-api`), authentifié avec le jeton
+ * de l'utilisateur (admin / directeur). Les identifiants admin du kiosk restent
+ * côté serveur — avant, ils étaient compilés dans le JS public.
+ */
 class KioskApiClient {
   private baseUrl: string
-  private authHeader: string
 
-  constructor(baseUrl: string, username: string, password: string) {
+  constructor(baseUrl: string) {
     this.baseUrl = (baseUrl || '').replace(/\/+$/, '')
-    this.authHeader = username && password ? `Basic ${btoa(`${username}:${password}`)}` : ''
   }
 
   get isConfigured(): boolean {
@@ -95,15 +101,23 @@ class KioskApiClient {
     return url.toString()
   }
 
-  private getHeaders(isJson = true): HeadersInit {
-    const headers: Record<string, string> = {}
-    if (this.authHeader) {
-      headers['Authorization'] = this.authHeader
+  private getHeaders(isJson: boolean): Record<string, string> {
+    return {
+      ...authService.getAuthorizationHeaders(),
+      ...(isJson ? { 'Content-Type': 'application/json' } : {}),
     }
-    if (isJson) {
-      headers['Content-Type'] = 'application/json'
-    }
-    return headers
+  }
+
+  /**
+   * Envoie la requête avec le jeton courant ; sur 401 (jeton expiré), rafraîchit
+   * la session puis rejoue une seule fois — même logique que le client GraphQL.
+   */
+  private async send(url: string, init: RequestInit, isJson: boolean): Promise<Response> {
+    const response = await fetch(url, { ...init, headers: this.getHeaders(isJson) })
+    if (response.status !== 401) return response
+    const recovered = await authService.handleAuthenticationChallenge()
+    if (!recovered) return response
+    return fetch(url, { ...init, headers: this.getHeaders(isJson) })
   }
 
   private async handleResponse<T>(response: Response): Promise<T> {
@@ -126,7 +140,7 @@ class KioskApiClient {
   private assertConfigured(): void {
     if (!this.baseUrl) {
       throw new KioskApiError(
-        'URL du serveur Kiosk non configurée. Ajoutez VITE_KIOSK_API_URL dans le fichier .env.',
+        'URL du backend non configurée. Ajoutez VITE_API_URL dans le fichier .env.',
         0,
         'config'
       )
@@ -144,62 +158,51 @@ class KioskApiClient {
 
   async get<T>(endpoint: string, params?: Record<string, string | number | undefined>): Promise<T> {
     return this.request(async () => {
-      const url = this.buildUrl(endpoint, params)
-      const response = await fetch(url, { method: 'GET', headers: this.getHeaders() })
+      const response = await this.send(this.buildUrl(endpoint, params), { method: 'GET' }, true)
       return this.handleResponse<T>(response)
     })
   }
 
   async post<T>(endpoint: string, body?: unknown): Promise<T> {
     return this.request(async () => {
-      const response = await fetch(this.buildUrl(endpoint), {
-        method: 'POST',
-        headers: this.getHeaders(),
-        body: body !== undefined ? JSON.stringify(body) : undefined,
-      })
+      const response = await this.send(
+        this.buildUrl(endpoint),
+        { method: 'POST', body: body !== undefined ? JSON.stringify(body) : undefined },
+        true
+      )
       return this.handleResponse<T>(response)
     })
   }
 
   async patch<T>(endpoint: string, body: unknown): Promise<T> {
     return this.request(async () => {
-      const response = await fetch(this.buildUrl(endpoint), {
-        method: 'PATCH',
-        headers: this.getHeaders(),
-        body: JSON.stringify(body),
-      })
+      const response = await this.send(
+        this.buildUrl(endpoint),
+        { method: 'PATCH', body: JSON.stringify(body) },
+        true
+      )
       return this.handleResponse<T>(response)
     })
   }
 
   async del<T>(endpoint: string): Promise<T> {
     return this.request(async () => {
-      const response = await fetch(this.buildUrl(endpoint), {
-        method: 'DELETE',
-        headers: this.getHeaders(),
-      })
+      const response = await this.send(this.buildUrl(endpoint), { method: 'DELETE' }, true)
       return this.handleResponse<T>(response)
     })
   }
 
   async upload<T>(endpoint: string, formData: FormData): Promise<T> {
     return this.request(async () => {
-      const headers: Record<string, string> = {}
-      if (this.authHeader) {
-        headers['Authorization'] = this.authHeader
-      }
-      const response = await fetch(this.buildUrl(endpoint), {
-        method: 'POST',
-        headers,
-        body: formData,
-      })
+      // Pas de Content-Type : le navigateur pose lui-même la frontière multipart.
+      const response = await this.send(
+        this.buildUrl(endpoint),
+        { method: 'POST', body: formData },
+        false
+      )
       return this.handleResponse<T>(response)
     })
   }
 }
 
-export const kioskClient = new KioskApiClient(
-  import.meta.env.VITE_KIOSK_API_URL || '',
-  import.meta.env.VITE_KIOSK_API_USER || '',
-  import.meta.env.VITE_KIOSK_API_PASS || ''
-)
+export const kioskClient = new KioskApiClient(`${import.meta.env.VITE_API_URL || ''}/kiosk-api`)
