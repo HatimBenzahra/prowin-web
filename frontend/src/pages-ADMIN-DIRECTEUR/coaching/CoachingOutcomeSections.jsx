@@ -85,7 +85,7 @@ export function ScoreBreakdown({ analysis }) {
           <div className="rounded-md bg-muted/40 px-2 py-1.5">
             <dt className="text-[11px] text-muted-foreground">Résultat commercial</dt>
             <dd className="text-lg font-semibold tabular-nums">
-              {typeof outcomeScore === 'number' ? Math.round(outcomeScore * 10) / 10 : '—'}
+              {typeof outcomeScore === 'number' ? `${Math.round(outcomeScore * 10) / 10}/15` : '—'}
             </dd>
           </div>
           <div className="rounded-md bg-muted/40 px-2 py-1.5">
@@ -295,6 +295,9 @@ export function ScoreSummary({ analysis, actions }) {
                 )}
               >
                 {outcomeScoreLabel(analysis)}
+                {typeof analysis.outcomeScore === 'number' && (
+                  <span className="ml-0.5 text-[10px] font-medium text-muted-foreground">/15</span>
+                )}
               </dd>
             </div>
           </dl>
