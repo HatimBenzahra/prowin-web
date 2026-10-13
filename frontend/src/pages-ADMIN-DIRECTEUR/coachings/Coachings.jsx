@@ -143,12 +143,7 @@ export default function Coachings() {
     <div className="grid gap-4 lg:h-[calc(100svh-7rem)] lg:grid-cols-[minmax(380px,2fr)_3fr]">
       <div className="flex min-h-0 flex-col rounded-xl border bg-card">
         <div className="space-y-3 border-b p-3">
-          <div>
-            <h1 className="text-xl font-semibold">Coachings</h1>
-            <p className="text-sm text-muted-foreground">
-              Toutes les écoutes par jour et par bâtiment, avec leur coaching IA.
-            </p>
-          </div>
+          <h1 className="text-lg font-semibold">Coachings</h1>
           <CoachingsFilterBar
             filters={filters}
             onChange={updateFilters}

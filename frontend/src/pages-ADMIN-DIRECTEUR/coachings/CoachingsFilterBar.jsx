@@ -7,6 +7,7 @@ import {
   LayoutList,
   ListTree,
   Package,
+  SlidersHorizontal,
   Sparkles,
   Star,
   User,
@@ -192,27 +193,27 @@ export default function CoachingsFilterBar({
       group: filters.group,
     })
   const custom = filters.period === 'custom'
+  // Replié par défaut, sauf si l'URL arrive déjà avec des filtres de contenu.
+  const [moreOpen, setMoreOpen] = useState(() => activeFiltersCount(filters) > 0)
 
   return (
-    <div className="space-y-3">
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="flex items-center gap-1.5">
-          {QUICK_PERIODS.map(p => (
-            <button
-              key={p.value}
-              type="button"
-              onClick={() => onChange({ period: p.value })}
-              className={cn(
-                'rounded-md px-2.5 py-1 text-xs font-medium transition-colors',
-                filters.period === p.value
-                  ? 'bg-primary text-primary-foreground'
-                  : 'bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground'
-              )}
-            >
-              {p.label}
-            </button>
-          ))}
-        </div>
+    <div className="space-y-2">
+      <div className="flex flex-wrap items-center gap-1.5">
+        {QUICK_PERIODS.map(p => (
+          <button
+            key={p.value}
+            type="button"
+            onClick={() => onChange({ period: p.value })}
+            className={cn(
+              'rounded-md px-2.5 py-1 text-xs font-medium transition-colors',
+              filters.period === p.value
+                ? 'bg-primary text-primary-foreground'
+                : 'bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground'
+            )}
+          >
+            {p.label}
+          </button>
+        ))}
         <DateRangeFilter
           startDate={draft.from}
           endDate={draft.to}
@@ -225,15 +226,20 @@ export default function CoachingsFilterBar({
           className={cn(!custom && 'text-muted-foreground')}
           title="Période des écoutes"
         />
+      </div>
 
+      <div className="flex items-center gap-2">
         <Select
           value={filters.subject || ALL_VALUE}
           onValueChange={v => onChange({ subject: v === ALL_VALUE ? '' : v })}
         >
           <SelectTrigger
-            className={cn('w-auto', filters.subject && 'border-primary/30 text-primary')}
+            className={cn(
+              'h-9 min-w-0 flex-1',
+              filters.subject && 'border-primary/30 text-primary'
+            )}
           >
-            <User className="mr-2 h-4 w-4" />
+            <User className="mr-2 h-4 w-4 shrink-0" />
             <SelectValue placeholder="Commercial..." />
           </SelectTrigger>
           <SelectContent>
@@ -252,28 +258,75 @@ export default function CoachingsFilterBar({
 
         <ExpandableSearch value={q} onChange={setQ} placeholder="Rechercher une adresse…" />
 
-        {filters.immeubles.length > 0 && (
-          <Badge
-            variant="outline"
-            className="h-8 gap-1.5 border-primary/30 bg-primary/10 px-2.5 text-primary"
-          >
-            <Building2 className="h-3.5 w-3.5" />
-            <span className="max-w-[220px] truncate">{buildingLabel}</span>
-            <button
-              type="button"
-              onClick={() => onChange({ immeubles: [] })}
-              className="rounded-sm hover:bg-primary/20"
-              aria-label="Retirer le filtre bâtiment"
-              title="Retirer le filtre bâtiment"
+        {/* Les filtres de contenu se replient : la liste garde la hauteur. */}
+        <Button
+          variant="outline"
+          className={cn(
+            'h-9 shrink-0 gap-2 font-normal',
+            count > 0 && 'border-primary/30 text-primary'
+          )}
+          onClick={() => setMoreOpen(o => !o)}
+          aria-expanded={moreOpen}
+        >
+          <SlidersHorizontal className="h-4 w-4" />
+          Filtres
+          {count > 0 && (
+            <Badge className="h-5 min-w-5 rounded-full px-1.5 tabular-nums">{count}</Badge>
+          )}
+          <ChevronDown
+            className={cn('h-4 w-4 opacity-60 transition-transform', moreOpen && 'rotate-180')}
+          />
+        </Button>
+
+        {/* Contrôle segmenté, comme Grille / Liste des Bâtiments ; icônes seules. */}
+        <div className="inline-flex shrink-0 items-center rounded-md border border-input p-0.5">
+          {VIEWS.map(({ value, label, icon }) => (
+            <Button
+              key={value}
+              variant={filters.group === value ? 'default' : 'ghost'}
+              size="sm"
+              onClick={() => onChange({ group: value })}
+              className="h-7 w-8 p-0"
+              title={label}
+              aria-label={label}
             >
-              <X className="h-3.5 w-3.5" />
-            </button>
-          </Badge>
-        )}
+              {icon}
+            </Button>
+          ))}
+        </div>
       </div>
 
-      <div className="flex flex-col gap-2">
+      {(filters.immeubles.length > 0 || (!moreOpen && count > 0)) && (
         <div className="flex flex-wrap items-center gap-2">
+          {filters.immeubles.length > 0 && (
+            <Badge
+              variant="outline"
+              className="h-7 gap-1.5 border-primary/30 bg-primary/10 px-2.5 text-primary"
+            >
+              <Building2 className="h-3.5 w-3.5" />
+              <span className="max-w-[220px] truncate">{buildingLabel}</span>
+              <button
+                type="button"
+                onClick={() => onChange({ immeubles: [] })}
+                className="rounded-sm hover:bg-primary/20"
+                aria-label="Retirer le filtre bâtiment"
+                title="Retirer le filtre bâtiment"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </Badge>
+          )}
+          {!moreOpen && count > 0 && (
+            <Button variant="ghost" size="sm" className="h-7 gap-1.5" onClick={reset}>
+              <X className="h-3.5 w-3.5" />
+              Réinitialiser les filtres
+            </Button>
+          )}
+        </div>
+      )}
+
+      {moreOpen && (
+        <div className="flex flex-wrap items-center gap-2 rounded-lg border bg-muted/30 p-2">
           <MultiFilter
             icon={<DoorOpen className="h-4 w-4 opacity-70" />}
             label="Statut porte"
@@ -307,7 +360,7 @@ export default function CoachingsFilterBar({
               }
             >
               <SelectTrigger
-                className={cn('w-auto', filters.produit && 'border-primary/30 text-primary')}
+                className={cn('h-9 w-auto', filters.produit && 'border-primary/30 text-primary')}
               >
                 <Package className="mr-2 h-4 w-4" />
                 <SelectValue placeholder="Produit..." />
@@ -348,7 +401,11 @@ export default function CoachingsFilterBar({
             Non analysés
           </ToggleFilter>
 
-          <div className="flex items-center gap-1" role="group" aria-label="Bande de score">
+          <div
+            className="flex flex-wrap items-center gap-1"
+            role="group"
+            aria-label="Bande de score"
+          >
             {BAND_FILTERS.map(band => {
               const active = filters.bands.includes(band)
               const meta = BAND_META[band]
@@ -374,34 +431,13 @@ export default function CoachingsFilterBar({
           </div>
 
           {count > 0 && (
-            <>
-              <Badge variant="outline" className="bg-background">
-                {count} filtre{count > 1 ? 's' : ''}
-              </Badge>
-              <Button variant="ghost" size="sm" className="gap-1.5" onClick={reset}>
-                <X className="h-3.5 w-3.5" />
-                Réinitialiser
-              </Button>
-            </>
+            <Button variant="ghost" size="sm" className="gap-1.5" onClick={reset}>
+              <X className="h-3.5 w-3.5" />
+              Réinitialiser
+            </Button>
           )}
         </div>
-
-        {/* Contrôle segmenté, comme Grille / Liste des Bâtiments. */}
-        <div className="inline-flex items-center self-start rounded-md border border-input p-0.5">
-          {VIEWS.map(({ value, label, icon }) => (
-            <Button
-              key={value}
-              variant={filters.group === value ? 'default' : 'ghost'}
-              size="sm"
-              onClick={() => onChange({ group: value })}
-              className="h-7 gap-1.5"
-            >
-              {icon}
-              {label}
-            </Button>
-          ))}
-        </div>
-      </div>
+      )}
     </div>
   )
 }

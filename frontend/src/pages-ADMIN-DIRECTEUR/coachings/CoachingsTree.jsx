@@ -275,7 +275,7 @@ export default function CoachingsTree({
                             <Building2 className="h-4 w-4 shrink-0 text-muted-foreground" />
                           )}
                           <span className="min-w-0">
-                            <span className="block truncate text-sm font-medium">
+                            <span className="line-clamp-2 break-words text-sm font-medium">
                               {groupBy === 'commercial'
                                 ? group.subjects[0] || 'Intervenant inconnu'
                                 : group.adresse || 'Adresse inconnue'}

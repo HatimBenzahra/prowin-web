@@ -112,7 +112,9 @@ export default function CoachingsPanel({
               {row?.adresse || meta.address || 'Enregistrement'}
             </h2>
             <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-sidebar-foreground/75 [&>*+*]:before:mr-2 [&>*+*]:before:content-['·']">
-              {row && <span className="font-medium text-sidebar-foreground">{porteLabel(row)}</span>}
+              {row && (
+                <span className="font-medium text-sidebar-foreground">{porteLabel(row)}</span>
+              )}
               {row?.subjectName && (
                 <span className="inline-flex items-center gap-1">
                   <User2 className="h-3.5 w-3.5" />
