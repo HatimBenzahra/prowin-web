@@ -272,8 +272,8 @@ export default function CoachingsFilterBar({
         )}
       </div>
 
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <div className="flex flex-wrap items-center gap-2 lg:flex-1">
+      <div className="flex flex-col gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <MultiFilter
             icon={<DoorOpen className="h-4 w-4 opacity-70" />}
             label="Statut porte"
@@ -387,7 +387,7 @@ export default function CoachingsFilterBar({
         </div>
 
         {/* Contrôle segmenté, comme Grille / Liste des Bâtiments. */}
-        <div className="inline-flex items-center self-start rounded-md border border-input p-0.5 lg:shrink-0 lg:self-auto">
+        <div className="inline-flex items-center self-start rounded-md border border-input p-0.5">
           {VIEWS.map(({ value, label, icon }) => (
             <Button
               key={value}

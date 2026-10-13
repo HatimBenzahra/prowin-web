@@ -138,24 +138,27 @@ export default function Coachings() {
   )
 
   return (
-    <div className="flex flex-col gap-4 lg:h-[calc(100svh-7rem)]">
-      <div>
-        <h1 className="text-xl font-semibold">Coachings</h1>
-        <p className="text-sm text-muted-foreground">
-          Toutes les écoutes par jour et par bâtiment, avec leur coaching IA.
-        </p>
-      </div>
+    // Deux colonnes sur toute la hauteur : à gauche titre, filtres et liste dans un même
+    // cadre ; à droite l'écoute et le coaching, du haut en bas de la page.
+    <div className="grid gap-4 lg:h-[calc(100svh-7rem)] lg:grid-cols-[minmax(380px,2fr)_3fr]">
+      <div className="flex min-h-0 flex-col rounded-xl border">
+        <div className="space-y-3 border-b p-3">
+          <div>
+            <h1 className="text-xl font-semibold">Coachings</h1>
+            <p className="text-sm text-muted-foreground">
+              Toutes les écoutes par jour et par bâtiment, avec leur coaching IA.
+            </p>
+          </div>
+          <CoachingsFilterBar
+            filters={filters}
+            onChange={updateFilters}
+            subjects={subjects}
+            products={products}
+            buildingLabel={buildingLabel}
+          />
+        </div>
 
-      <CoachingsFilterBar
-        filters={filters}
-        onChange={updateFilters}
-        subjects={subjects}
-        products={products}
-        buildingLabel={buildingLabel}
-      />
-
-      <div className="grid min-h-0 flex-1 gap-4 lg:grid-cols-[minmax(340px,2fr)_3fr]">
-        <div className="min-h-0 rounded-xl border lg:overflow-y-auto">
+        <div className="min-h-0 flex-1 lg:overflow-y-auto">
           {journal.loading ? (
             <div className="space-y-3 p-3">
               {[0, 1, 2].map(i => (
@@ -200,20 +203,20 @@ export default function Coachings() {
             />
           )}
         </div>
-
-        {/* Panneau latéral (pas un modal) ; sous lg, un tiroir plein écran. */}
-        {isMobile ? (
-          <Sheet open={Boolean(selectedKey)} onOpenChange={open => !open && select('')}>
-            <SheetContent side="right" className="w-full gap-0 overflow-y-auto p-0 sm:max-w-xl">
-              <SheetTitle className="sr-only">Écoute</SheetTitle>
-              {/* Sous la croix du tiroir. */}
-              {selectedKey && <div className="pt-10">{panel}</div>}
-            </SheetContent>
-          </Sheet>
-        ) : (
-          <div className="min-h-0 overflow-y-auto rounded-xl border">{panel}</div>
-        )}
       </div>
+
+      {/* Panneau latéral (pas un modal) ; sous lg, un tiroir plein écran. */}
+      {isMobile ? (
+        <Sheet open={Boolean(selectedKey)} onOpenChange={open => !open && select('')}>
+          <SheetContent side="right" className="w-full gap-0 overflow-y-auto p-0 sm:max-w-xl">
+            <SheetTitle className="sr-only">Écoute</SheetTitle>
+            {/* Sous la croix du tiroir. */}
+            {selectedKey && <div className="pt-10">{panel}</div>}
+          </SheetContent>
+        </Sheet>
+      ) : (
+        <div className="min-h-0 overflow-y-auto rounded-xl border">{panel}</div>
+      )}
     </div>
   )
 }
