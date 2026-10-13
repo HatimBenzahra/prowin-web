@@ -24,7 +24,13 @@ import {
   criterionMeta,
   isInProgress,
 } from './CoachingComponents'
-import { NA_REASON_LABELS, TIMING_META, formatTimestamp, showsScore } from './coaching-calibration'
+import {
+  NA_REASON_LABELS,
+  TIMING_META,
+  crmContradiction,
+  formatTimestamp,
+  showsScore,
+} from './coaching-calibration'
 import { ConsistencySection, ScoreBreakdown, VisitOutcomeSection } from './CoachingOutcomeSections'
 
 /** Proven contradiction against the product sheet or supplied price grid. */
@@ -140,6 +146,9 @@ function ListBlock({ icon: Icon, title, items, tone }) {
  * plan de vente ne démarre qu'en dessous et laisse un vide en haut à droite.
  *
  * `onSeek(sec)` : rend les horodatages des preuves cliquables (lecteur de l'hôte).
+ * `embedded` (panneau d'écoute de la page Coachings) : une seule colonne, dans l'ordre
+ * résultat de visite et produits, résumé et points forts, puis le détail des critères ;
+ * le score est déjà en tête du panneau, et un statut CRM contredit par l'audio est signalé.
  */
 export default function CoachingResultPanel({
   analysis,
@@ -149,6 +158,7 @@ export default function CoachingResultPanel({
   lead = null,
   onAnalysisChange,
   onSeek,
+  embedded = false,
 }) {
   const [audioUrl, setAudioUrl] = useState(null)
   // Dernière correction du résultat de visite, tant que l'appelant ne fournit pas mieux.
@@ -215,6 +225,33 @@ export default function CoachingResultPanel({
   const violations = analysis.violations || []
   const productAlerts = analysis.productAlerts || []
   const compliance = productComplianceMessage(analysis)
+  const contradiction = embedded ? crmContradiction(current.statutPorte, current) : null
+
+  const summaryBlock = analysis.summary && (
+    <div>
+      <h3 className="mb-1.5 text-sm font-semibold">Résumé</h3>
+      <p className="text-sm text-foreground/90">{analysis.summary}</p>
+    </div>
+  )
+  const listsBlock = (analysis.strengths?.length ||
+    analysis.improvements?.length ||
+    analysis.recommendations?.length) > 0 && (
+    <div className="grid gap-3 sm:grid-cols-3">
+      <ListBlock icon={ThumbsUp} title="Forces" items={analysis.strengths} tone="text-green-600" />
+      <ListBlock
+        icon={TrendingUp}
+        title="À améliorer"
+        items={analysis.improvements}
+        tone="text-amber-600"
+      />
+      <ListBlock
+        icon={Lightbulb}
+        title="Recommandations"
+        items={analysis.recommendations}
+        tone="text-indigo-600"
+      />
+    </div>
+  )
 
   const ScoreFooter = () => (
     <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-border/60 bg-muted/30 px-4 py-3">
@@ -269,22 +306,27 @@ export default function CoachingResultPanel({
 
           Sans étape du plan à afficher (analyse en attente, en cours, échouée),
           une seule colonne : sinon la moitié droite reste vide. */}
-      <div className={cn('grid min-h-0 flex-1 gap-5', hasPlanSteps && '@4xl:grid-cols-2')}>
+      <div
+        className={cn('grid min-h-0 flex-1 gap-5', hasPlanSteps && !embedded && '@4xl:grid-cols-2')}
+      >
         <div className="min-w-0 space-y-5 overflow-y-auto @4xl:pr-1">
           {lead}
 
           {showAudio && audioUrl && <AudioPlayer src={audioUrl} title="Enregistrement" />}
 
-          {analysis.summary && (
-            <div>
-              <h3 className="mb-1.5 text-sm font-semibold">Résumé</h3>
-              <p className="text-sm text-foreground/90">{analysis.summary}</p>
-            </div>
-          )}
+          {!embedded && summaryBlock}
 
-          {isReady && <ScoreBreakdown analysis={analysis} />}
+          {isReady && !embedded && <ScoreBreakdown analysis={analysis} />}
+          {contradiction && (
+            <Alert className="border-amber-500/30 bg-amber-500/10 p-3 [&>svg]:text-amber-600">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertDescription>{contradiction}</AlertDescription>
+            </Alert>
+          )}
           {isReady && <VisitOutcomeSection analysis={current} onUpdated={onOutcomeUpdated} />}
           {isReady && <ConsistencySection analysis={analysis} />}
+          {embedded && summaryBlock}
+          {embedded && listsBlock}
 
           {isReady && violations.length === 0 && (
             <Alert
@@ -352,30 +394,7 @@ export default function CoachingResultPanel({
             </div>
           )}
 
-          {(analysis.strengths?.length ||
-            analysis.improvements?.length ||
-            analysis.recommendations?.length) > 0 && (
-            <div className="grid gap-3 sm:grid-cols-3">
-              <ListBlock
-                icon={ThumbsUp}
-                title="Forces"
-                items={analysis.strengths}
-                tone="text-green-600"
-              />
-              <ListBlock
-                icon={TrendingUp}
-                title="À améliorer"
-                items={analysis.improvements}
-                tone="text-amber-600"
-              />
-              <ListBlock
-                icon={Lightbulb}
-                title="Recommandations"
-                items={analysis.recommendations}
-                tone="text-indigo-600"
-              />
-            </div>
-          )}
+          {!embedded && listsBlock}
         </div>
 
         {hasPlanSteps && (

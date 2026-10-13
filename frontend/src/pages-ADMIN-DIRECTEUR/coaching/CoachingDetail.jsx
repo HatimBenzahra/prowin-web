@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import CoachingService from '@/services/coaching/coaching.service'
 import CoachingResultPanel from './CoachingResultPanel'
+import { ScoreSummary } from './CoachingOutcomeSections'
 import {
   NIVEAU_LABELS,
   RELAUNCH_CORRECTION_WARNING,
@@ -33,9 +34,10 @@ const POLL_MS = 6000
  * favori + relancer + fermer) puis le corps `CoachingResultPanel`.
  * Autonome : gère localement le favori et le relancement.
  *
- * `embedded` : hors Dialog (panneau latéral de la page Coachings) ; l'hôte affiche
- * déjà titre, porte et favori, il ne reste ici que l'état, le score et la relance.
- * `showAudio` / `onSeek` : l'hôte peut garder son propre lecteur et y caler les preuves.
+ * `embedded` : hors Dialog (panneau d'écoute de la page Coachings). L'hôte affiche
+ * titre, porte, favori et lecteur ; il ne reste ici qu'un bloc de score unique et la
+ * relance, puis le corps dans l'ordre du panneau.
+ * `onSeek` : les horodatages des preuves calent le lecteur de l'hôte.
  * `onAnalysisChange` : chaque nouvel état (suivi, relance, correction) remonte à l'hôte.
  */
 export default function CoachingDetail({
@@ -44,7 +46,6 @@ export default function CoachingDetail({
   onClose,
   backLabel = 'Analysés',
   embedded = false,
-  showAudio = true,
   onSeek,
   onAnalysisChange,
 }) {
@@ -105,20 +106,31 @@ export default function CoachingDetail({
     }
   }
 
+  const relaunchButton = (
+    <Button
+      variant="outline"
+      size="sm"
+      onClick={() => (a.outcomeOverriddenAt ? setConfirmRelaunch(true) : relaunch())}
+      disabled={relaunching || inProgress}
+    >
+      {relaunching ? (
+        <Loader2 className="h-4 w-4 animate-spin" />
+      ) : (
+        <RotateCw className="h-4 w-4" />
+      )}
+      Relancer
+    </Button>
+  )
+
   return (
     <>
-      <div className="border-b p-5">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
-          {embedded ? (
-            <div className="min-w-0">
-              <h3 className="text-sm font-semibold">Coaching IA</h3>
-              {a.status === 'READY' && a.planSlug && (
-                <p className="mt-0.5 text-xs text-muted-foreground">
-                  {a.planSlug} v{a.planVersion}
-                </p>
-              )}
-            </div>
-          ) : (
+      {embedded ? (
+        <div className="border-b p-5">
+          <ScoreSummary analysis={a} actions={relaunchButton} />
+        </div>
+      ) : (
+        <div className="border-b p-5">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
             <div className="min-w-0">
               {onBack && (
                 <div className="mb-1 flex items-center gap-2 text-sm">
@@ -158,11 +170,9 @@ export default function CoachingDetail({
                 </div>
               )}
             </div>
-          )}
 
-          <div className="flex flex-col items-start gap-2 sm:items-end">
-            <div className="flex items-center gap-2">
-              {!embedded && (
+            <div className="flex flex-col items-start gap-2 sm:items-end">
+              <div className="flex items-center gap-2">
                 <Button
                   variant="outline"
                   size="sm"
@@ -173,73 +183,62 @@ export default function CoachingDetail({
                   <Star className={cn('h-4 w-4', favori && 'fill-amber-500 text-amber-500')} />
                   Favori
                 </Button>
-              )}
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => (a.outcomeOverriddenAt ? setConfirmRelaunch(true) : relaunch())}
-                disabled={relaunching || inProgress}
-              >
-                {relaunching ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <RotateCw className="h-4 w-4" />
+                {relaunchButton}
+                {onClose && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 w-8 p-0"
+                    onClick={onClose}
+                    aria-label="Fermer"
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
                 )}
-                Relancer
-              </Button>
-              {onClose && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-8 w-8 p-0"
-                  onClick={onClose}
-                  aria-label="Fermer"
-                >
-                  <X className="h-4 w-4" />
-                </Button>
-              )}
-            </div>
-            <div className="flex items-center gap-2">
-              <StatusPill status={a.status} />
-              <QualityPill quality={a.quality} />
-            </div>
-            {hasScore && (
-              <div className="text-right">
-                <div className="text-3xl font-semibold leading-none">
-                  {Math.round(a.score)}
-                  <span className="text-base text-muted-foreground">/100</span>
-                </div>
-                {typeof a.confidence === 'number' && (
-                  <div className="mt-1 text-xs text-muted-foreground">
-                    confiance {Math.round(a.confidence)}%
+              </div>
+              <div className="flex items-center gap-2">
+                <StatusPill status={a.status} />
+                <QualityPill quality={a.quality} />
+              </div>
+              {hasScore && (
+                <div className="text-right">
+                  <div className="text-3xl font-semibold leading-none">
+                    {Math.round(a.score)}
+                    <span className="text-base text-muted-foreground">/100</span>
                   </div>
-                )}
-              </div>
-            )}
-            {a.status === 'READY' && <BandPill score={a.score} band={a.band} />}
-            {gap && (
-              <div
-                className={cn(
-                  'max-w-64 text-right text-xs',
-                  gap.below ? 'font-medium text-amber-600' : 'text-muted-foreground'
-                )}
-              >
-                {NIVEAU_LABELS[a.commercialNiveau] || a.commercialNiveau} · objectif{' '}
-                {a.objectiveScore}
-                {gap.below && ' — en dessous du standard attendu pour son niveau'}
-              </div>
-            )}
+                  {typeof a.confidence === 'number' && (
+                    <div className="mt-1 text-xs text-muted-foreground">
+                      confiance {Math.round(a.confidence)}%
+                    </div>
+                  )}
+                </div>
+              )}
+              {a.status === 'READY' && <BandPill score={a.score} band={a.band} />}
+              {gap && (
+                <div
+                  className={cn(
+                    'max-w-64 text-right text-xs',
+                    gap.below ? 'font-medium text-amber-600' : 'text-muted-foreground'
+                  )}
+                >
+                  {NIVEAU_LABELS[a.commercialNiveau] || a.commercialNiveau} · objectif{' '}
+                  {a.objectiveScore}
+                  {gap.below && ' — en dessous du standard attendu pour son niveau'}
+                </div>
+              )}
+            </div>
           </div>
+          {hasScore && <ScoreBar value={a.score} band={a.band} className="mt-3" />}
         </div>
-        {hasScore && <ScoreBar value={a.score} band={a.band} className="mt-3" />}
-      </div>
+      )}
 
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden px-5 py-4">
         {/* Pas de pied de score : l'en-tête porte déjà score, barre et pastilles. */}
         <CoachingResultPanel
           analysis={a}
           recordingKey={a.s3KeyOriginal}
-          showAudio={showAudio}
+          showAudio={!embedded}
+          embedded={embedded}
           onAnalysisChange={update}
           onSeek={onSeek}
         />

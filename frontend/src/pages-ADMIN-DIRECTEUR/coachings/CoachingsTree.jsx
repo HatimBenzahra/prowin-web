@@ -1,60 +1,83 @@
 import { useEffect, useRef } from 'react'
-import {
-  Building2,
-  CheckCircle2,
-  ChevronRight,
-  CircleDashed,
-  Filter,
-  Loader2,
-  MinusCircle,
-  Star,
-  User2,
-  XCircle,
-} from 'lucide-react'
+import { Building2, ChevronRight, Filter, Loader2, Sparkles, Star, User2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-import { BAND_META, VISIT_RESULT_LABELS, scoreBand } from '../coaching/coaching-calibration'
+import {
+  BAND_META,
+  BAND_RANGES,
+  VISIT_RESULT_LABELS,
+  isNotEvaluable,
+  scoreBand,
+} from '../coaching/coaching-calibration'
 import { PorteStatutPill, formatDuration, isInProgress } from '../coaching/CoachingComponents'
-import { dayLabel, porteLabel } from './coachings-utils'
+import { dayLabel, porteLabel, rowSubject } from './coachings-utils'
 
-/** État de l'analyse d'un audio, en une icône. */
-function AnalysisIcon({ analysis }) {
-  const cls = 'h-4 w-4 shrink-0'
-  if (!analysis)
-    return <CircleDashed className={cn(cls, 'text-muted-foreground/60')} aria-label="Non analysé" />
-  if (isInProgress(analysis.status))
-    return (
-      <Loader2 className={cn(cls, 'animate-spin text-blue-600')} aria-label="Analyse en cours" />
-    )
-  if (analysis.status === 'FAILED')
-    return <XCircle className={cn(cls, 'text-red-600')} aria-label="Échec de l’analyse" />
-  if (analysis.quality === 'INEXPLOITABLE')
-    return <MinusCircle className={cn(cls, 'text-slate-500')} aria-label="Inexploitable" />
-  return <CheckCircle2 className={cn(cls, 'text-green-600')} aria-label="Analysé" />
-}
-
-/** Score coloré par bande ; ⚪ pour une visite non évaluable, rien avant la fin de l'analyse. */
-export function ScorePill({ score, band, className }) {
-  if (band === 'non_evaluable')
+/** Score coloré par bande ; « N/É » (sans chiffre) pour une visite non évaluable. */
+export function ScorePill({ score, band, notEvaluable = false, className }) {
+  if (notEvaluable || band === 'non_evaluable')
     return (
       <span
-        className={cn('rounded-full px-1.5 py-px text-xs', BAND_META.non_evaluable.pill, className)}
+        title={BAND_RANGES.non_evaluable}
+        className={cn(
+          'rounded-full px-1.5 py-px text-xs font-medium',
+          BAND_META.non_evaluable.pill,
+          className
+        )}
       >
-        ⚪
+        ⚪ N/É
       </span>
     )
   if (typeof score !== 'number') return null
+  const b = scoreBand(score, band)
   return (
     <span
+      title={BAND_RANGES[b]}
       className={cn(
         'rounded-full px-1.5 py-px text-xs font-semibold tabular-nums',
-        BAND_META[scoreBand(score, band)].pill,
+        BAND_META[b].pill,
         className
       )}
     >
       {Math.round(score)}
     </span>
   )
+}
+
+/**
+ * État de l'analyse d'un audio, en clair : son score, « Analyser » s'il n'en a pas,
+ * « En cours » ou « Échec » sinon.
+ */
+function AnalysisCell({ row, launching, onLaunch }) {
+  const a = row.analysis
+  if (!a)
+    return (
+      <Button
+        variant="ghost"
+        size="sm"
+        className="h-6 px-1.5 text-xs text-primary"
+        disabled={launching}
+        onClick={e => {
+          e.stopPropagation()
+          onLaunch(row)
+        }}
+      >
+        {launching ? (
+          <Loader2 className="h-3 w-3 animate-spin" />
+        ) : (
+          <Sparkles className="h-3 w-3" />
+        )}
+        Analyser
+      </Button>
+    )
+  if (isInProgress(a.status))
+    return (
+      <span className="inline-flex items-center gap-1 text-xs text-blue-600">
+        <Loader2 className="h-3 w-3 animate-spin" />
+        En cours
+      </span>
+    )
+  if (a.status === 'FAILED') return <span className="text-xs font-medium text-red-600">Échec</span>
+  return <ScorePill score={a.score} band={a.band} notEvaluable={isNotEvaluable(a)} />
 }
 
 /** Agrégats d'un groupe : portes, score moyen coloré, ventes. */
@@ -65,7 +88,10 @@ function GroupStats({ stats }) {
         {stats.nbPortes} porte{stats.nbPortes > 1 ? 's' : ''}
       </span>
       {stats.scoreMoyen != null && (
-        <span className="flex items-center gap-1" title="Score moyen (hors non évaluables)">
+        <span
+          className="flex items-center gap-1"
+          title={`Score moyen sur ${stats.nbAnalyses} analyse${stats.nbAnalyses > 1 ? 's' : ''} notée${stats.nbAnalyses > 1 ? 's' : ''} (hors non évaluables)`}
+        >
           moy. <ScorePill score={stats.scoreMoyen} />
         </span>
       )}
@@ -78,9 +104,18 @@ function GroupStats({ stats }) {
   )
 }
 
-function DoorRow({ row, groupBy, selected, onSelect, onToggleFavori }) {
+function DoorRow({
+  row,
+  groupBy,
+  groupSubjects,
+  selected,
+  onSelect,
+  onToggleFavori,
+  launching,
+  onLaunch,
+}) {
   const a = row.analysis
-  const ready = a?.status === 'READY'
+  const subject = rowSubject(row, groupBy, groupSubjects)
   return (
     <div
       role="option"
@@ -92,7 +127,6 @@ function DoorRow({ row, groupBy, selected, onSelect, onToggleFavori }) {
         selected ? 'border-l-primary bg-primary/10' : 'border-l-transparent hover:bg-muted/50'
       )}
     >
-      <AnalysisIcon analysis={a} />
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
           <span className="truncate font-medium">{porteLabel(row)}</span>
@@ -104,18 +138,19 @@ function DoorRow({ row, groupBy, selected, onSelect, onToggleFavori }) {
           </span>
         </div>
         <div className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
-          {a?.visitResult ? (
-            <span className="truncate">{VISIT_RESULT_LABELS[a.visitResult] || a.visitResult}</span>
-          ) : (
-            <PorteStatutPill statut={row.statutPorte} />
+          <PorteStatutPill statut={row.statutPorte} />
+          {a?.visitResult && (
+            <span className="truncate" title="Résultat de visite selon l’IA">
+              IA : {VISIT_RESULT_LABELS[a.visitResult] || a.visitResult}
+            </span>
           )}
           {groupBy !== 'batiment' && <span className="truncate">· {row.adresse}</span>}
-          {groupBy !== 'commercial' && row.subjectName && (
-            <span className="hidden truncate xl:inline">· {row.subjectName}</span>
-          )}
+          {subject && <span className="truncate">· {subject}</span>}
         </div>
       </div>
-      {ready && <ScorePill score={a.score} band={a.band} />}
+      <span className="flex w-20 shrink-0 justify-end">
+        <AnalysisCell row={row} launching={launching} onLaunch={onLaunch} />
+      </span>
       <span className="w-10 shrink-0 text-right text-xs tabular-nums text-muted-foreground">
         {formatDuration(row.durationSec)}
       </span>
@@ -126,6 +161,7 @@ function DoorRow({ row, groupBy, selected, onSelect, onToggleFavori }) {
           onToggleFavori(row)
         }}
         className="shrink-0 rounded p-0.5 hover:bg-muted"
+        title={row.favori ? 'Retirer des favoris' : 'Ajouter aux favoris'}
         aria-label={row.favori ? 'Retirer des favoris' : 'Ajouter aux favoris'}
       >
         <Star
@@ -152,6 +188,8 @@ export default function CoachingsTree({
   onToggleCollapse,
   onToggleFavori,
   onFilterBuilding,
+  launching,
+  onLaunch,
   hasMore,
   loadingMore,
   onLoadMore,
@@ -238,7 +276,7 @@ export default function CoachingsTree({
                             variant="ghost"
                             size="sm"
                             className="h-7 w-7 shrink-0 p-0 text-muted-foreground"
-                            onClick={() => onFilterBuilding(group.immeubleId)}
+                            onClick={() => onFilterBuilding(group.immeubleIds)}
                             title="Filtrer sur ce bâtiment"
                             aria-label="Filtrer sur ce bâtiment"
                           >
@@ -254,6 +292,9 @@ export default function CoachingsTree({
                             key={row.s3Key}
                             row={row}
                             groupBy={groupBy}
+                            groupSubjects={group.subjects}
+                            launching={launching.has(row.s3Key)}
+                            onLaunch={onLaunch}
                             selected={row.s3Key === selectedKey}
                             onSelect={onSelect}
                             onToggleFavori={onToggleFavori}

@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import {
   BAND_META,
+  NOT_RATED,
   criterionMeta,
+  crmContradiction,
+  isNotEvaluable,
+  outcomeScoreLabel,
   formatTimestamp,
   objectiveGap,
   scoreBand,
@@ -88,5 +92,51 @@ describe('affichage du score', () => {
     expect(showsScore(null, 'correct')).toBe(false)
     expect(showsScore(72, null)).toBe(true)
     expect(BAND_META[scoreBand(72, null)].label).toBe('Coaching nécessaire')
+  })
+})
+
+describe('page Coachings : non évaluable, résultat non noté, contradiction CRM', () => {
+  it('isNotEvaluable', () => {
+    expect(isNotEvaluable({ band: 'non_evaluable', score: 40 })).toBe(true)
+    expect(isNotEvaluable({ quality: 'INEXPLOITABLE', score: null })).toBe(true)
+    // Ancienne analyse, sans bande, notée 0 sur un échange trop court.
+    expect(isNotEvaluable({ band: null, score: 0, quality: 'LOW_CONFIDENCE' })).toBe(true)
+    expect(isNotEvaluable({ band: 'insuffisant', score: 0, quality: 'LOW_CONFIDENCE' })).toBe(false)
+    expect(isNotEvaluable({ band: null, score: 62, quality: 'ANALYZED' })).toBe(false)
+    expect(isNotEvaluable(null)).toBe(false)
+  })
+
+  it('outcomeScoreLabel', () => {
+    expect(outcomeScoreLabel({ outcomeScore: 6.25 })).toBe('6.3')
+    expect(outcomeScoreLabel({ outcomeScore: null, visitResult: 'NON_ELIGIBLE' })).toBe('—')
+    expect(outcomeScoreLabel({ outcomeScore: null, visitResult: 'VENTE' })).toBe(NOT_RATED)
+  })
+
+  it('crmContradiction', () => {
+    const ready = extra => ({
+      status: 'READY',
+      productStatuses: [{ key: 'tv', label: 'TV', status: 'REFUSE' }],
+      ...extra,
+    })
+    expect(crmContradiction('CONTRAT_SIGNE', ready({ signatureStatus: 'NON_SIGNE' }))).toMatch(
+      /ne retrouve ni signature/
+    )
+    expect(crmContradiction('CONTRAT_SIGNE', ready({ signatureStatus: 'LIEN_SMS' }))).toBeNull()
+    expect(
+      crmContradiction(
+        'CONTRAT_SIGNE',
+        ready({ productStatuses: [{ key: 'tv', status: 'ACCEPTE' }] })
+      )
+    ).toBeNull()
+    expect(
+      crmContradiction(
+        'REFUS',
+        ready({ productStatuses: [{ key: 'tv', label: 'TV', status: 'ACCEPTE' }] })
+      )
+    ).toMatch(/retrouve un produit accepté.*\(TV\)/)
+    expect(crmContradiction('REFUS', ready())).toBeNull()
+    // Analyse antérieure sans résultat de visite, ou pas prête : rien à opposer.
+    expect(crmContradiction('CONTRAT_SIGNE', { status: 'READY', productStatuses: [] })).toBeNull()
+    expect(crmContradiction('CONTRAT_SIGNE', ready({ status: 'ANALYZING' }))).toBeNull()
   })
 })

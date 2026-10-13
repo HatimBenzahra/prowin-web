@@ -221,7 +221,8 @@ function detectSpeechRegions(audioBuffer) {
   return cleaned
 }
 
-function AudioPlayer({ src, title, onDownload, onWavesurferReady }) {
+// `compact` : forme basse (onde réduite), pour un lecteur épinglé en tête d'un panneau.
+function AudioPlayer({ src, title, onDownload, onWavesurferReady, compact = false }) {
   const waveformRef = useRef(null)
   const wsRef = useRef(null)
   const containerRef = useRef(null)
@@ -268,7 +269,7 @@ function AudioPlayer({ src, title, onDownload, onWavesurferReady }) {
       barWidth: 3,
       barGap: 1,
       barRadius: 2,
-      height: 72,
+      height: compact ? 40 : 72,
       normalize: true,
       interact: true,
       dragToSeek: true,
@@ -318,7 +319,7 @@ function AudioPlayer({ src, title, onDownload, onWavesurferReady }) {
       ws.destroy()
       wsRef.current = null
     }
-  }, [src])
+  }, [src, compact])
 
   const togglePlay = useCallback(() => {
     if (!wsRef.current || !isReady) return
@@ -383,7 +384,7 @@ function AudioPlayer({ src, title, onDownload, onWavesurferReady }) {
   return (
     <div
       ref={containerRef}
-      className="bg-card text-card-foreground rounded-lg p-3 sm:p-4 space-y-3 w-full"
+      className={`bg-card text-card-foreground rounded-lg w-full ${compact ? 'p-2 space-y-2' : 'p-3 sm:p-4 space-y-3'}`}
     >
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">

@@ -413,8 +413,9 @@ export class CoachingJournalFilter {
   @Field(() => Int, { nullable: true, defaultValue: 5 }) days?: number;
   @Field(() => Int, { nullable: true }) commercialId?: number | null;
   @Field(() => Int, { nullable: true }) managerId?: number | null;
-  @Field(() => Int, { nullable: true }) immeubleId?: number | null;
-  @Field(() => String, { nullable: true }) search?: string | null; // adresse du bâtiment
+  // Un bâtiment peut exister en plusieurs fiches (même adresse) : tous ses ids.
+  @Field(() => [Int], { nullable: true }) immeubleIds?: number[] | null;
+  @Field(() => String, { nullable: true }) search?: string | null; // adresse du bâtiment, sans casse ni accents
   @Field(() => [String], { nullable: true }) statutPorte?: string[] | null;
   @Field(() => [String], { nullable: true }) visitResult?: string[] | null;
   @Field(() => [String], { nullable: true }) band?: string[] | null;

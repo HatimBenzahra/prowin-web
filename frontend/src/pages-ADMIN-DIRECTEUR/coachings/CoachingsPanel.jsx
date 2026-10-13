@@ -17,9 +17,9 @@ import {
 import { porteLabel } from './coachings-utils'
 
 /**
- * Panneau d'écoute de la porte sélectionnée : lecteur en tête (il reste en vue
- * pendant la lecture du coaching), puis le détail d'analyse existant, ou de quoi
- * lancer l'analyse. Les horodatages des preuves calent le lecteur.
+ * Panneau d'écoute de la porte sélectionnée : en-tête, lecteur compact épinglé
+ * (il reste en vue pendant la lecture du coaching), puis le détail d'analyse
+ * existant, ou de quoi lancer l'analyse. Les horodatages des preuves calent le lecteur.
  *
  * `row` peut manquer (lien partagé vers un audio hors de la période chargée) :
  * l'en-tête retombe alors sur ce que dit la clé S3.
@@ -29,7 +29,8 @@ export default function CoachingsPanel({
   row,
   onClose,
   onToggleFavori,
-  onAnalysisLaunched,
+  onLaunch,
+  onAnalysisChange,
 }) {
   const { showError } = useErrorToast()
   const [audioUrl, setAudioUrl] = useState(null)
@@ -90,12 +91,8 @@ export default function CoachingsPanel({
   const launch = async () => {
     setLaunching(true)
     try {
-      await CoachingService.launchMany([s3Key])
-      const [created] = await CoachingService.byS3Keys([s3Key])
-      if (created) {
-        setAnalysis(created)
-        onAnalysisLaunched(s3Key, created)
-      }
+      const created = await onLaunch(s3Key)
+      if (created) setAnalysis(created)
     } catch (error) {
       showError(error, 'CoachingsPanel.launch')
     } finally {
@@ -108,7 +105,7 @@ export default function CoachingsPanel({
 
   return (
     <div>
-      <div className="sticky top-0 z-10 space-y-3 border-b bg-background p-4">
+      <div className="p-4 pb-3">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <h2 className="truncate text-base font-semibold">
@@ -162,19 +159,23 @@ export default function CoachingsPanel({
             )}
           </div>
         </div>
+      </div>
 
+      {/* Épinglé : les commandes restent en vue pendant qu'on clique les preuves. */}
+      <div className="sticky top-0 z-10 border-b bg-background px-4 pb-2">
         {audioUrl ? (
           <AudioPlayer
             src={audioUrl}
             title="Enregistrement"
             onWavesurferReady={onWavesurferReady}
+            compact
           />
         ) : audioError ? (
           <p className="rounded-lg bg-destructive/5 px-3 py-2 text-sm text-destructive">
             Audio indisponible pour cet enregistrement.
           </p>
         ) : (
-          <Skeleton className="h-[140px] w-full" />
+          <Skeleton className="h-[96px] w-full" />
         )}
       </div>
 
@@ -183,9 +184,8 @@ export default function CoachingsPanel({
           <CoachingDetail
             analysis={analysis}
             embedded
-            showAudio={false}
             onSeek={seek}
-            onAnalysisChange={next => onAnalysisLaunched(s3Key, next)}
+            onAnalysisChange={next => onAnalysisChange(s3Key, next)}
           />
         ) : loadingAnalysis ? (
           <div className="space-y-3 p-5">

@@ -48,10 +48,26 @@ const PARIS_DAY = new Intl.DateTimeFormat('en-CA', {
 /** Jour calendaire (YYYY-MM-DD) à Paris : un audio de 00h30 appartient au jour qui commence. */
 export const parisDay = (d: Date) => PARIS_DAY.format(d);
 
-/** Bande d'une analyse prête ; calculée depuis le score pour les analyses antérieures au recalibrage. */
+/** Adresse comparable : sans casse, accents, ponctuation ni espaces superflus. */
+export const normalizeAddress = (adresse: string) =>
+  adresse
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+
+/**
+ * Bande d'une analyse prête ; calculée depuis le score pour les analyses antérieures
+ * au recalibrage. Inexploitable, ou ancienne analyse notée 0 sur un échange trop
+ * court : non évaluable, comme dans l'écran.
+ */
 function journalBand(a: CoachingJournalAnalysisDto): string | null {
   if (a.status !== CoachingStatus.READY) return null;
+  if (a.quality === CoachingQuality.INEXPLOITABLE) return 'non_evaluable';
   if (a.band) return a.band;
+  if (a.score === 0 && a.quality === CoachingQuality.LOW_CONFIDENCE)
+    return 'non_evaluable';
   if (a.score == null) return 'non_evaluable';
   if (a.score >= 85) return 'maitrise';
   if (a.score >= 75) return 'correct';
@@ -67,9 +83,10 @@ function matchesJournalFilter(
   const a = r.analysis ?? null;
   if (f.favorisOnly && !r.favori) return false;
   if (f.nonAnalysesOnly && a) return false;
-  if (f.immeubleId != null && r.immeubleId !== f.immeubleId) return false;
-  const q = f.search?.trim().toLowerCase();
-  if (q && !r.adresse.toLowerCase().includes(q)) return false;
+  if (f.immeubleIds?.length && !f.immeubleIds.includes(r.immeubleId))
+    return false;
+  const q = normalizeAddress(f.search ?? '');
+  if (q && !normalizeAddress(r.adresse).includes(q)) return false;
   if (f.statutPorte?.length && !f.statutPorte.includes(r.statutPorte ?? ''))
     return false;
   if (

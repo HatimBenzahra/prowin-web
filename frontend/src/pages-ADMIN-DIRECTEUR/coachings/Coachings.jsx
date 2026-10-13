@@ -83,6 +83,19 @@ export default function Coachings() {
     }
   }
 
+  const launchRow = async row => {
+    try {
+      await journal.launch(row.s3Key)
+    } catch (error) {
+      showError(error, 'Coachings.launch')
+    }
+  }
+
+  // Libellé du filtre bâtiment : l'adresse si une ligne chargée la connaît.
+  const buildingLabel = filters.immeubles.length
+    ? (journal.rows.find(r => filters.immeubles.includes(r.immeubleId))?.adresse ?? 'Bâtiment')
+    : null
+
   // ↑/↓ ou J/K : porte précédente / suivante, chargée dans le panneau.
   // (Espace lecture/pause est géré par le lecteur lui-même.)
   useEffect(() => {
@@ -106,7 +119,8 @@ export default function Coachings() {
       row={selectedRow}
       onClose={isMobile ? undefined : () => select('')}
       onToggleFavori={toggleFavori}
-      onAnalysisLaunched={journal.setAnalysis}
+      onLaunch={journal.launch}
+      onAnalysisChange={journal.setAnalysis}
     />
   ) : (
     <div className="flex h-full flex-col items-center justify-center gap-3 p-8 text-center text-muted-foreground">
@@ -137,6 +151,7 @@ export default function Coachings() {
         onChange={updateFilters}
         subjects={subjects}
         products={products}
+        buildingLabel={buildingLabel}
       />
 
       <div className="grid min-h-0 flex-1 gap-4 lg:grid-cols-[minmax(340px,2fr)_3fr]">
@@ -176,7 +191,9 @@ export default function Coachings() {
               collapsed={collapsed}
               onToggleCollapse={toggleCollapse}
               onToggleFavori={toggleFavori}
-              onFilterBuilding={immeuble => updateFilters({ immeuble })}
+              onFilterBuilding={immeubles => updateFilters({ immeubles })}
+              launching={journal.launching}
+              onLaunch={launchRow}
               hasMore={journal.hasMore}
               loadingMore={journal.loadingMore}
               onLoadMore={journal.loadMore}

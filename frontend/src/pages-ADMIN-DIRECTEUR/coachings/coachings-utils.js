@@ -2,7 +2,7 @@
  * Page Coachings : filtres ⇄ URL, période, regroupement et agrégats du journal. Module
  * pur (sans React) pour être testé.
  */
-import { scoreBand, showsScore } from '../coaching/coaching-calibration'
+import { isNotEvaluable, scoreBand, showsScore } from '../coaching/coaching-calibration'
 
 export const PERIODS = [
   { value: 'today', label: 'Aujourd’hui' },
@@ -28,7 +28,7 @@ export const DEFAULT_FILTERS = {
   to: '',
   subject: '', // "commercial:3" | "manager:2"
   q: '',
-  immeuble: null,
+  immeubles: [], // ids des immeubles d'un même bâtiment (adresse normalisée)
   favoris: false,
   statuts: [],
   resultats: [],
@@ -49,14 +49,15 @@ export function parseFilters(params) {
     ? get('periode')
     : DEFAULT_FILTERS.period
   const group = GROUP_BY.some(g => g.value === get('vue')) ? get('vue') : DEFAULT_FILTERS.group
-  const immeuble = Number(get('immeuble'))
   return {
     period,
     from: isDay(get('du')) ? get('du') : '',
     to: isDay(get('au')) ? get('au') : '',
     subject: /^(commercial|manager):\d+$/.test(get('commercial')) ? get('commercial') : '',
     q: get('q'),
-    immeuble: Number.isInteger(immeuble) && immeuble > 0 ? immeuble : null,
+    immeubles: list(get('immeuble'))
+      .map(Number)
+      .filter(id => Number.isInteger(id) && id > 0),
     favoris: get('favoris') === '1',
     statuts: list(get('statut')),
     resultats: list(get('resultat')),
@@ -80,7 +81,7 @@ export function serializeFilters(filters, selection = '') {
   }
   set('commercial', f.subject)
   set('q', f.q.trim())
-  set('immeuble', f.immeuble ? String(f.immeuble) : '')
+  set('immeuble', f.immeubles.join(','))
   set('favoris', f.favoris ? '1' : '')
   set('statut', f.statuts.join(','))
   set('resultat', f.resultats.join(','))
@@ -131,7 +132,7 @@ export function toJournalFilter(filters, now = new Date()) {
     dateTo: dateTo?.toISOString() ?? null,
     commercialId: role === 'commercial' ? Number(id) : null,
     managerId: role === 'manager' ? Number(id) : null,
-    immeubleId: filters.immeuble ?? null,
+    immeubleIds: orNull(filters.immeubles),
     search: orNull(filters.q.trim()),
     statutPorte: orNull(filters.statuts),
     visitResult: orNull(filters.resultats),
@@ -147,10 +148,10 @@ export function toJournalFilter(filters, now = new Date()) {
 export const isSale = row =>
   row.statutPorte === 'CONTRAT_SIGNE' || SALE_RESULTS.includes(row.analysis?.visitResult)
 
-/** Score affichable d'une ligne : analyse prête et visite évaluable. */
+/** Score affichable d'une ligne : analyse prête, évaluable (⚪ exclues des moyennes). */
 export const rowScore = row => {
   const a = row.analysis
-  return a?.status === 'READY' && showsScore(a.score, a.band) ? a.score : null
+  return a?.status === 'READY' && !isNotEvaluable(a) && showsScore(a.score, a.band) ? a.score : null
 }
 
 /** Agrégats d'un groupe : portes, score moyen (hors non évaluables), bande, ventes. */
@@ -166,6 +167,29 @@ export function aggregate(rows) {
     band: scoreMoyen != null ? scoreBand(scoreMoyen) : null,
     nbVentes: rows.filter(isSale).length,
   }
+}
+
+/**
+ * Adresse comparable : sans casse, accents, ponctuation ni espaces superflus. Deux
+ * fiches « 2 Avenue du Val de Fontenay » et « 2, avenue du Val-de-Fontenay » sont un
+ * seul bâtiment pour l'écoute.
+ */
+export const normalizeAddress = adresse =>
+  (adresse || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()
+
+/**
+ * Nom de l'intervenant sur une ligne : seulement s'il n'est pas déjà dit par la
+ * carte (vue bâtiment à un seul intervenant, vue par commercial).
+ */
+export function rowSubject(row, groupBy, groupSubjects = []) {
+  if (!row.subjectName || groupBy === 'commercial') return null
+  if (groupBy === 'batiment' && groupSubjects.length <= 1) return null
+  return row.subjectName
 }
 
 const subjectKey = row =>
@@ -186,7 +210,7 @@ export function groupRows(rows, groupBy = 'batiment') {
         ? subjectKey(row)
         : groupBy === 'liste'
           ? 'all'
-          : `b:${row.immeubleId}`
+          : `b:${normalizeAddress(row.adresse) || row.immeubleId}`
     if (!groups.has(key)) groups.set(key, [])
     groups.get(key).push(row)
   }
@@ -197,7 +221,7 @@ export function groupRows(rows, groupBy = 'batiment') {
       stats: aggregate(dayRows),
       groups: [...groups.entries()].map(([key, groupRows]) => ({
         key: `${day}|${key}`,
-        immeubleId: groupRows[0].immeubleId,
+        immeubleIds: [...new Set(groupRows.map(r => r.immeubleId))],
         adresse: groupRows[0].adresse,
         subjects: [...new Set(groupRows.map(r => r.subjectName).filter(Boolean))],
         rows: groupRows,

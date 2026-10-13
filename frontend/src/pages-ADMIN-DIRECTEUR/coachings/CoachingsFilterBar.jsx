@@ -16,7 +16,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
-import { BAND_META, VISIT_RESULT_LABELS } from '../coaching/coaching-calibration'
+import { BAND_META, BAND_RANGES, VISIT_RESULT_LABELS } from '../coaching/coaching-calibration'
 import { PORTE_STATUT_META } from '../coaching/CoachingComponents'
 import { BAND_FILTERS, DEFAULT_FILTERS, GROUP_BY, PERIODS, periodRange } from './coachings-utils'
 
@@ -67,7 +67,13 @@ function MultiFilter({ label, options, selected, onChange }) {
  * Barre de filtres de la page Coachings. Contrôlée : `filters` vient de l'URL et
  * `onChange(patch)` l'y réécrit — un lien copié rouvre exactement la même vue.
  */
-export default function CoachingsFilterBar({ filters, onChange, subjects, products }) {
+export default function CoachingsFilterBar({
+  filters,
+  onChange,
+  subjects,
+  products,
+  buildingLabel,
+}) {
   // Recherche bâtiment débouncée → URL (pas une requête par frappe).
   const [q, setQ] = useState(filters.q)
   useEffect(() => setQ(filters.q), [filters.q])
@@ -171,15 +177,15 @@ export default function CoachingsFilterBar({ filters, onChange, subjects, produc
           />
         </div>
 
-        {filters.immeuble && (
+        {filters.immeubles.length > 0 && (
           <button
             type="button"
             className={chip(true)}
-            onClick={() => onChange({ immeuble: null })}
+            onClick={() => onChange({ immeubles: [] })}
             title="Retirer le filtre bâtiment"
           >
             <Building2 className="h-3.5 w-3.5" />
-            Bâtiment n°{filters.immeuble}
+            <span className="max-w-[220px] truncate">{buildingLabel}</span>
             <X className="h-3.5 w-3.5" />
           </button>
         )}
@@ -224,7 +230,7 @@ export default function CoachingsFilterBar({ filters, onChange, subjects, produc
               key={band}
               type="button"
               onClick={() => toggleBand(band)}
-              title={BAND_META[band].label.replace('⚪ ', '')}
+              title={BAND_RANGES[band]}
               aria-pressed={filters.bands.includes(band)}
               className={cn(chip(filters.bands.includes(band)), 'px-2')}
             >

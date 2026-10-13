@@ -12,7 +12,7 @@ import {
 import { useRole } from '@/contexts/userole'
 import { useErrorToast } from '@/hooks/utils/ui/use-error-toast'
 import CoachingService from '@/services/coaching/coaching.service'
-import { BandPill, ScoreBar, formatDateTime } from './CoachingComponents'
+import { BandPill, ScoreBar, StatusPill, formatDateTime } from './CoachingComponents'
 import {
   CHECK_STATUS_META,
   CONFIDENCE_LABELS,
@@ -24,8 +24,13 @@ import {
   RIB_LABELS,
   SIGNATURE_LABELS,
   VISIT_RESULT_LABELS,
+  BAND_META,
+  NOT_RATED,
+  isNotEvaluable,
   objectiveGap,
   optionsOf,
+  outcomeScoreLabel,
+  scoreBand,
 } from './coaching-calibration'
 
 /*
@@ -107,6 +112,113 @@ export function ScoreBreakdown({ analysis }) {
             {CONFIDENCE_LABELS[analysisConfidence.level] || analysisConfidence.level}
           </span>
           {analysisConfidence.reasons?.length > 0 && ` — ${analysisConfidence.reasons.join(' ; ')}`}
+        </p>
+      )}
+      {gap && (
+        <p
+          className={cn(
+            'text-xs',
+            gap.below ? 'font-medium text-amber-600' : 'text-muted-foreground'
+          )}
+        >
+          {NIVEAU_LABELS[analysis.commercialNiveau] || analysis.commercialNiveau} · {gap.text}
+        </p>
+      )}
+    </div>
+  )
+}
+
+/**
+ * Bloc de score unique en tête du panneau d'écoute (page Coachings) : global, bande,
+ * exécution et résultat commercial, indicateurs, confiance de l'analyse et objectif du
+ * niveau — une seule fois. `actions` : boutons de l'hôte (relance), alignés à droite.
+ */
+export function ScoreSummary({ analysis, actions }) {
+  const { executionScore, score, band, indicators, analysisConfidence } = analysis
+  const ready = analysis.status === 'READY'
+  const notEvaluable = ready && isNotEvaluable(analysis)
+  const scored = ready && !notEvaluable && typeof score === 'number'
+  const gap = scored ? objectiveGap(score, analysis.objectiveScore, band) : null
+  const rows = [
+    { label: 'Qualité commerciale', value: indicators?.qualiteCommerciale },
+    { label: 'Respect du plan', value: indicators?.respectPlan },
+    { label: 'Conformité', value: indicators?.conformite },
+  ]
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <h3 className="text-sm font-semibold">Coaching IA</h3>
+          {!ready && <StatusPill status={analysis.status} />}
+          {notEvaluable && <BandPill band="non_evaluable" />}
+          {scored && <BandPill score={score} band={band} />}
+        </div>
+        {actions}
+      </div>
+
+      {scored && (
+        <>
+          <dl className="grid grid-cols-3 gap-2 text-center">
+            <div className="rounded-md bg-muted/40 px-2 py-1.5">
+              <dt className="text-[11px] text-muted-foreground">Global</dt>
+              <dd
+                className={cn(
+                  'text-2xl font-semibold tabular-nums',
+                  BAND_META[scoreBand(score, band)].text
+                )}
+              >
+                {Math.round(score)}
+                <span className="text-xs font-normal text-muted-foreground">/100</span>
+              </dd>
+            </div>
+            <div className="rounded-md bg-muted/40 px-2 py-1.5">
+              <dt className="text-[11px] text-muted-foreground">Exécution</dt>
+              <dd className="text-lg font-semibold tabular-nums">{pct(executionScore)}</dd>
+            </div>
+            <div className="rounded-md bg-muted/40 px-2 py-1.5">
+              <dt className="text-[11px] text-muted-foreground">Résultat commercial</dt>
+              <dd
+                className={cn(
+                  'tabular-nums',
+                  typeof analysis.outcomeScore === 'number'
+                    ? 'text-lg font-semibold'
+                    : 'pt-1 text-xs text-muted-foreground'
+                )}
+              >
+                {outcomeScoreLabel(analysis)}
+              </dd>
+            </div>
+          </dl>
+          <ScoreBar value={score} band={band} />
+          {indicators ? (
+            <div className="space-y-1.5">
+              {rows.map(r => (
+                <div key={r.label} className="flex items-center gap-3 text-xs">
+                  <span className="w-36 shrink-0 text-muted-foreground">{r.label}</span>
+                  <ScoreBar value={r.value} className="flex-1" />
+                  <span className="w-8 text-right tabular-nums">{pct(r.value)}</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-xs text-muted-foreground">Indicateurs : {NOT_RATED.toLowerCase()}</p>
+          )}
+        </>
+      )}
+
+      {ready && analysisConfidence && (
+        <p className="text-xs text-muted-foreground">
+          Confiance de l’analyse :{' '}
+          <span
+            title={analysisConfidence.reasons?.join(' ; ') || undefined}
+            className={cn(
+              'font-medium',
+              analysisConfidence.reasons?.length && 'cursor-help underline decoration-dotted',
+              analysisConfidence.level === 'faible' && 'text-amber-600'
+            )}
+          >
+            {CONFIDENCE_LABELS[analysisConfidence.level] || analysisConfidence.level}
+          </span>
         </p>
       )}
       {gap && (

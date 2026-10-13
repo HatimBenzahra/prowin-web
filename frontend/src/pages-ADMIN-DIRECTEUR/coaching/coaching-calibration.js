@@ -214,3 +214,58 @@ export function objectiveGap(score, objective, band) {
         text: `Au niveau du standard attendu pour son niveau (objectif ${objective}).`,
       }
 }
+
+/**
+ * Visite sans score exploitable : bande ⚪, échange inexploitable, ou analyse antérieure
+ * au recalibrage (sans bande) notée 0 sur un échange trop court. Ces analyses n'ont pas
+ * de chiffre à afficher et n'entrent dans aucune moyenne.
+ */
+export const isNotEvaluable = a =>
+  Boolean(a) &&
+  (a.band === 'non_evaluable' ||
+    a.quality === 'INEXPLOITABLE' ||
+    (a.band == null && a.score === 0 && a.quality === 'LOW_CONFIDENCE'))
+
+/** Bornes des bandes, pour les infobulles. */
+export const BAND_RANGES = {
+  maitrise: 'Maîtrisé ≥ 85',
+  correct: 'Correct 75–84',
+  coaching: 'Coaching nécessaire 60–74',
+  insuffisant: 'Insuffisant < 60',
+  non_evaluable: 'Non évaluable',
+}
+
+/** Résultats sans part commerciale à noter : « — » plutôt que « non noté ». */
+const OUTCOME_NOT_APPLICABLE = ['NON_ELIGIBLE', 'VISITE_INTERROMPUE']
+export const NOT_RATED = 'Non noté par ce référentiel'
+
+/** Points du résultat commercial ; le référentiel peut ne pas le noter du tout. */
+export function outcomeScoreLabel(analysis) {
+  if (typeof analysis?.outcomeScore === 'number')
+    return String(Math.round(analysis.outcomeScore * 10) / 10)
+  return OUTCOME_NOT_APPLICABLE.includes(analysis?.visitResult) ? '—' : NOT_RATED
+}
+
+const SIGNED = ['SIGNE', 'LIEN_SMS', 'LIEN_EMAIL']
+
+/**
+ * Le statut CRM de la porte contredit-il ce que l'IA a entendu ? Seulement sur une
+ * analyse prête qui porte le résultat de visite (une analyse antérieure n'en dit rien).
+ */
+export function crmContradiction(statutPorte, analysis) {
+  if (analysis?.status !== 'READY') return null
+  const products = analysis.productStatuses || []
+  if (!products.length && !analysis.signatureStatus) return null
+  const accepted = products.filter(p => p.status === 'ACCEPTE')
+  if (
+    statutPorte === 'CONTRAT_SIGNE' &&
+    !SIGNED.includes(analysis.signatureStatus) &&
+    !accepted.length
+  )
+    return 'Porte notée « Contrat signé » dans le CRM, mais l’IA ne retrouve ni signature ni produit accepté dans l’audio.'
+  if (statutPorte === 'REFUS' && accepted.length)
+    return `Porte notée « Refus » dans le CRM, mais l’IA retrouve un produit accepté dans l’audio (${accepted
+      .map(p => p.label || p.key)
+      .join(', ')}).`
+  return null
+}

@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest'
 import {
   DEFAULT_FILTERS,
+  normalizeAddress,
+  rowSubject,
   aggregate,
   dayLabel,
   groupRows,
@@ -38,7 +40,7 @@ describe('filtres ⇄ URL', () => {
       to: '2026-10-10',
       subject: 'manager:2',
       q: 'Foch',
-      immeuble: 12,
+      immeubles: [12, 40],
       favoris: true,
       statuts: ['REFUS', 'ARGUMENTE'],
       resultats: ['VENTE'],
@@ -60,13 +62,15 @@ describe('filtres ⇄ URL', () => {
 
   it('ignore les valeurs invalides', () => {
     const f = parseFilters(
-      new URLSearchParams('periode=x&vue=y&commercial=foo&immeuble=-1&bande=rouge,maitrise&du=hier')
+      new URLSearchParams(
+        'periode=x&vue=y&commercial=foo&immeuble=-1,x&bande=rouge,maitrise&du=hier'
+      )
     )
     expect(f).toMatchObject({
       period: '7d',
       group: 'batiment',
       subject: '',
-      immeuble: null,
+      immeubles: [],
       bands: ['maitrise'],
       from: '',
     })
@@ -169,7 +173,7 @@ describe('regroupement', () => {
 
   it('navigation clavier : groupes repliés exclus, bornée aux extrémités', () => {
     const tree = groupRows(rows)
-    const keys = visibleKeys(tree, new Set(['2026-10-13|b:2']))
+    const keys = visibleKeys(tree, new Set(['2026-10-13|b:5 avenue foch']))
     expect(keys).toEqual(['a', 'c', 'd'])
     expect(visibleKeys(tree, new Set(['2026-10-12']))).toEqual(['a', 'c', 'b'])
     expect(neighbourKey(keys, 'a', 1)).toBe('c')
@@ -190,5 +194,51 @@ describe('libellés', () => {
   it('porte', () => {
     expect(porteLabel(row('a'))).toBe('Ét. 2 · Porte 204')
     expect(porteLabel(row('a', { porteEtage: 0 }))).toBe('RDC · Porte 204')
+  })
+})
+
+describe('bâtiment : adresse normalisée', () => {
+  it('normalise casse, accents, ponctuation et espaces', () => {
+    expect(normalizeAddress('  2, Avenue du Val-de-Fontenay ')).toBe('2 avenue du val de fontenay')
+    expect(normalizeAddress('12 Rue de l’Église')).toBe('12 rue de l eglise')
+    expect(normalizeAddress(null)).toBe('')
+  })
+
+  it('deux fiches de la même adresse font une seule carte, ids conservés', () => {
+    const tree = groupRows([
+      row('a', { immeubleId: 7, adresse: '2 Avenue du Val de Fontenay' }),
+      row('b', { immeubleId: 9, adresse: '2, avenue du Val-de-Fontenay' }),
+    ])
+    expect(tree[0].groups).toHaveLength(1)
+    expect(tree[0].groups[0].immeubleIds).toEqual([7, 9])
+    expect(tree[0].groups[0].rows.map(r => r.immeubleId)).toEqual([7, 9])
+  })
+
+  it('filtre GraphQL sur les ids du bâtiment', () => {
+    expect(toJournalFilter({ ...DEFAULT_FILTERS, immeubles: [7, 9] }).immeubleIds).toEqual([7, 9])
+    expect(toJournalFilter(DEFAULT_FILTERS).immeubleIds).toBeNull()
+  })
+})
+
+describe('non évaluables hors des moyennes', () => {
+  it('inexploitable et ancienne analyse notée 0 ne comptent pas', () => {
+    const stats = aggregate([
+      row('a', { analysis: ready(80, 'correct') }),
+      row('b', { analysis: ready(null, null, { quality: 'INEXPLOITABLE' }) }),
+      row('c', { analysis: ready(0, null, { quality: 'LOW_CONFIDENCE' }) }),
+    ])
+    expect(stats).toMatchObject({ nbAnalyses: 1, scoreMoyen: 80 })
+  })
+})
+
+describe('intervenant sur la ligne', () => {
+  const r = row('a')
+  it('masqué quand la carte le dit déjà', () => {
+    expect(rowSubject(r, 'batiment', ['Léa Martin'])).toBeNull()
+    expect(rowSubject(r, 'commercial', ['Léa Martin'])).toBeNull()
+  })
+  it('affiché quand la carte en compte plusieurs, et en liste', () => {
+    expect(rowSubject(r, 'batiment', ['Léa Martin', 'Paul Roy'])).toBe('Léa Martin')
+    expect(rowSubject(r, 'liste')).toBe('Léa Martin')
   })
 })

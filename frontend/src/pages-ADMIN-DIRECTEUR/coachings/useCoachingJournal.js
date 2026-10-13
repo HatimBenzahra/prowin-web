@@ -1,9 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import CoachingService from '@/services/coaching/coaching.service'
+import { isInProgress } from '../coaching/CoachingComponents'
 import { toJournalFilter } from './coachings-utils'
 
 // Jours entiers par page : assez pour remplir l'écran sans charger toute la période.
 const DAYS_PER_PAGE = 5
+// Suivi des analyses en cours dans la liste, aligné sur les autres écrans coaching.
+const POLL_MS = 6000
 
 /** Résumé d'analyse du journal, depuis une analyse complète (après un lancement). */
 const summaryOf = a =>
@@ -96,15 +99,56 @@ export function useCoachingJournal(filters) {
     }
   }, [])
 
-  /** Après un lancement : l'analyse créée remplace l'état « non analysé » de la ligne. */
+  /** Une analyse nouvelle ou suivie remplace le résumé de sa ligne. */
   const setAnalysis = useCallback((s3Key, analysis) => {
     setRows(prev =>
       prev.map(r => (r.s3Key === s3Key ? { ...r, analysis: summaryOf(analysis) } : r))
     )
   }, [])
 
+  /** Lance l'analyse d'un audio (même mutation que la gestion) ; rend l'analyse créée. */
+  const [launching, setLaunching] = useState(() => new Set())
+  const launch = useCallback(
+    async s3Key => {
+      setLaunching(prev => new Set(prev).add(s3Key))
+      try {
+        await CoachingService.launchMany([s3Key])
+        const [created] = await CoachingService.byS3Keys([s3Key])
+        if (created) setAnalysis(s3Key, created)
+        return created ?? null
+      } finally {
+        setLaunching(prev => {
+          const next = new Set(prev)
+          next.delete(s3Key)
+          return next
+        })
+      }
+    },
+    [setAnalysis]
+  )
+
+  // Les lignes « En cours » passent d'elles-mêmes à leur score, sans recharger la liste.
+  const runningKeys = rows
+    .filter(r => isInProgress(r.analysis?.status))
+    .map(r => r.s3Key)
+    .join('|')
+  useEffect(() => {
+    if (!runningKeys) return
+    const t = setInterval(async () => {
+      try {
+        const fresh = await CoachingService.byS3Keys(runningKeys.split('|'))
+        for (const a of fresh) if (!isInProgress(a.status)) setAnalysis(a.s3KeyOriginal, a)
+      } catch {
+        // Réessayé au tour suivant.
+      }
+    }, POLL_MS)
+    return () => clearInterval(t)
+  }, [runningKeys, setAnalysis])
+
   return {
     rows,
+    launch,
+    launching,
     loading,
     loadingMore,
     error,
