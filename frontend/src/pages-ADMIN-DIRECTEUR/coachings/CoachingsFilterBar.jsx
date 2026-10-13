@@ -1,7 +1,20 @@
 import { useEffect, useState } from 'react'
-import { Building2, ChevronDown, Search, Star, X } from 'lucide-react'
+import {
+  Building2,
+  ChevronDown,
+  ClipboardCheck,
+  DoorOpen,
+  LayoutList,
+  ListTree,
+  Package,
+  Sparkles,
+  Star,
+  User,
+  Users,
+  X,
+} from 'lucide-react'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import {
   Select,
   SelectContent,
@@ -13,59 +26,131 @@ import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import DateRangeFilter from '@/components/DateRangeFilter'
+import ExpandableSearch from '@/components/ExpandableSearch'
 import { cn } from '@/lib/utils'
 import { BAND_META, BAND_RANGES, VISIT_RESULT_LABELS } from '../coaching/coaching-calibration'
 import { PORTE_STATUT_META } from '../coaching/CoachingComponents'
-import { BAND_FILTERS, DEFAULT_FILTERS, GROUP_BY, PERIODS, periodRange } from './coachings-utils'
-
-const toDay = d =>
-  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+import {
+  BAND_FILTERS,
+  DEFAULT_FILTERS,
+  PERIODS,
+  activeFiltersCount,
+  periodRange,
+} from './coachings-utils'
 
 // Valeur sentinelle pour « tous » (le Select n'accepte pas value="").
 const ALL_VALUE = '__all__'
 
-const chip = active =>
-  cn(
-    'inline-flex h-8 items-center gap-1.5 rounded-md border px-2.5 text-sm transition-colors',
-    active
-      ? 'border-primary bg-primary/10 text-primary'
-      : 'border-border/60 text-muted-foreground hover:bg-muted/60'
-  )
+// Raccourcis de période, comme les « Enregistrements récents » de la Bibliothèque ;
+// une plage libre passe par le sélecteur de dates commun (Statistiques).
+const QUICK_PERIODS = PERIODS.filter(p => p.value !== 'custom')
 
-/** Choix multiple compact : « Statut porte · 2 » plutôt qu'une rangée de badges. */
-function MultiFilter({ label, options, selected, onChange }) {
+// Libellés courts des bandes : la couleur dit la bande, le libellé dit le seuil.
+const BAND_SHORT = {
+  maitrise: '≥ 85',
+  correct: '75–84',
+  coaching: '60–74',
+  insuffisant: '< 60',
+  non_evaluable: 'N/É',
+}
+
+const VIEWS = [
+  { value: 'batiment', label: 'Date › Bâtiment', icon: <ListTree className="h-4 w-4" /> },
+  { value: 'commercial', label: 'Commercial', icon: <Users className="h-4 w-4" /> },
+  { value: 'liste', label: 'Liste', icon: <LayoutList className="h-4 w-4" /> },
+]
+
+const toDay = d =>
+  d
+    ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+    : ''
+
+/** Choix multiple : bouton contour + compteur, cases à cocher avec la pastille de couleur. */
+function MultiFilter({ icon, label, options, selected, onChange }) {
   const toggle = value =>
     onChange(selected.includes(value) ? selected.filter(v => v !== value) : [...selected, value])
+  const active = selected.length > 0
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <button type="button" className={chip(selected.length > 0)}>
+        <Button
+          variant="outline"
+          className={cn('h-9 gap-2 font-normal', active && 'border-primary/30 text-primary')}
+        >
+          {icon}
           {label}
-          {selected.length > 0 && <span className="tabular-nums">· {selected.length}</span>}
-          <ChevronDown className="h-3.5 w-3.5 opacity-60" />
-        </button>
+          {active && (
+            <Badge className="h-5 min-w-5 rounded-full px-1.5 tabular-nums">
+              {selected.length}
+            </Badge>
+          )}
+          <ChevronDown className="h-4 w-4 opacity-60" />
+        </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="w-56">
+      <DropdownMenuContent align="start" className="w-60">
+        <DropdownMenuLabel className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70">
+          {label}
+        </DropdownMenuLabel>
         {options.map(o => (
           <DropdownMenuCheckboxItem
             key={o.value}
             checked={selected.includes(o.value)}
             onCheckedChange={() => toggle(o.value)}
             onSelect={e => e.preventDefault()}
+            className="gap-2"
           >
+            {o.dot && <span className={cn('h-2 w-2 shrink-0 rounded-full', o.dot)} />}
             {o.label}
           </DropdownMenuCheckboxItem>
         ))}
+        {active && (
+          <>
+            <DropdownMenuSeparator />
+            <button
+              type="button"
+              onClick={() => onChange([])}
+              className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm text-muted-foreground hover:bg-accent"
+            >
+              <X className="h-3.5 w-3.5" />
+              Tout désélectionner
+            </button>
+          </>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   )
 }
 
+/** Interrupteur de filtre : contour au repos, couleur primaire une fois actif. */
+function ToggleFilter({ active, onClick, icon, title, children }) {
+  return (
+    <Button
+      variant={active ? 'default' : 'outline'}
+      className={cn('h-9 gap-2', !active && 'font-normal')}
+      onClick={onClick}
+      aria-pressed={active}
+      title={title}
+    >
+      <span className={cn('inline-flex [&>svg]:h-4 [&>svg]:w-4', !active && 'opacity-70')}>
+        {icon}
+      </span>
+      {children}
+    </Button>
+  )
+}
+
 /**
- * Barre de filtres de la page Coachings. Contrôlée : `filters` vient de l'URL et
- * `onChange(patch)` l'y réécrit — un lien copié rouvre exactement la même vue.
+ * Barre de filtres de la page Coachings, faite des contrôles des autres pages : les
+ * raccourcis de période de la Bibliothèque et le sélecteur de dates des Statistiques,
+ * les Select à icône, la recherche repliable et le contrôle segmenté des Bâtiments,
+ * le compteur de filtres et « Réinitialiser » des Statistiques. Pas de Card autour,
+ * comme ailleurs. Contrôlée : `filters` vient de l'URL et `onChange(patch)` l'y
+ * réécrit — un lien copié rouvre exactement la même vue.
  */
 export default function CoachingsFilterBar({
   filters,
@@ -83,12 +168,12 @@ export default function CoachingsFilterBar({
     return () => clearTimeout(t)
   }, [q]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // « Période » part de la plage affichée, pour l'ajuster plutôt que tout ressaisir.
-  const periodPatch = period => {
-    if (period !== 'custom' || filters.from || filters.to) return { period }
+  // Brouillon du sélecteur de dates, prérempli avec la plage affichée.
+  const [draft, setDraft] = useState({ from: '', to: '' })
+  useEffect(() => {
     const { dateFrom, dateTo } = periodRange(filters)
-    return { period, from: toDay(dateFrom), to: toDay(dateTo) }
-  }
+    setDraft({ from: toDay(dateFrom), to: toDay(dateTo) })
+  }, [filters.period, filters.from, filters.to]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const toggleBand = band =>
     onChange({
@@ -97,61 +182,59 @@ export default function CoachingsFilterBar({
         : [...filters.bands, band],
     })
 
-  const isFiltered = Object.keys(DEFAULT_FILTERS).some(
-    key =>
-      key !== 'group' &&
-      key !== 'period' &&
-      JSON.stringify(filters[key]) !== JSON.stringify(DEFAULT_FILTERS[key])
-  )
+  const count = activeFiltersCount(filters)
+  const reset = () =>
+    onChange({
+      ...DEFAULT_FILTERS,
+      period: filters.period,
+      from: filters.from,
+      to: filters.to,
+      group: filters.group,
+    })
+  const custom = filters.period === 'custom'
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
-        <div className="inline-flex rounded-md border border-border/60 p-0.5">
-          {PERIODS.map(p => (
+        <div className="flex items-center gap-1.5">
+          {QUICK_PERIODS.map(p => (
             <button
               key={p.value}
               type="button"
-              onClick={() => onChange(periodPatch(p.value))}
+              onClick={() => onChange({ period: p.value })}
               className={cn(
-                'h-7 rounded px-2.5 text-sm transition-colors',
+                'rounded-md px-2.5 py-1 text-xs font-medium transition-colors',
                 filters.period === p.value
                   ? 'bg-primary text-primary-foreground'
-                  : 'text-muted-foreground hover:bg-muted/60'
+                  : 'bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground'
               )}
             >
               {p.label}
             </button>
           ))}
         </div>
-        {filters.period === 'custom' && (
-          <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-            <Input
-              type="date"
-              value={filters.from}
-              max={filters.to || undefined}
-              onChange={e => onChange({ from: e.target.value })}
-              className="h-8 w-[150px]"
-              aria-label="Du"
-            />
-            <span>au</span>
-            <Input
-              type="date"
-              value={filters.to}
-              min={filters.from || undefined}
-              onChange={e => onChange({ to: e.target.value })}
-              className="h-8 w-[150px]"
-              aria-label="Au"
-            />
-          </div>
-        )}
+        <DateRangeFilter
+          startDate={draft.from}
+          endDate={draft.to}
+          appliedStartDate={custom ? filters.from : ''}
+          appliedEndDate={custom ? filters.to : ''}
+          onChangeStart={from => setDraft(d => ({ ...d, from }))}
+          onChangeEnd={to => setDraft(d => ({ ...d, to }))}
+          onApply={(from = draft.from, to = draft.to) => onChange({ period: 'custom', from, to })}
+          onReset={() => onChange({ period: DEFAULT_FILTERS.period, from: '', to: '' })}
+          className={cn(!custom && 'text-muted-foreground')}
+          title="Période des écoutes"
+        />
 
         <Select
           value={filters.subject || ALL_VALUE}
           onValueChange={v => onChange({ subject: v === ALL_VALUE ? '' : v })}
         >
-          <SelectTrigger className="h-8 w-[200px] text-sm">
-            <SelectValue placeholder="Commercial" />
+          <SelectTrigger
+            className={cn('w-auto', filters.subject && 'border-primary/30 text-primary')}
+          >
+            <User className="mr-2 h-4 w-4" />
+            <SelectValue placeholder="Commercial..." />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value={ALL_VALUE}>Tous les commerciaux</SelectItem>
@@ -161,153 +244,161 @@ export default function CoachingsFilterBar({
                 value={`${s.subjectRole}:${s.subjectId}`}
               >
                 {s.subjectName}
-                {s.subjectRole === 'manager' ? ' (mgr)' : ''}
+                {s.subjectRole === 'manager' ? ' (manager)' : ''}
               </SelectItem>
             ))}
           </SelectContent>
         </Select>
 
-        <div className="relative w-full sm:w-[220px]">
-          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            value={q}
-            onChange={e => setQ(e.target.value)}
-            placeholder="Adresse du bâtiment…"
-            className="h-8 pl-8"
-          />
-        </div>
+        <ExpandableSearch value={q} onChange={setQ} placeholder="Rechercher une adresse…" />
 
         {filters.immeubles.length > 0 && (
-          <button
-            type="button"
-            className={chip(true)}
-            onClick={() => onChange({ immeubles: [] })}
-            title="Retirer le filtre bâtiment"
+          <Badge
+            variant="outline"
+            className="h-8 gap-1.5 border-primary/30 bg-primary/10 px-2.5 text-primary"
           >
             <Building2 className="h-3.5 w-3.5" />
             <span className="max-w-[220px] truncate">{buildingLabel}</span>
-            <X className="h-3.5 w-3.5" />
-          </button>
+            <button
+              type="button"
+              onClick={() => onChange({ immeubles: [] })}
+              className="rounded-sm hover:bg-primary/20"
+              aria-label="Retirer le filtre bâtiment"
+              title="Retirer le filtre bâtiment"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </Badge>
         )}
-
-        <button
-          type="button"
-          className={chip(filters.favoris)}
-          onClick={() => onChange({ favoris: !filters.favoris })}
-        >
-          <Star className={cn('h-3.5 w-3.5', filters.favoris && 'fill-amber-500 text-amber-500')} />
-          Favoris
-        </button>
-        <button
-          type="button"
-          className={chip(filters.nonAnalyses)}
-          onClick={() => onChange({ nonAnalyses: !filters.nonAnalyses })}
-        >
-          Non analysés
-        </button>
       </div>
 
-      <div className="flex flex-wrap items-center gap-2">
-        <MultiFilter
-          label="Statut porte"
-          options={Object.entries(PORTE_STATUT_META).map(([value, m]) => ({
-            value,
-            label: m.label,
-          }))}
-          selected={filters.statuts}
-          onChange={statuts => onChange({ statuts })}
-        />
-        <MultiFilter
-          label="Résultat de visite"
-          options={Object.entries(VISIT_RESULT_LABELS).map(([value, label]) => ({ value, label }))}
-          selected={filters.resultats}
-          onChange={resultats => onChange({ resultats })}
-        />
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex flex-wrap items-center gap-2 lg:flex-1">
+          <MultiFilter
+            icon={<DoorOpen className="h-4 w-4 opacity-70" />}
+            label="Statut porte"
+            options={Object.entries(PORTE_STATUT_META).map(([value, m]) => ({
+              value,
+              label: m.label,
+              dot: m.dot,
+            }))}
+            selected={filters.statuts}
+            onChange={statuts => onChange({ statuts })}
+          />
+          <MultiFilter
+            icon={<ClipboardCheck className="h-4 w-4 opacity-70" />}
+            label="Résultat de visite"
+            options={Object.entries(VISIT_RESULT_LABELS).map(([value, label]) => ({
+              value,
+              label,
+            }))}
+            selected={filters.resultats}
+            onChange={resultats => onChange({ resultats })}
+          />
 
-        <div className="flex items-center gap-1">
-          {BAND_FILTERS.map(band => (
-            <button
-              key={band}
-              type="button"
-              onClick={() => toggleBand(band)}
-              title={BAND_RANGES[band]}
-              aria-pressed={filters.bands.includes(band)}
-              className={cn(chip(filters.bands.includes(band)), 'px-2')}
+          {products.length > 0 && (
+            <Select
+              value={filters.produit || ALL_VALUE}
+              onValueChange={v =>
+                onChange({
+                  produit: v === ALL_VALUE ? '' : v,
+                  ...(v === ALL_VALUE ? { accepte: false } : {}),
+                })
+              }
             >
-              <span className={cn('h-2.5 w-2.5 rounded-full', BAND_META[band].dot)} />
-            </button>
-          ))}
+              <SelectTrigger
+                className={cn('w-auto', filters.produit && 'border-primary/30 text-primary')}
+              >
+                <Package className="mr-2 h-4 w-4" />
+                <SelectValue placeholder="Produit..." />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ALL_VALUE}>Tous les produits</SelectItem>
+                {products.map(p => (
+                  <SelectItem key={p.key} value={p.key}>
+                    {p.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+          {filters.produit && (
+            <ToggleFilter
+              active={filters.accepte}
+              icon={<ClipboardCheck />}
+              onClick={() => onChange({ accepte: !filters.accepte })}
+              title="Sinon : produit proposé (présenté, refusé ou accepté)"
+            >
+              Accepté seulement
+            </ToggleFilter>
+          )}
+
+          <ToggleFilter
+            active={filters.favoris}
+            icon={<Star />}
+            onClick={() => onChange({ favoris: !filters.favoris })}
+          >
+            Favoris
+          </ToggleFilter>
+          <ToggleFilter
+            active={filters.nonAnalyses}
+            icon={<Sparkles />}
+            onClick={() => onChange({ nonAnalyses: !filters.nonAnalyses })}
+          >
+            Non analysés
+          </ToggleFilter>
+
+          <div className="flex items-center gap-1" role="group" aria-label="Bande de score">
+            {BAND_FILTERS.map(band => {
+              const active = filters.bands.includes(band)
+              const meta = BAND_META[band]
+              return (
+                <button
+                  key={band}
+                  type="button"
+                  onClick={() => toggleBand(band)}
+                  title={BAND_RANGES[band]}
+                  aria-pressed={active}
+                  className={cn(
+                    'inline-flex h-9 items-center gap-1.5 rounded-md border px-2.5 text-xs font-medium tabular-nums transition-colors',
+                    active
+                      ? cn(meta.pill, 'border-current')
+                      : 'border-input bg-background text-muted-foreground hover:bg-muted/60 hover:text-foreground'
+                  )}
+                >
+                  <span className={cn('h-2 w-2 rounded-full', meta.dot)} />
+                  {BAND_SHORT[band]}
+                </button>
+              )
+            })}
+          </div>
+
+          {count > 0 && (
+            <>
+              <Badge variant="outline" className="bg-background">
+                {count} filtre{count > 1 ? 's' : ''}
+              </Badge>
+              <Button variant="ghost" size="sm" className="gap-1.5" onClick={reset}>
+                <X className="h-3.5 w-3.5" />
+                Réinitialiser
+              </Button>
+            </>
+          )}
         </div>
 
-        {products.length > 0 && (
-          <Select
-            value={filters.produit || ALL_VALUE}
-            onValueChange={v =>
-              onChange({
-                produit: v === ALL_VALUE ? '' : v,
-                ...(v === ALL_VALUE ? { accepte: false } : {}),
-              })
-            }
-          >
-            <SelectTrigger className="h-8 w-[180px] text-sm">
-              <SelectValue placeholder="Produit" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={ALL_VALUE}>Tous les produits</SelectItem>
-              {products.map(p => (
-                <SelectItem key={p.key} value={p.key}>
-                  {p.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        )}
-        {filters.produit && (
-          <button
-            type="button"
-            className={chip(filters.accepte)}
-            onClick={() => onChange({ accepte: !filters.accepte })}
-            title="Sinon : produit proposé (présenté, refusé ou accepté)"
-          >
-            Accepté seulement
-          </button>
-        )}
-
-        {isFiltered && (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-8 text-muted-foreground"
-            onClick={() =>
-              onChange({
-                ...DEFAULT_FILTERS,
-                period: filters.period,
-                from: filters.from,
-                to: filters.to,
-                group: filters.group,
-              })
-            }
-          >
-            <X className="h-3.5 w-3.5" />
-            Réinitialiser
-          </Button>
-        )}
-
-        <div className="ml-auto inline-flex rounded-md border border-border/60 p-0.5">
-          {GROUP_BY.map(g => (
-            <button
-              key={g.value}
-              type="button"
-              onClick={() => onChange({ group: g.value })}
-              className={cn(
-                'h-7 rounded px-2.5 text-sm transition-colors',
-                filters.group === g.value
-                  ? 'bg-muted font-medium text-foreground'
-                  : 'text-muted-foreground hover:bg-muted/60'
-              )}
+        {/* Contrôle segmenté, comme Grille / Liste des Bâtiments. */}
+        <div className="inline-flex items-center self-start rounded-md border border-input p-0.5 lg:shrink-0 lg:self-auto">
+          {VIEWS.map(({ value, label, icon }) => (
+            <Button
+              key={value}
+              variant={filters.group === value ? 'default' : 'ghost'}
+              size="sm"
+              onClick={() => onChange({ group: value })}
+              className="h-7 gap-1.5"
             >
-              {g.label}
-            </button>
+              {icon}
+              {label}
+            </Button>
           ))}
         </div>
       </div>

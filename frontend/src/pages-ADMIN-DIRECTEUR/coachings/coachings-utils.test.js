@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   DEFAULT_FILTERS,
+  activeFiltersCount,
   normalizeAddress,
   rowSubject,
   aggregate,
@@ -240,5 +241,23 @@ describe('intervenant sur la ligne', () => {
   it('affiché quand la carte en compte plusieurs, et en liste', () => {
     expect(rowSubject(r, 'batiment', ['Léa Martin', 'Paul Roy'])).toBe('Léa Martin')
     expect(rowSubject(r, 'liste')).toBe('Léa Martin')
+  })
+})
+
+describe('compteur de filtres', () => {
+  it('ignore période et vue, compte chaque filtre une fois', () => {
+    expect(
+      activeFiltersCount({ ...DEFAULT_FILTERS, period: 'today', group: 'liste', q: '  ' })
+    ).toBe(0)
+    expect(
+      activeFiltersCount({
+        ...DEFAULT_FILTERS,
+        subject: 'commercial:3',
+        statuts: ['REFUS', 'ARGUMENTE'],
+        bands: ['maitrise'],
+        favoris: true,
+        immeubles: [7, 9],
+      })
+    ).toBe(5)
   })
 })

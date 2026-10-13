@@ -94,6 +94,21 @@ export function serializeFilters(filters, selection = '') {
   return params
 }
 
+/** Filtres actifs (période et vue exclues), pour le compteur et « Réinitialiser ». */
+export function activeFiltersCount(filters) {
+  return [
+    filters.subject,
+    filters.q.trim(),
+    filters.immeubles.length,
+    filters.favoris,
+    filters.nonAnalyses,
+    filters.statuts.length,
+    filters.resultats.length,
+    filters.bands.length,
+    filters.produit,
+  ].filter(Boolean).length
+}
+
 const startOfDay = d => new Date(d.getFullYear(), d.getMonth(), d.getDate())
 const endOfDay = d => new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999)
 const addDays = (d, n) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + n)
