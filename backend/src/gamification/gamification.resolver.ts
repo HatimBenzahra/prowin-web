@@ -1,4 +1,4 @@
-import { Resolver, Query, Mutation, Args, Int, Context } from '@nestjs/graphql';
+import { Resolver, Query, Mutation, Args, Int } from '@nestjs/graphql';
 import { UseGuards } from '@nestjs/common';
 import {
   WinleadPlusUser,
@@ -32,6 +32,7 @@ import { BadgeService } from './badge.service';
 import { RankingService } from './ranking.service';
 import { ContratService } from './contrat.service';
 import { EvaluationService } from './evaluation.service';
+import { WinleadPlusAuthService } from './winleadplus-auth.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -47,6 +48,7 @@ export class GamificationResolver {
     private readonly rankingService: RankingService,
     private readonly contratService: ContratService,
     private readonly evaluationService: EvaluationService,
+    private readonly winleadPlusAuth: WinleadPlusAuthService,
   ) {}
 
   // ============================================================================
@@ -56,18 +58,16 @@ export class GamificationResolver {
   @Query(() => [WinleadPlusUser], { name: 'winleadPlusUsers' })
   @Roles('admin', 'directeur')
   async getWinleadPlusUsers(
-    @Context() context: any,
   ): Promise<WinleadPlusUser[]> {
-    const token = this.extractToken(context);
+    const token = await this.winleadPlusAuth.getServiceToken();
     return this.mappingService.getWinleadPlusUsers(token);
   }
 
   @Query(() => [MappingSuggestion], { name: 'mappingSuggestions' })
   @Roles('admin', 'directeur')
   async getMappingSuggestions(
-    @Context() context: any,
   ): Promise<MappingSuggestion[]> {
-    const token = this.extractToken(context);
+    const token = await this.winleadPlusAuth.getServiceToken();
     return this.mappingService.getMappingSuggestions(token);
   }
 
@@ -128,9 +128,8 @@ export class GamificationResolver {
   @Mutation(() => SyncOffresResult, { name: 'syncOffres' })
   @Roles('admin', 'directeur')
   async syncOffres(
-    @Context() context: any,
   ): Promise<SyncOffresResult> {
-    const token = this.extractToken(context);
+    const token = await this.winleadPlusAuth.getServiceToken();
     const result = await this.offreService.syncOffres(token);
     return {
       success: true,
@@ -232,14 +231,6 @@ export class GamificationResolver {
   // ============================================================================
   // HELPERS
   // ============================================================================
-
-  private extractToken(context: any): string {
-    const authHeader = context.req?.headers?.authorization;
-    if (!authHeader) {
-      throw new Error('Token manquant dans le header Authorization');
-    }
-    return authHeader.replace('Bearer ', '');
-  }
 
   /** Convertit un BadgeDefinition Prisma (null) → GraphQL (undefined) */
   private toBadgeType(b: any): BadgeDefinitionType {
@@ -377,14 +368,13 @@ export class GamificationResolver {
       defaultValue: [ContractRankingStatus.VALIDE],
     })
     contractStatuses: ContractRankingStatus[],
-    @Context() context: any,
   ): Promise<RankSnapshotType[]> {
     const snapshots = await this.rankingService.getRanking(
       period,
       periodKey,
       includeContratFinie,
       contractStatuses,
-      this.extractToken(context),
+      await this.winleadPlusAuth.getServiceToken(),
     );
     return snapshots.map((s) => {
       const tier = this.rankingService.resolvePointTier(s.points);
@@ -542,9 +532,8 @@ export class GamificationResolver {
   @Mutation(() => SyncContratsResult, { name: 'syncContrats' })
   @Roles('admin', 'directeur')
   async syncContrats(
-    @Context() context: any,
   ): Promise<SyncContratsResult> {
-    const token = this.extractToken(context);
+    const token = await this.winleadPlusAuth.getServiceToken();
     const result = await this.contratService.syncContrats(token);
     return {
       success: true,
@@ -566,12 +555,11 @@ export class GamificationResolver {
       defaultValue: [ContractRankingStatus.VALIDE],
     })
     contractStatuses: ContractRankingStatus[],
-    @Context() context: any,
   ): Promise<ContratValideType[]> {
     const contrats = await this.contratService.getContratsByCommercial(
       commercialId,
       contractStatuses,
-      this.extractToken(context),
+      await this.winleadPlusAuth.getServiceToken(),
     );
     return contrats.map((c) => this.toContratType(c));
   }
@@ -586,12 +574,11 @@ export class GamificationResolver {
       defaultValue: [ContractRankingStatus.VALIDE],
     })
     contractStatuses: ContractRankingStatus[],
-    @Context() context: any,
   ): Promise<ContratValideType[]> {
     const contrats = await this.contratService.getContratsByManager(
       managerId,
       contractStatuses,
-      this.extractToken(context),
+      await this.winleadPlusAuth.getServiceToken(),
     );
     return contrats.map((c) => this.toContratType(c));
   }
