@@ -23,7 +23,7 @@ export const BAND_FILTERS = ['maitrise', 'correct', 'coaching', 'insuffisant', '
 const SALE_RESULTS = ['VENTE', 'VENTE_MULTI_PRODUITS']
 
 export const DEFAULT_FILTERS = {
-  period: '7d',
+  period: '30d',
   from: '',
   to: '',
   subject: '', // "commercial:3" | "manager:2"

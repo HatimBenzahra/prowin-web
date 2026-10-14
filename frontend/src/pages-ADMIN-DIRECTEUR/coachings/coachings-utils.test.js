@@ -69,7 +69,7 @@ describe('filtres ⇄ URL', () => {
       )
     )
     expect(f).toMatchObject({
-      period: '7d',
+      period: DEFAULT_FILTERS.period,
       group: 'batiment',
       subject: '',
       immeubles: [],
