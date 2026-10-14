@@ -121,12 +121,14 @@ export class SnapshotBuilderService {
       orderBy: { createdAt: 'asc' },
     });
 
-    // Contrats validés (back-office) — periodDay pour la ventilation par jour.
+    // Contrats validés (back-office), tout l'historique WinLead+ : le bloc `contrats`
+    // n'en garde que la période coachée, l'historique n'est donné qu'en contexte.
     const contrats = await this.prisma.contratValide.findMany({
       where: activityWhere,
       select: {
+        // Un client signe un pack de plusieurs offres : 1 vente = 1 prospect, N contrats.
+        externalProspectId: true,
         periodDay: true,
-        periodMonth: true,
         dateValidation: true,
         offre: {
           select: {
@@ -293,9 +295,13 @@ export class SnapshotBuilderService {
     const nbJoursActifs = jourMap.size;
     let totalPortesJours = 0;
     let totalEvenements = 0;
-    for (const e of jourMap.values()) {
+    // Contrats des seuls jours de terrain ProWin : l'historique WinLead+ remonte
+    // avant l'arrivée sur ProWin et fausserait la moyenne par jour actif.
+    let contratsJoursActifs = 0;
+    for (const [day, e] of jourMap) {
       totalPortesJours += e.portes.size;
       totalEvenements += e.evenements;
+      contratsJoursActifs += contratsParDay[day] ?? 0;
     }
     const conv = {
       contratsSignes: 0,
@@ -329,7 +335,7 @@ export class SnapshotBuilderService {
         ? Math.round(dureeSumEvt / dureeNEvt)
         : null,
       contratsParJourActif: nbJoursActifs
-        ? Math.round(contrats.length / nbJoursActifs)
+        ? round(contratsJoursActifs / nbJoursActifs)
         : null,
       conversion: {
         ...conv,
@@ -435,7 +441,15 @@ export class SnapshotBuilderService {
       })),
     );
 
-    // --- Contrats : `points` = valeur de l'offre, pour juger le mix par VALEUR ---
+    // --- Contrats de la période coachée : ventes, contrats et points gamification ---
+    // Même fenêtre que les sessions, sinon le bilan compare N jours de coaching à
+    // des mois d'historique WinLead+.
+    const inPeriod = (day: string) =>
+      (!dayStart || day >= dayStart) && (!dayEnd || day <= dayEnd);
+    const contratDay = (c: (typeof contrats)[number]) =>
+      c.periodDay ?? localDayKey(c.dateValidation);
+    const contratsPeriode = contrats.filter((c) => inPeriod(contratDay(c)));
+
     const parTypeMap = new Map<
       string,
       {
@@ -443,25 +457,41 @@ export class SnapshotBuilderService {
         offre: string;
         count: number;
         pointsUnite: number;
-        valeurTotale: number;
+        pointsTotal: number;
       }
     >();
-    const parMois: Record<string, number> = {};
-    let valeurTotale = 0;
-    for (const c of contrats) {
+    let pointsTotal = 0;
+    let sansOffre = 0;
+    for (const c of contratsPeriode) {
+      if (!c.offre) sansOffre++;
       const categorie = c.offre?.categorie ?? 'Inconnu';
       const offre = c.offre?.nom ?? c.offre?.badgeProductKey ?? 'Inconnu';
       const pts = c.offre?.points ?? 0;
       const key = `${categorie}|${offre}`;
       const cur =
         parTypeMap.get(key) ??
-        { categorie, offre, count: 0, pointsUnite: pts, valeurTotale: 0 };
+        { categorie, offre, count: 0, pointsUnite: pts, pointsTotal: 0 };
       cur.count++;
-      cur.valeurTotale += pts;
+      cur.pointsTotal += pts;
       parTypeMap.set(key, cur);
-      valeurTotale += pts;
-      if (c.periodMonth) parMois[c.periodMonth] = (parMois[c.periodMonth] ?? 0) + 1;
+      pointsTotal += pts;
     }
+    const ventesPeriode = new Set(contratsPeriode.map((c) => c.externalProspectId)).size;
+
+    // Signatures déclarées sur le terrain pendant la période : portes passées en
+    // CONTRAT_SIGNE, une porte = un client, comparable aux ventes validées.
+    const portesSigneesPeriode = new Set<number>();
+    for (const h of history) {
+      if (h.statut === 'CONTRAT_SIGNE' && h.porteId != null && inPeriod(localDayKey(h.createdAt))) {
+        portesSigneesPeriode.add(h.porteId);
+      }
+    }
+    const signesDeclares = portesSigneesPeriode.size;
+
+    const premierContrat = contrats.reduce<Date | null>(
+      (m, c) => (!m || c.dateValidation < m ? c.dateValidation : m),
+      null,
+    );
 
     // --- Zone de terrain (assignée au sujet + terrain réel coaché) -----------
     const zoneEnCours = await this.prisma.zoneEnCours.findFirst({
@@ -522,7 +552,10 @@ export class SnapshotBuilderService {
         }),
         this.prisma.contratValide.groupBy({
           by: ['commercialId'],
-          where: { commercialId: { in: teamIds } },
+          where: {
+            commercialId: { in: teamIds },
+            ...(dayStart && dayEnd ? { periodDay: { gte: dayStart, lte: dayEnd } } : {}),
+          },
           _count: { _all: true },
         }),
         this.prisma.coachingAnalysis.aggregate({
@@ -597,21 +630,27 @@ export class SnapshotBuilderService {
       },
       sessions,
       contrats: {
-        signesDeclares: statutsGlobal['CONTRAT_SIGNE'] ?? 0,
-        valides: contrats.length,
-        tauxValidation: statutsGlobal['CONTRAT_SIGNE']
-          ? Math.round((contrats.length / statutsGlobal['CONTRAT_SIGNE']) * 100) / 100
+        // Tout ce bloc porte sur la période coachée (mêmes bornes que les sessions).
+        periode: { debut: dayStart, fin: dayEnd },
+        ventesValidees: ventesPeriode,
+        contratsValides: contratsPeriode.length,
+        signesDeclares,
+        tauxValidation: signesDeclares
+          ? Math.round((ventesPeriode / signesDeclares) * 100) / 100
           : null,
-        // Valeur totale (somme des points d'offre) — les offres à points élevés
-        // "valent" plus (barème gamification). Mix trié par valeur décroissante.
-        valeurTotale,
-        valeurMoyenne: contrats.length
-          ? Math.round((valeurTotale / contrats.length) * 10) / 10
-          : null,
+        // Points gamification (barème d'offre), pas des euros. Mix trié par points.
+        pointsTotal,
+        pointsMoyenParVente: ventesPeriode ? round(pointsTotal / ventesPeriode) : null,
+        contratsSansOffre: sansOffre,
         parType: [...parTypeMap.values()].sort(
-          (a, b) => b.valeurTotale - a.valeurTotale || b.count - a.count,
+          (a, b) => b.pointsTotal - a.pointsTotal || b.count - a.count,
         ),
-        parMois,
+        // Contexte uniquement : historique WinLead+, antérieur à ProWin le cas échéant.
+        historique: {
+          depuis: premierContrat ? localDayKey(premierContrat) : null,
+          ventesValidees: new Set(contrats.map((c) => c.externalProspectId)).size,
+          contratsValides: contrats.length,
+        },
       },
       zone: {
         zoneAssignee: zoneEnCours?.zone?.nom ?? null,
