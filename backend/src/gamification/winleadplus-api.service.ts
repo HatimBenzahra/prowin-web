@@ -30,7 +30,8 @@ export class WinleadPlusApiService {
   private readonly logger = new Logger(WinleadPlusApiService.name);
 
   // ============================================================================
-  // USERS — Récupérer les users WinLead+ (COMMERCIAL + MANAGER uniquement)
+  // USERS — Récupérer les users WinLead+ (COMMERCIAL, MANAGER et ADMIN : un admin
+  // peut signer des contrats et avoir un compte commercial ProWin)
   // ============================================================================
 
   async getUsers(token: string): Promise<WinleadPlusUser[]> {
@@ -40,7 +41,7 @@ export class WinleadPlusApiService {
       return items
         .filter(
           (u) =>
-            ['COMMERCIAL', 'MANAGER'].includes(u.role) && u.isActive === true,
+            ['COMMERCIAL', 'MANAGER', 'ADMIN'].includes(u.role) && u.isActive === true,
         )
         .map((u) => ({
           id: u.id,

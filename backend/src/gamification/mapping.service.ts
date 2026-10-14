@@ -40,12 +40,13 @@ export class MappingService {
 
     const suggestions: MappingSuggestion[] = [];
 
-    const winleadCommercials = winleadUsers.filter((u) => u.role === 'COMMERCIAL');
+    // Les admins WinLead+ signent aussi : candidats pour les deux types.
+    const winleadCommercials = winleadUsers.filter((u) => ['COMMERCIAL', 'ADMIN'].includes(u.role));
     for (const commercial of commercials) {
       suggestions.push(this.buildSuggestion(commercial, 'COMMERCIAL', winleadCommercials));
     }
 
-    const winleadManagers = winleadUsers.filter((u) => u.role === 'MANAGER');
+    const winleadManagers = winleadUsers.filter((u) => ['MANAGER', 'ADMIN'].includes(u.role));
     for (const manager of managers) {
       suggestions.push(this.buildSuggestion(manager, 'MANAGER', winleadManagers));
     }
@@ -150,7 +151,7 @@ export class MappingService {
       };
     }
 
-    const bestMatch = this.findBestMatch(prowinUser, winleadUsers);
+    const bestMatch = this.findBestMatch(prowinUser, winleadUsers, type);
 
     return {
       prowinId: prowinUser.id,
@@ -170,6 +171,7 @@ export class MappingService {
   private findBestMatch(
     prowinUser: { nom: string; prenom: string; email: string | null },
     winleadUsers: WinleadPlusUser[],
+    type: string,
   ): { user: WinleadPlusUser; confidence: number } | null {
     const prowinNom = this.normalize(prowinUser.nom);
     const prowinPrenom = this.normalize(prowinUser.prenom);
@@ -202,8 +204,12 @@ export class MappingService {
         confidence = 95;
       }
       //la condition ajoute pour un utilisateur qui a le compte gmail dans prowin et a 2 comptes gmail et winlead dans winlead plus
+      // À égalité, le compte du même rôle l'emporte sur un compte admin homonyme.
+      const sameRole = (u: WinleadPlusUser | null) => u?.role === type;
       if (confidence > bestConfidence ||
-          (confidence === bestConfidence && wUser.email?.endsWith('@winleadplus.com'))) {
+          (confidence === bestConfidence && sameRole(wUser) && !sameRole(bestMatch)) ||
+          (confidence === bestConfidence && sameRole(wUser) === sameRole(bestMatch) &&
+            wUser.email?.endsWith('@winleadplus.com'))) {
         bestConfidence = confidence;
         bestMatch = wUser;
       }
