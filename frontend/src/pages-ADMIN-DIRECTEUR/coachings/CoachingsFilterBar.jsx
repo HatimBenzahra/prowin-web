@@ -244,7 +244,7 @@ export default function CoachingsFilterBar({
             <SelectValue placeholder="Commercial..." />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value={ALL_VALUE}>Tous les commerciaux</SelectItem>
+            <SelectItem value={ALL_VALUE}>Tous</SelectItem>
             {subjects.map(s => (
               <SelectItem
                 key={`${s.subjectRole}-${s.subjectId}`}

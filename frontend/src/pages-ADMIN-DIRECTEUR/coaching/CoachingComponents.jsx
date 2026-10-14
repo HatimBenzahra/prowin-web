@@ -38,7 +38,7 @@ export const QUALITY_META = {
 export function BandPill({ score, band, className }) {
   const meta = BAND_META[scoreBand(score, band)]
   return (
-    <span className={cn('inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium', meta.pill, className)}>
+    <span className={cn('inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium', meta.pill, className)}>
       <span className={cn('h-1.5 w-1.5 rounded-full', meta.dot)} />
       {meta.label}
     </span>
@@ -66,7 +66,7 @@ export const SEVERITY_META = {
 export function SeverityPill({ severity }) {
   const meta = SEVERITY_META[severity] || SEVERITY_META.modere
   return (
-    <span className={cn('inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium', meta.pill)}>
+    <span className={cn('inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium', meta.pill)}>
       <span className={cn('h-1.5 w-1.5 rounded-full', meta.dot)} />
       {meta.label}
     </span>
@@ -76,7 +76,7 @@ export function SeverityPill({ severity }) {
 export function StatusPill({ status }) {
   const meta = STATUS_META[status] || STATUS_META.PENDING
   return (
-    <span className={cn('inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium', meta.pill)}>
+    <span className={cn('inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium', meta.pill)}>
       <span className={cn('h-1.5 w-1.5 rounded-full', meta.dot)} />
       {meta.label}
     </span>
@@ -158,9 +158,12 @@ export const isInProgress = (status) => IN_PROGRESS_STATUSES.includes(status)
 
 export function formatDuration(sec) {
   if (typeof sec !== 'number' || !Number.isFinite(sec) || sec <= 0) return '—'
-  const m = Math.floor(sec / 60)
-  const s = Math.round(sec % 60)
-  return `${m}:${String(s).padStart(2, '0')}`
+  // Arrondi d'abord : 59,6 s donne 1:00, pas 0:60. Au-delà d'une heure, h:mm:ss.
+  const total = Math.round(sec)
+  const h = Math.floor(total / 3600)
+  const m = Math.floor((total % 3600) / 60)
+  const s = String(total % 60).padStart(2, '0')
+  return h ? `${h}:${String(m).padStart(2, '0')}:${s}` : `${m}:${s}`
 }
 
 // Statut de la porte (résultat de l'échange) — couleur sémantique via pastille.
@@ -174,7 +177,16 @@ export const PORTE_STATUT_META = {
   NON_VISITE: { label: 'Non visité', dot: 'bg-slate-300', pill: 'bg-slate-500/10 text-muted-foreground' },
 }
 
-export function PorteStatutPill({ statut }) {
+/**
+ * `tone` : « color » (pastille teintée), « neutral » (seul le point est coloré : la
+ * couleur forte reste au score voisin), « dark » (sur un en-tête foncé).
+ */
+const PILL_TONES = {
+  neutral: 'bg-muted text-foreground/80',
+  dark: 'bg-white/15 text-sidebar-foreground',
+}
+
+export function PorteStatutPill({ statut, tone = 'color' }) {
   if (!statut) return <span className="text-xs text-muted-foreground">—</span>
   const meta = PORTE_STATUT_META[statut] || {
     label: statut,
@@ -182,7 +194,12 @@ export function PorteStatutPill({ statut }) {
     pill: 'bg-slate-500/10 text-slate-600',
   }
   return (
-    <span className={cn('inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium', meta.pill)}>
+    <span
+      className={cn(
+        'inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium',
+        PILL_TONES[tone] ?? meta.pill
+      )}
+    >
       <span className={cn('h-1.5 w-1.5 rounded-full', meta.dot)} />
       {meta.label}
     </span>

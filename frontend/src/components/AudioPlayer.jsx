@@ -376,9 +376,12 @@ function AudioPlayer({ src, title, onDownload, onWavesurferReady, compact = fals
 
   const formatTime = useCallback(time => {
     if (!time || isNaN(time)) return '0:00'
-    const m = Math.floor(time / 60)
+    const h = Math.floor(time / 3600)
+    const m = Math.floor((time % 3600) / 60)
     const s = Math.floor(time % 60)
-    return `${m}:${s.toString().padStart(2, '0')}`
+      .toString()
+      .padStart(2, '0')
+    return h ? `${h}:${m.toString().padStart(2, '0')}:${s}` : `${m}:${s}`
   }, [])
 
   return (
@@ -386,27 +389,29 @@ function AudioPlayer({ src, title, onDownload, onWavesurferReady, compact = fals
       ref={containerRef}
       className={`bg-card text-card-foreground rounded-lg w-full ${compact ? 'p-2 space-y-2' : 'p-3 sm:p-4 space-y-3'}`}
     >
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-        <div className="flex-1 min-w-0">
-          <h4 className="font-semibold text-card-foreground truncate text-sm sm:text-base">
-            {title}
-          </h4>
-          <div className="flex items-center gap-2 text-xs sm:text-sm text-muted-foreground tabular-nums">
-            <span>{formatTime(currentTime)}</span>
-            <span>/</span>
-            <span>{formatTime(duration)}</span>
-            {playbackSpeed !== 1 && (
-              <span className="text-primary font-medium">{playbackSpeed}x</span>
-            )}
+      {/* Header — en compact, le temps passe sur la ligne des commandes. */}
+      {!compact && (
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div className="flex-1 min-w-0">
+            <h4 className="font-semibold text-card-foreground truncate text-sm sm:text-base">
+              {title}
+            </h4>
+            <div className="flex items-center gap-2 text-xs sm:text-sm text-muted-foreground tabular-nums">
+              <span>{formatTime(currentTime)}</span>
+              <span>/</span>
+              <span>{formatTime(duration)}</span>
+              {playbackSpeed !== 1 && (
+                <span className="text-primary font-medium">{playbackSpeed}x</span>
+              )}
+            </div>
           </div>
+          {onDownload && (
+            <Button variant="outline" size="sm" onClick={onDownload} className="shrink-0">
+              <Download className="w-4 h-4" />
+            </Button>
+          )}
         </div>
-        {onDownload && (
-          <Button variant="outline" size="sm" onClick={onDownload} className="shrink-0">
-            <Download className="w-4 h-4" />
-          </Button>
-        )}
-      </div>
+      )}
 
       {/* Waveform */}
       <div className="w-full relative">
@@ -464,6 +469,11 @@ function AudioPlayer({ src, title, onDownload, onWavesurferReady, compact = fals
           >
             {playbackSpeed}x
           </Button>
+          {compact && (
+            <span className="ml-2 text-xs text-muted-foreground tabular-nums">
+              {formatTime(currentTime)} / {formatTime(duration)}
+            </span>
+          )}
         </div>
 
         {/* Volume */}

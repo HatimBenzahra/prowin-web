@@ -34,7 +34,7 @@ export function ScorePill({ score, band, notEvaluable = false, className }) {
           className
         )}
       >
-        ⚪ N/É
+        N/É
       </span>
     )
   if (typeof score !== 'number') return null
@@ -139,9 +139,15 @@ function DoorRow({
       role="option"
       aria-selected={selected}
       data-s3key={row.s3Key}
+      title={
+        a?.visitResult
+          ? `Résultat de visite selon l’IA : ${VISIT_RESULT_LABELS[a.visitResult] || a.visitResult}`
+          : undefined
+      }
       onClick={() => onSelect(row.s3Key)}
       className={cn(
-        'group flex cursor-pointer items-center gap-2 border-l-2 px-3 py-2 text-sm transition-colors',
+        // scroll-mt : la ligne sélectionnée ne passe pas sous les en-têtes épinglés.
+        'group flex scroll-mt-24 cursor-pointer items-center gap-2 border-l-2 px-3 py-2 text-sm transition-colors',
         selected ? 'border-l-primary bg-primary/10' : 'border-l-transparent hover:bg-muted/50',
         // Archivé : présent, mais en retrait.
         row.archived && !selected && 'text-muted-foreground opacity-70'
@@ -158,45 +164,59 @@ function DoorRow({
           </span>
         </div>
         <div className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
-          <PorteStatutPill statut={row.statutPorte} />
-          {a?.visitResult && (
-            <span className="truncate" title="Résultat de visite selon l’IA">
-              IA : {VISIT_RESULT_LABELS[a.visitResult] || a.visitResult}
+          <PorteStatutPill statut={row.statutPorte} tone="neutral" />
+          {groupBy !== 'batiment' && <span className="truncate">{row.adresse}</span>}
+          {subject && (
+            <span className="truncate">
+              {groupBy !== 'batiment' && '· '}
+              {subject}
             </span>
           )}
-          {groupBy !== 'batiment' && <span className="truncate">· {row.adresse}</span>}
-          {subject && <span className="truncate">· {subject}</span>}
         </div>
       </div>
       <span className="flex w-20 shrink-0 justify-end">
         <AnalysisCell row={row} launching={launching} onLaunch={onLaunch} />
       </span>
-      <span className="w-10 shrink-0 text-right text-xs tabular-nums text-muted-foreground">
-        {formatDuration(row.durationSec)}
+      {/*
+       * Durée et archivage partagent une colonne : sur grand écran l'icône remplace la
+       * durée au survol (toujours là sur un archivé) ; au doigt, elle reste à côté.
+       */}
+      <span className="relative flex shrink-0 items-center justify-end gap-1">
+        <span
+          className={cn(
+            'w-12 text-right text-xs tabular-nums text-muted-foreground',
+            row.archived ? 'lg:invisible' : 'lg:group-hover:invisible'
+          )}
+        >
+          {formatDuration(row.durationSec)}
+        </span>
+        <button
+          type="button"
+          onClick={e => {
+            e.stopPropagation()
+            onToggleArchive(row)
+          }}
+          className={cn(
+            'shrink-0 rounded p-0.5 text-muted-foreground/60 hover:bg-muted hover:text-foreground lg:absolute lg:right-0 focus-visible:opacity-100',
+            !row.archived && 'lg:opacity-0 lg:group-hover:opacity-100'
+          )}
+          title={row.archived ? 'Désarchiver' : 'Masquer cet enregistrement (non intéressant)'}
+          aria-label={row.archived ? 'Désarchiver' : 'Archiver'}
+        >
+          {row.archived ? <ArchiveRestore className="h-4 w-4" /> : <Archive className="h-4 w-4" />}
+        </button>
       </span>
-      {/* Au survol sur grand écran ; toujours visible au doigt et sur un archivé. */}
-      <button
-        type="button"
-        onClick={e => {
-          e.stopPropagation()
-          onToggleArchive(row)
-        }}
-        className={cn(
-          'shrink-0 rounded p-0.5 text-muted-foreground/60 hover:bg-muted hover:text-foreground focus-visible:opacity-100',
-          !row.archived && !selected && 'lg:opacity-0 lg:group-hover:opacity-100'
-        )}
-        title={row.archived ? 'Désarchiver' : 'Masquer cet enregistrement (non intéressant)'}
-        aria-label={row.archived ? 'Désarchiver' : 'Archiver'}
-      >
-        {row.archived ? <ArchiveRestore className="h-4 w-4" /> : <Archive className="h-4 w-4" />}
-      </button>
       <button
         type="button"
         onClick={e => {
           e.stopPropagation()
           onToggleFavori(row)
         }}
-        className="shrink-0 rounded p-0.5 hover:bg-muted"
+        className={cn(
+          'shrink-0 rounded p-0.5 hover:bg-muted focus-visible:opacity-100',
+          // Une étoile vide n'apparaît qu'au survol ; un favori reste marqué.
+          !row.favori && !selected && 'lg:opacity-0 lg:group-hover:opacity-100'
+        )}
         title={row.favori ? 'Retirer des favoris' : 'Ajouter aux favoris'}
         aria-label={row.favori ? 'Retirer des favoris' : 'Ajouter aux favoris'}
       >
@@ -275,16 +295,12 @@ export default function CoachingsTree({
                 const open = !collapsed.has(group.key)
                 const flat = groupBy === 'liste'
                 return (
-                  <div
-                    key={group.key}
-                    className={cn(
-                      !flat && 'mx-3 my-3 overflow-hidden rounded-lg border bg-card shadow-sm'
-                    )}
-                  >
+                  <div key={group.key} className={cn(!flat && 'border-b last:border-b-0')}>
+                    {/* Sous-titre du bâtiment, épinglé sous l'en-tête du jour. */}
                     {!flat && (
                       <div
                         className={cn(
-                          'flex items-center gap-2 bg-muted/50 px-3 py-2',
+                          'sticky top-9 z-[5] flex items-center gap-2 bg-muted px-3 py-2',
                           open && 'border-b'
                         )}
                       >
@@ -333,7 +349,7 @@ export default function CoachingsTree({
                       </div>
                     )}
                     {(flat || open) && (
-                      <div className={cn(!flat && 'border-t')}>
+                      <div className="divide-y divide-border/50">
                         {group.rows.map(row => (
                           <DoorRow
                             key={row.s3Key}

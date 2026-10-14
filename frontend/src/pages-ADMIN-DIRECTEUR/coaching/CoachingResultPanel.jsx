@@ -115,8 +115,9 @@ function ListBlock({ icon: Icon, title, items, tone }) {
   const list = items || []
   return (
     <div className="rounded-lg border border-border/60 p-3">
-      <div className={cn('mb-2 flex items-center gap-1.5 text-sm font-medium', tone)}>
-        <Icon className="h-4 w-4" />
+      {/* La couleur reste sur l'icône : le titre se lit comme les autres. */}
+      <div className="mb-2 flex items-center gap-1.5 text-sm font-medium">
+        <Icon className={cn('h-4 w-4', tone)} />
         {title}
       </div>
       {list.length === 0 ? (
@@ -236,7 +237,8 @@ export default function CoachingResultPanel({
   const listsBlock = (analysis.strengths?.length ||
     analysis.improvements?.length ||
     analysis.recommendations?.length) > 0 && (
-    <div className="grid gap-3 sm:grid-cols-3">
+    // Dans le panneau d'écoute, trois colonnes étroites cassent le texte tous les trois mots.
+    <div className={cn('grid gap-3', !embedded && 'sm:grid-cols-3')}>
       <ListBlock icon={ThumbsUp} title="Forces" items={analysis.strengths} tone="text-green-600" />
       <ListBlock
         icon={TrendingUp}
@@ -248,7 +250,7 @@ export default function CoachingResultPanel({
         icon={Lightbulb}
         title="Recommandations"
         items={analysis.recommendations}
-        tone="text-indigo-600"
+        tone="text-primary"
       />
     </div>
   )

@@ -106,13 +106,13 @@ export default function CoachingsPanel({
 
   return (
     <div>
-      <div className="bg-sidebar p-4 pb-3 text-sidebar-foreground">
+      <div className="bg-sidebar px-4 py-3 text-sidebar-foreground">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <h2 className="truncate text-base font-semibold">
               {row?.adresse || meta.address || 'Enregistrement'}
             </h2>
-            <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-sidebar-foreground/75 [&>*+*]:before:mr-2 [&>*+*]:before:content-['·']">
+            <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-sidebar-foreground/75 [&>*+*]:before:mr-2 [&>*+*]:before:content-['·'] [&>*]:whitespace-nowrap">
               {row && (
                 <span className="font-medium text-sidebar-foreground">{porteLabel(row)}</span>
               )}
@@ -122,19 +122,19 @@ export default function CoachingsPanel({
                   {row.subjectName}
                 </span>
               )}
-              {date && <span>{formatDateTime(date)}</span>}
-              {row?.durationSec > 0 && (
+              {date && (
                 <span className="inline-flex items-center gap-1">
-                  <Clock className="h-3.5 w-3.5" />
-                  {formatDuration(row.durationSec)}
+                  {formatDateTime(date)}
+                  {row?.durationSec > 0 && (
+                    <>
+                      <Clock className="ml-1 h-3.5 w-3.5" />
+                      {formatDuration(row.durationSec)}
+                    </>
+                  )}
                 </span>
               )}
+              {row?.statutPorte && <PorteStatutPill statut={row.statutPorte} tone="dark" />}
             </div>
-            {row?.statutPorte && (
-              <div className="mt-2">
-                <PorteStatutPill statut={row.statutPorte} />
-              </div>
-            )}
           </div>
           <div className="flex shrink-0 items-center gap-1">
             {row && (
@@ -142,14 +142,11 @@ export default function CoachingsPanel({
                 variant="ghost"
                 size="sm"
                 onClick={() => onToggleFavori(row)}
-                className={cn(
-                  'border text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground',
-                  row.favori ? 'border-amber-400 text-amber-300' : 'border-sidebar-foreground/30'
-                )}
+                className="h-8 w-8 p-0 text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground"
+                title={row.favori ? 'Retirer des favoris' : 'Ajouter aux favoris'}
                 aria-label={row.favori ? 'Retirer des favoris' : 'Ajouter aux favoris'}
               >
                 <Star className={cn('h-4 w-4', row.favori && 'fill-amber-500 text-amber-500')} />
-                Favori
               </Button>
             )}
             {row && (
@@ -157,7 +154,8 @@ export default function CoachingsPanel({
                 variant="ghost"
                 size="sm"
                 onClick={() => onToggleArchive(row)}
-                className="border border-sidebar-foreground/30 text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground"
+                className="h-8 w-8 p-0 text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground"
+                aria-label={row.archived ? 'Désarchiver' : 'Archiver'}
                 title={
                   row.archived
                     ? 'Remettre dans le journal'
@@ -169,7 +167,6 @@ export default function CoachingsPanel({
                 ) : (
                   <Archive className="h-4 w-4" />
                 )}
-                {row.archived ? 'Désarchiver' : 'Archiver'}
               </Button>
             )}
             {onClose && (
@@ -188,7 +185,7 @@ export default function CoachingsPanel({
       </div>
 
       {/* Épinglé : les commandes restent en vue pendant qu'on clique les preuves. */}
-      <div className="sticky top-0 z-10 border-b bg-background px-4 pb-2">
+      <div className="sticky top-0 z-10 border-b bg-background px-2 py-1">
         {audioUrl ? (
           <AudioPlayer
             src={audioUrl}
@@ -201,7 +198,7 @@ export default function CoachingsPanel({
             Audio indisponible pour cet enregistrement.
           </p>
         ) : (
-          <Skeleton className="h-[96px] w-full" />
+          <Skeleton className="h-[92px] w-full" />
         )}
       </div>
 

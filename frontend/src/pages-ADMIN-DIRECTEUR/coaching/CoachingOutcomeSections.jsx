@@ -144,6 +144,15 @@ export function ScoreSummary({ analysis, actions }) {
     { label: 'Respect du plan', value: indicators?.respectPlan },
     { label: 'Conformité', value: indicators?.conformite },
   ]
+  // Seules les cases notées s'affichent ; ce que le référentiel ne note pas tient en une ligne.
+  const hasExecution = typeof executionScore === 'number'
+  const hasOutcome = typeof analysis.outcomeScore === 'number'
+  const notRated = [
+    !hasExecution && 'exécution',
+    !hasOutcome && outcomeScoreLabel(analysis) === NOT_RATED && 'résultat commercial',
+    !indicators && 'indicateurs',
+  ].filter(Boolean)
+  const cols = 1 + hasExecution + hasOutcome
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -158,7 +167,12 @@ export function ScoreSummary({ analysis, actions }) {
 
       {scored && (
         <>
-          <dl className="grid grid-cols-3 gap-2 text-center">
+          <dl
+            className={cn(
+              'grid gap-2 text-center',
+              cols === 3 ? 'grid-cols-3' : cols === 2 ? 'grid-cols-2' : 'grid-cols-1'
+            )}
+          >
             <div className="rounded-md bg-muted/40 px-2 py-1.5">
               <dt className="text-[11px] text-muted-foreground">Global</dt>
               <dd
@@ -171,26 +185,23 @@ export function ScoreSummary({ analysis, actions }) {
                 <span className="text-xs font-normal text-muted-foreground">/100</span>
               </dd>
             </div>
-            <div className="rounded-md bg-muted/40 px-2 py-1.5">
-              <dt className="text-[11px] text-muted-foreground">Exécution</dt>
-              <dd className="text-lg font-semibold tabular-nums">{pct(executionScore)}</dd>
-            </div>
-            <div className="rounded-md bg-muted/40 px-2 py-1.5">
-              <dt className="text-[11px] text-muted-foreground">Résultat commercial</dt>
-              <dd
-                className={cn(
-                  'tabular-nums',
-                  typeof analysis.outcomeScore === 'number'
-                    ? 'text-lg font-semibold'
-                    : 'pt-1 text-xs text-muted-foreground'
-                )}
-              >
-                {outcomeScoreLabel(analysis)}
-              </dd>
-            </div>
+            {hasExecution && (
+              <div className="rounded-md bg-muted/40 px-2 py-1.5">
+                <dt className="text-[11px] text-muted-foreground">Exécution</dt>
+                <dd className="text-lg font-semibold tabular-nums">{pct(executionScore)}</dd>
+              </div>
+            )}
+            {hasOutcome && (
+              <div className="rounded-md bg-muted/40 px-2 py-1.5">
+                <dt className="text-[11px] text-muted-foreground">Résultat commercial</dt>
+                <dd className="text-lg font-semibold tabular-nums">
+                  {outcomeScoreLabel(analysis)}
+                </dd>
+              </div>
+            )}
           </dl>
           <ScoreBar value={score} band={band} />
-          {indicators ? (
+          {indicators && (
             <div className="space-y-1.5">
               {rows.map(r => (
                 <div key={r.label} className="flex items-center gap-3 text-xs">
@@ -200,8 +211,11 @@ export function ScoreSummary({ analysis, actions }) {
                 </div>
               ))}
             </div>
-          ) : (
-            <p className="text-xs text-muted-foreground">Indicateurs : {NOT_RATED.toLowerCase()}</p>
+          )}
+          {notRated.length > 0 && (
+            <p className="text-xs text-muted-foreground">
+              Non notés par ce référentiel : {notRated.join(', ')}.
+            </p>
           )}
         </>
       )}
