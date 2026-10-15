@@ -5,17 +5,14 @@ import {
   UnauthorizedException,
   Logger,
 } from '@nestjs/common';
-import axios from 'axios';
 import { PrismaService } from '../../prisma.service';
+import { KeycloakAccessToken, verifyKeycloakToken } from '../keycloak-jwt';
 import { requestFromContext } from './request-from-context';
 
 @Injectable()
 export class JwtAuthGuard implements CanActivate {
   private readonly logger = new Logger(JwtAuthGuard.name);
-  private readonly KEYCLOAK_BASE_URL = process.env.KEYCLOAK_BASE_URL;
-  private readonly REALM = process.env.KEYCLOAK_REALM;
   private readonly CLIENT_ID = process.env.KEYCLOAK_CLIENT_ID as string;
-  private readonly CLIENT_SECRET = process.env.KEYCLOAK_CLIENT_SECRET as string;
 
   constructor(private readonly prisma: PrismaService) {}
 
@@ -41,6 +38,9 @@ export class JwtAuthGuard implements CanActivate {
       const groups = this.extractGroups(decodedToken);
       const role = this.mapGroupToRole(groups);
       const email = decodedToken.email || decodedToken.preferred_username;
+      if (!email) {
+        throw new UnauthorizedException('Email absent du token');
+      }
       const userRecord = await this.resolveUserRecord(email, role);
 
       if (!userRecord) {
@@ -57,9 +57,7 @@ export class JwtAuthGuard implements CanActivate {
         userId: userRecord.id,
       };
 
-      this.logger.debug(
-        `✅ Utilisateur authentifié: ${request.user.email} (${request.user.role})`,
-      );
+      this.logger.debug(`✅ Utilisateur authentifié: ${email} (${role})`);
 
       return true;
     } catch (error) {
@@ -68,26 +66,11 @@ export class JwtAuthGuard implements CanActivate {
     }
   }
 
-  private async validateTokenWithKeycloak(token: string): Promise<any> {
-    const params = new URLSearchParams();
-    params.append('client_id', this.CLIENT_ID);
-    params.append('client_secret', this.CLIENT_SECRET);
-    params.append('token', token);
-
+  private async validateTokenWithKeycloak(
+    token: string,
+  ): Promise<KeycloakAccessToken> {
     try {
-      const response = await axios.post(
-        `${this.KEYCLOAK_BASE_URL}/realms/${this.REALM}/protocol/openid-connect/token/introspect`,
-        params.toString(),
-        {
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        },
-      );
-
-      if (!response.data.active) {
-        throw new UnauthorizedException('Token expiré');
-      }
-
-      return response.data;
+      return await verifyKeycloakToken(token);
     } catch (error) {
       throw new UnauthorizedException('Impossible de valider le token');
     }

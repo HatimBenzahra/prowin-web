@@ -6,15 +6,14 @@ import {
   Logger,
 } from '@nestjs/common';
 import { GqlExecutionContext } from '@nestjs/graphql';
-import axios from 'axios';
+import {
+  KeycloakAccessToken,
+  verifyKeycloakToken,
+} from '../auth/keycloak-jwt';
 
 @Injectable()
 export class CreationCompteGuard implements CanActivate {
   private readonly logger = new Logger(CreationCompteGuard.name);
-  private readonly KEYCLOAK_BASE_URL = process.env.KEYCLOAK_BASE_URL;
-  private readonly REALM = process.env.KEYCLOAK_REALM;
-  private readonly CLIENT_ID = process.env.KEYCLOAK_CLIENT_ID!;
-  private readonly CLIENT_SECRET = process.env.KEYCLOAK_CLIENT_SECRET!;
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const gqlContext = GqlExecutionContext.create(context);
@@ -52,26 +51,11 @@ export class CreationCompteGuard implements CanActivate {
     }
   }
 
-  private async validateTokenWithKeycloak(token: string): Promise<any> {
-    const params = new URLSearchParams();
-    params.append('client_id', this.CLIENT_ID);
-    params.append('client_secret', this.CLIENT_SECRET);
-    params.append('token', token);
-
+  private async validateTokenWithKeycloak(
+    token: string,
+  ): Promise<KeycloakAccessToken> {
     try {
-      const response = await axios.post(
-        `${this.KEYCLOAK_BASE_URL}/realms/${this.REALM}/protocol/openid-connect/token/introspect`,
-        params.toString(),
-        {
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        },
-      );
-
-      if (!response.data.active) {
-        throw new UnauthorizedException('Token expiré');
-      }
-
-      return response.data;
+      return await verifyKeycloakToken(token);
     } catch (error) {
       throw new UnauthorizedException('Impossible de valider le token');
     }

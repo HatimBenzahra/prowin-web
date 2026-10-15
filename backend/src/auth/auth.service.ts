@@ -8,6 +8,7 @@ import axios, { AxiosResponse } from 'axios';
 import { LoginInput } from './dto/login.input';
 import { AuthResponse } from './auth.types';
 import { PrismaService } from '../prisma.service';
+import { KeycloakAccessToken, verifyKeycloakToken } from './keycloak-jwt';
 
 interface KeycloakTokenResponse {
   access_token: string;
@@ -210,31 +211,13 @@ export class AuthService {
   }
 
   /**
-   * Valide un token auprès de Keycloak via l'endpoint d'introspection
-   * Plus sûr que le simple décodage car Keycloak vérifie la signature
+   * Valide un token Keycloak localement (signature JWKS, expiration, émetteur)
    */
-  private async validateTokenWithKeycloak(token: string): Promise<any> {
-    const params = new URLSearchParams();
-    params.append('client_id', this.CLIENT_ID);
-    params.append('client_secret', this.CLIENT_SECRET);
-    params.append('token', token);
-
+  private async validateTokenWithKeycloak(
+    token: string,
+  ): Promise<KeycloakAccessToken> {
     try {
-      const response = await axios.post(
-        `${this.KEYCLOAK_BASE_URL}/realms/${this.REALM}/protocol/openid-connect/token/introspect`,
-        params.toString(),
-        {
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        },
-      );
-
-      // Vérifier que le token est actif
-      if (!response.data.active) {
-        throw new UnauthorizedException('Token invalide ou expiré');
-      }
-
-      // Keycloak retourne toutes les infos du token validé
-      return response.data;
+      return await verifyKeycloakToken(token);
     } catch (error) {
       Logger.error('AuthService', 'Erreur validation token Keycloak:', error);
       throw new UnauthorizedException('Impossible de valider le token');
