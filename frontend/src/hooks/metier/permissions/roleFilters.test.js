@@ -53,6 +53,7 @@ describe('ROLES and PERMISSIONS constants', () => {
         'statistics',
         'gps-tracking',
         'ecoutes',
+        'coaching',
         'gestion',
         'gamification',
         'kiosk',

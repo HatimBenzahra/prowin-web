@@ -2,7 +2,6 @@ import {
   test,
   expect,
   waitForPageLoad,
-  getTableRowCount,
   navigateToRowDetails,
   hasTableData,
 } from '../../fixtures/base.js'

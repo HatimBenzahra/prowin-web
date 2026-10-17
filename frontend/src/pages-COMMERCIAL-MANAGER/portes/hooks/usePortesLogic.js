@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect, useMemo } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { useParams, useOutletContext, useNavigate } from 'react-router-dom'
 import { useErrorToast } from '@/hooks/utils/ui/use-error-toast'
 import {
@@ -65,7 +65,6 @@ export function usePortesLogic() {
   const {
     data: portes,
     loading: portesLoading,
-    error: portesError,
     refetch: refetchPortes,
     loadMore,
     hasMore,

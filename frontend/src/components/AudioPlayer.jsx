@@ -87,9 +87,6 @@ function detectSpeechRegions(audioBuffer) {
   const fftOut = fft.createComplexArray()
   const fftIn = new Array(fftSize).fill(0)
 
-  const binHz = sampleRate / fftSize
-  const loIdx = Math.floor(300 / binHz)
-  const hiIdx = Math.ceil(3400 / binHz)
   const halfN = fftSize / 2
 
   const Edb = []

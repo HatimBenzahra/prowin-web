@@ -29,7 +29,7 @@ export default defineConfig([
       },
     },
     rules: {
-      'no-unused-vars': ['error', { varsIgnorePattern: '^[A-Z_]' }],
+      'no-unused-vars': ['error', { varsIgnorePattern: '^[A-Z_]', argsIgnorePattern: '^[A-Z_]' }],
       'prettier/prettier': 'warn',
       'react-refresh/only-export-components': [
         'warn',
@@ -42,9 +42,33 @@ export default defineConfig([
     // Les tests e2e et les fichiers de configuration tournent sous Node, pas dans le
     // navigateur : avec les seules globales navigateur, `process` était signalé comme
     // indéfini partout dans `e2e/`.
-    files: ['e2e/**/*.{js,mjs}', '*.config.js'],
+    files: ['e2e/**/*.{js,mjs}', '*.config.js', 'serve.js'],
     languageOptions: {
       globals: globals.node,
+    },
+  },
+  {
+    // Fixtures Playwright : le `use` de `base.extend` n'est pas un hook React.
+    files: ['e2e/**/*.{js,mjs}'],
+    rules: {
+      'react-hooks/rules-of-hooks': 'off',
+    },
+  },
+  {
+    // Vitest tourne avec `test.globals: true` (cf. vite.config.js).
+    files: ['src/**/*.test.{js,jsx}'],
+    languageOptions: {
+      globals: {
+        describe: 'readonly',
+        it: 'readonly',
+        test: 'readonly',
+        expect: 'readonly',
+        vi: 'readonly',
+        beforeAll: 'readonly',
+        beforeEach: 'readonly',
+        afterAll: 'readonly',
+        afterEach: 'readonly',
+      },
     },
   },
 ])
