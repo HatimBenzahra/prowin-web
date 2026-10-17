@@ -1,6 +1,5 @@
-# Dependencies
+# Dependencies (les package-lock.json SONT versionnés : la CI installe avec npm ci)
 node_modules/
-package-lock.json
 
 # Build outputs
 dist/
@@ -21,6 +20,9 @@ build/
 
 # OMC : etat runtime volatile (ne pas versionner)
 .omc/
+
+# Plans Plannotator : brouillons de travail locaux
+.plannotator-plans/
 
 # Backups manuels de config
 *.bak
