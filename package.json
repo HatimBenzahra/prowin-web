@@ -1,5 +1,6 @@
 {
   "scripts": {
+    "verify": "bash scripts/verify.sh",
     "deploy:staging": "bash ../deploy web staging",
     "deploy:prod": "bash ../deploy web prod"
   },

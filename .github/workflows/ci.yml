@@ -1,0 +1,65 @@
+# Barrière de qualité prowin-web : la même batterie que ./deploy (npm run verify),
+# rejouée sur chaque push et chaque PR. Pastille verte/rouge sur GitHub.
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    # Base Postgres des tests d'intégration : fournie par un service, donc
+    # test:int n'utilise pas Docker Compose (TEST_DATABASE_URL est défini).
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: prowin_test
+          POSTGRES_PASSWORD: prowin_test
+          POSTGRES_DB: prowin_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U prowin_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      TEST_DATABASE_URL: postgresql://prowin_test:prowin_test@localhost:5432/prowin_test?schema=public
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: |
+            backend/package-lock.json
+            frontend/package-lock.json
+
+      - name: Install backend
+        working-directory: backend
+        run: npm ci
+
+      - name: Generate Prisma client
+        working-directory: backend
+        run: npx prisma generate
+
+      - name: Install frontend
+        working-directory: frontend
+        run: npm ci
+
+      # Le moteur coaching (dépôt voisin) n'est pas présent ici : les suites qui
+      # en dépendent se sautent d'elles-mêmes avec un message explicite.
+      - name: Verify
+        run: bash scripts/verify.sh
