@@ -1,0 +1,266 @@
+{
+  "src/acquiscan/acquiscan.service.ts": {
+    "@typescript-eslint/no-unsafe-assignment": 83,
+    "@typescript-eslint/no-unsafe-call": 8,
+    "@typescript-eslint/no-unsafe-member-access": 105,
+    "@typescript-eslint/no-unsafe-return": 4
+  },
+  "src/app.module.ts": {
+    "@typescript-eslint/no-unsafe-assignment": 1
+  },
+  "src/auth/auth.resolver.ts": {
+    "@typescript-eslint/require-await": 1
+  },
+  "src/auth/auth.service.ts": {
+    "@typescript-eslint/no-unsafe-assignment": 17,
+    "@typescript-eslint/no-unsafe-call": 4,
+    "@typescript-eslint/no-unsafe-member-access": 24,
+    "@typescript-eslint/no-unsafe-return": 1
+  },
+  "src/auth/decorators/current-user.decorator.ts": {
+    "@typescript-eslint/no-unsafe-member-access": 1,
+    "@typescript-eslint/no-unsafe-return": 1
+  },
+  "src/auth/guards/jwt-auth.guard.ts": {
+    "@typescript-eslint/no-unsafe-member-access": 4,
+    "@typescript-eslint/no-unsafe-return": 2
+  },
+  "src/coaching/__tests__/coaching-journal.spec.ts": {
+    "@typescript-eslint/no-unsafe-assignment": 5,
+    "@typescript-eslint/no-unsafe-call": 9,
+    "@typescript-eslint/no-unsafe-member-access": 33,
+    "@typescript-eslint/no-unsafe-return": 11,
+    "@typescript-eslint/require-await": 11
+  },
+  "src/coaching/__tests__/coaching-prices.spec.ts": {
+    "@typescript-eslint/no-unsafe-assignment": 2
+  },
+  "src/coaching/__tests__/coaching-relaunch.spec.ts": {
+    "@typescript-eslint/no-unsafe-assignment": 4,
+    "@typescript-eslint/no-unsafe-call": 1,
+    "@typescript-eslint/no-unsafe-member-access": 12,
+    "@typescript-eslint/no-unsafe-return": 1,
+    "@typescript-eslint/require-await": 2
+  },
+  "src/coaching/__tests__/coaching-stage-client.spec.ts": {
+    "@typescript-eslint/unbound-method": 3
+  },
+  "src/coaching/__tests__/coaching-sync.spec.ts": {
+    "@typescript-eslint/no-unsafe-assignment": 23,
+    "@typescript-eslint/no-unsafe-call": 20,
+    "@typescript-eslint/no-unsafe-member-access": 76,
+    "@typescript-eslint/no-unsafe-return": 19,
+    "@typescript-eslint/require-await": 20,
+    "prefer-const": 1
+  },
+  "src/coaching/__tests__/coaching-user-prices.spec.ts": {
+    "@typescript-eslint/no-unsafe-assignment": 4,
+    "@typescript-eslint/no-unsafe-member-access": 11,
+    "@typescript-eslint/no-unsafe-return": 5,
+    "@typescript-eslint/require-await": 13,
+    "@typescript-eslint/unbound-method": 4
+  },
+  "src/coaching/__tests__/coaching-visit-outcome.spec.ts": {
+    "@typescript-eslint/no-unsafe-assignment": 3,
+    "@typescript-eslint/no-unsafe-call": 4,
+    "@typescript-eslint/no-unsafe-member-access": 15,
+    "@typescript-eslint/no-unsafe-return": 5,
+    "@typescript-eslint/require-await": 15
+  },
+  "src/coaching/__tests__/graphql-schema.spec.ts": {
+    "@typescript-eslint/no-unsafe-assignment": 1,
+    "@typescript-eslint/no-unsafe-member-access": 2,
+    "@typescript-eslint/no-unsafe-return": 1
+  },
+  "src/coaching/__tests__/product-alerts-flow.spec.ts": {
+    "@typescript-eslint/no-require-imports": 5,
+    "@typescript-eslint/no-unsafe-assignment": 27,
+    "@typescript-eslint/no-unsafe-call": 8,
+    "@typescript-eslint/no-unsafe-member-access": 39,
+    "@typescript-eslint/no-unsafe-return": 3,
+    "@typescript-eslint/require-await": 7,
+    "prefer-const": 1
+  },
+  "src/coaching/__tests__/reference.integration.spec.ts": {
+    "@typescript-eslint/no-unsafe-assignment": 23,
+    "@typescript-eslint/no-unsafe-call": 5,
+    "@typescript-eslint/no-unsafe-member-access": 17,
+    "@typescript-eslint/no-unsafe-return": 2,
+    "@typescript-eslint/require-await": 2
+  },
+  "src/coaching/__tests__/synthesis-budget.spec.ts": {
+    "@typescript-eslint/no-unsafe-assignment": 1
+  },
+  "src/coaching/coaching-api.client.ts": {
+    "@typescript-eslint/no-unsafe-member-access": 1
+  },
+  "src/coaching/coaching-sync.service.ts": {
+    "@typescript-eslint/no-unnecessary-type-assertion": 1
+  },
+  "src/coaching/lecture/coaching-query.service.ts": {
+    "@typescript-eslint/no-unsafe-assignment": 54,
+    "@typescript-eslint/no-unsafe-call": 11,
+    "@typescript-eslint/no-unsafe-member-access": 72,
+    "@typescript-eslint/no-unsafe-return": 1
+  },
+  "src/coaching/shared/llm.service.ts": {
+    "@typescript-eslint/no-unsafe-member-access": 1
+  },
+  "src/coaching/synthese-globale/snapshot-builder.service.ts": {
+    "@typescript-eslint/no-unsafe-assignment": 8,
+    "@typescript-eslint/no-unsafe-call": 1,
+    "@typescript-eslint/no-unsafe-member-access": 18
+  },
+  "src/coaching/synthese-globale/synthesis-prompt.ts": {
+    "@typescript-eslint/no-base-to-string": 1
+  },
+  "src/coaching/synthese-globale/synthesis.service.ts": {
+    "@typescript-eslint/no-unsafe-assignment": 10,
+    "@typescript-eslint/no-unsafe-call": 1,
+    "@typescript-eslint/no-unsafe-member-access": 13
+  },
+  "src/commercial/commercial.resolver.ts": {
+    "@typescript-eslint/no-unsafe-member-access": 10
+  },
+  "src/commercial/commercial.service.ts": {
+    "@typescript-eslint/no-unsafe-assignment": 4,
+    "@typescript-eslint/no-unsafe-member-access": 9
+  },
+  "src/creation_compte/creation_compte.guard.ts": {
+    "@typescript-eslint/no-unsafe-assignment": 5,
+    "@typescript-eslint/no-unsafe-call": 1,
+    "@typescript-eslint/no-unsafe-member-access": 6
+  },
+  "src/creation_compte/creation_compte.resolver.ts": {
+    "@typescript-eslint/no-unsafe-assignment": 3,
+    "@typescript-eslint/no-unsafe-member-access": 3
+  },
+  "src/creation_compte/creation_compte.service.ts": {
+    "@typescript-eslint/no-unsafe-assignment": 3,
+    "@typescript-eslint/no-unsafe-call": 4,
+    "@typescript-eslint/no-unsafe-member-access": 18,
+    "@typescript-eslint/no-unsafe-return": 2,
+    "@typescript-eslint/restrict-template-expressions": 1
+  },
+  "src/directeur/directeur.resolver.ts": {
+    "@typescript-eslint/no-unsafe-member-access": 8
+  },
+  "src/gamification/badge.service.ts": {
+    "@typescript-eslint/no-unsafe-assignment": 7,
+    "@typescript-eslint/no-unsafe-member-access": 11
+  },
+  "src/gamification/contrat.service.ts": {
+    "@typescript-eslint/no-unsafe-assignment": 38,
+    "@typescript-eslint/no-unsafe-member-access": 54,
+    "@typescript-eslint/no-unsafe-return": 1
+  },
+  "src/gamification/evaluation.service.ts": {
+    "@typescript-eslint/no-unnecessary-type-assertion": 2,
+    "@typescript-eslint/no-unsafe-assignment": 37,
+    "@typescript-eslint/no-unsafe-call": 11,
+    "@typescript-eslint/no-unsafe-member-access": 88,
+    "@typescript-eslint/no-unsafe-return": 5
+  },
+  "src/gamification/gamification-cron.service.ts": {
+    "@typescript-eslint/no-unsafe-member-access": 10
+  },
+  "src/gamification/gamification.resolver.ts": {
+    "@typescript-eslint/no-unsafe-assignment": 27,
+    "@typescript-eslint/no-unsafe-member-access": 37,
+    "@typescript-eslint/no-unsafe-return": 2
+  },
+  "src/gamification/mapping.service.ts": {
+    "@typescript-eslint/no-unsafe-member-access": 2
+  },
+  "src/gamification/offre.service.ts": {
+    "@typescript-eslint/no-unsafe-assignment": 14,
+    "@typescript-eslint/no-unsafe-call": 3,
+    "@typescript-eslint/no-unsafe-member-access": 26
+  },
+  "src/gamification/ranking.service.ts": {
+    "@typescript-eslint/no-unsafe-assignment": 2,
+    "@typescript-eslint/no-unsafe-member-access": 9
+  },
+  "src/gamification/winleadplus-api.service.spec.ts": {
+    "@typescript-eslint/no-unsafe-member-access": 1,
+    "@typescript-eslint/unbound-method": 4
+  },
+  "src/gamification/winleadplus-api.service.ts": {
+    "@typescript-eslint/no-unsafe-assignment": 8,
+    "@typescript-eslint/no-unsafe-call": 2,
+    "@typescript-eslint/no-unsafe-member-access": 20,
+    "@typescript-eslint/no-unsafe-return": 2
+  },
+  "src/gamification/winleadplus-auth.service.spec.ts": {
+    "@typescript-eslint/unbound-method": 4
+  },
+  "src/gps-tracking/gps-tracking.spec.ts": {
+    "@typescript-eslint/no-unsafe-assignment": 10,
+    "@typescript-eslint/no-unsafe-call": 2,
+    "@typescript-eslint/no-unsafe-member-access": 18,
+    "@typescript-eslint/unbound-method": 3
+  },
+  "src/immeuble/immeuble.service.ts": {
+    "@typescript-eslint/no-unsafe-assignment": 3,
+    "@typescript-eslint/no-unsafe-call": 3,
+    "@typescript-eslint/no-unsafe-member-access": 3
+  },
+  "src/manager/manager.resolver.ts": {
+    "@typescript-eslint/no-unsafe-member-access": 12
+  },
+  "src/manager/manager.service.ts": {
+    "@typescript-eslint/no-unsafe-assignment": 2,
+    "@typescript-eslint/no-unsafe-member-access": 2,
+    "@typescript-eslint/no-unsafe-return": 2
+  },
+  "src/notifications/notifications.listener.ts": {
+    "@typescript-eslint/no-unsafe-assignment": 1,
+    "@typescript-eslint/no-unsafe-member-access": 5
+  },
+  "src/porte/porte.repassage.ts": {
+    "@typescript-eslint/no-unsafe-enum-comparison": 1
+  },
+  "src/porte/porte.resolver.ts": {
+    "@typescript-eslint/no-unsafe-member-access": 26
+  },
+  "src/porte/porte.service.ts": {
+    "@typescript-eslint/no-unsafe-assignment": 2,
+    "@typescript-eslint/no-unsafe-enum-comparison": 2,
+    "@typescript-eslint/no-unsafe-member-access": 10
+  },
+  "src/recording/recording.service.ts": {
+    "@typescript-eslint/no-unnecessary-type-assertion": 2,
+    "@typescript-eslint/no-unsafe-assignment": 22,
+    "@typescript-eslint/no-unsafe-member-access": 31
+  },
+  "src/speech-analysis/speech-analysis.service.ts": {
+    "@typescript-eslint/no-unsafe-assignment": 1,
+    "@typescript-eslint/no-unsafe-member-access": 7
+  },
+  "src/statistic/statistic-sync.service.ts": {
+    "@typescript-eslint/no-unsafe-assignment": 6,
+    "@typescript-eslint/no-unsafe-enum-comparison": 2
+  },
+  "src/statistic/statistic.resolver.ts": {
+    "@typescript-eslint/no-unsafe-member-access": 30
+  },
+  "src/statistic/statistic.service.ts": {
+    "@typescript-eslint/no-unsafe-assignment": 33,
+    "@typescript-eslint/no-unsafe-enum-comparison": 1,
+    "@typescript-eslint/no-unsafe-member-access": 4,
+    "@typescript-eslint/no-unsafe-return": 6,
+    "no-case-declarations": 6,
+    "prefer-const": 2
+  },
+  "src/zone/zone.resolver.ts": {
+    "@typescript-eslint/no-unsafe-member-access": 30
+  },
+  "src/zone/zone.service.ts": {
+    "@typescript-eslint/no-unsafe-assignment": 17,
+    "@typescript-eslint/no-unsafe-call": 12,
+    "@typescript-eslint/no-unsafe-member-access": 24,
+    "@typescript-eslint/no-unsafe-return": 12,
+    "no-case-declarations": 1,
+    "prefer-const": 1
+  }
+}

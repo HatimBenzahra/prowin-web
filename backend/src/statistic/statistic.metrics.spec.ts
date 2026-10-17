@@ -29,7 +29,9 @@ describe('statistic.metrics', () => {
   describe('normalizeDate', () => {
     it('accepte une Date valide', () => {
       const date = new Date('2026-08-05T10:00:00.000Z');
-      expect(normalizeDate(date)?.toISOString()).toBe('2026-08-05T10:00:00.000Z');
+      expect(normalizeDate(date)?.toISOString()).toBe(
+        '2026-08-05T10:00:00.000Z',
+      );
     });
 
     it('rejette une date invalide', () => {
@@ -111,7 +113,9 @@ describe('statistic.metrics', () => {
 
   describe('effectiveTypeHabitat', () => {
     it('laisse un immeuble et une maison inchangés', () => {
-      expect(effectiveTypeHabitat({ typeHabitat: 'IMMEUBLE' })).toBe('IMMEUBLE');
+      expect(effectiveTypeHabitat({ typeHabitat: 'IMMEUBLE' })).toBe(
+        'IMMEUBLE',
+      );
       expect(effectiveTypeHabitat({ typeHabitat: 'MAISON' })).toBe('MAISON');
     });
 
@@ -126,7 +130,10 @@ describe('statistic.metrics', () => {
         effectiveTypeHabitat({ typeHabitat: 'PAVILLON', nbPortesParEtage: 1 }),
       ).toBe('PAVILLON');
       expect(
-        effectiveTypeHabitat({ typeHabitat: 'PAVILLON', nbPortesParEtage: null }),
+        effectiveTypeHabitat({
+          typeHabitat: 'PAVILLON',
+          nbPortesParEtage: null,
+        }),
       ).toBe('PAVILLON');
     });
   });

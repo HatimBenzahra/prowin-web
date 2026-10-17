@@ -15,8 +15,10 @@ describe('AppController', () => {
   });
 
   describe('root', () => {
-    it('should return "Hello World!"', () => {
-      expect(appController.getHello()).toBe('Backend is ready!');
+    it('should return the readiness message', () => {
+      expect(appController.getHello()).toBe(
+        'Hello World! NestJS + Prisma + PostgreSQL + GraphQL is ready!',
+      );
     });
   });
 });

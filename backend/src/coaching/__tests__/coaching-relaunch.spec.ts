@@ -10,9 +10,7 @@ describe('relaunch — référentiel', () => {
     const created: any[] = [];
     const prisma: any = {
       coachingAnalysis: {
-        findUnique: jest.fn(({ where }) =>
-          where.id ? analysis : existing,
-        ),
+        findUnique: jest.fn(({ where }) => (where.id ? analysis : existing)),
         updateMany: jest.fn((args) => {
           updated.push(args);
           return { count: 1 };
@@ -105,7 +103,12 @@ describe('relaunch — référentiel', () => {
   });
 
   it('ne réinitialise pas une analyse distante déjà en cours sur le référentiel actif', async () => {
-    const { service, updated, created } = build({ ...base, referenceId: active.id, remoteManaged: true, status: 'ANALYZING' });
+    const { service, updated, created } = build({
+      ...base,
+      referenceId: active.id,
+      remoteManaged: true,
+      status: 'ANALYZING',
+    });
     expect((await service.relaunch(1)).id).toBe(1);
     expect(updated).toHaveLength(0);
     expect(created).toHaveLength(0);

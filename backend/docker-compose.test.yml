@@ -1,0 +1,21 @@
+# Base Postgres JETABLE pour les tests d'intégration (`npm run test:int`).
+# Port dédié (pas de collision avec une base locale sur 5432), données en mémoire
+# (tmpfs) : rien ne survit à un `down -v`. Ne jamais pointer un .env dessus.
+name: prowin-backend-test
+
+services:
+  postgres-test:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: prowin_test
+      POSTGRES_PASSWORD: prowin_test
+      POSTGRES_DB: prowin_test
+    ports:
+      - '55432:5432'
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U prowin_test -d prowin_test']
+      interval: 2s
+      timeout: 3s
+      retries: 30

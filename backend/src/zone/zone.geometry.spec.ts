@@ -32,7 +32,13 @@ describe('zone.geometry', () => {
     });
 
     it('rejette une coordonnée non numérique', () => {
-      expect(() => parseRing([[0, 0], ['a', 1], [1, 1]] as unknown)).toThrow();
+      expect(() =>
+        parseRing([
+          [0, 0],
+          ['a', 1],
+          [1, 1],
+        ] as unknown),
+      ).toThrow();
     });
 
     it('rejette moins de 3 sommets distincts', () => {

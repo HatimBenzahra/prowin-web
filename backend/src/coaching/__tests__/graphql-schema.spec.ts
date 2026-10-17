@@ -20,7 +20,11 @@ describe('schéma GraphQL coaching', () => {
     await app.init();
     const factory = app.get(GraphQLSchemaFactory);
     sdl = printSchema(
-      await factory.create([CoachingResolver, SynthesisResolver, ReferenceResolver]),
+      await factory.create([
+        CoachingResolver,
+        SynthesisResolver,
+        ReferenceResolver,
+      ]),
     );
     await app.close();
   }, 30_000);
@@ -49,14 +53,11 @@ describe('schéma GraphQL coaching', () => {
     'violations',
     'detectedProducts',
     'productMapping',
-  ])(
-    'expose CoachingAnalysisDto.%s',
-    (field) => {
-      const block = /type CoachingAnalysisDto \{([^}]*)\}/.exec(sdl);
-      expect(block).not.toBeNull();
-      expect(block![1]).toContain(field);
-    },
-  );
+  ])('expose CoachingAnalysisDto.%s', (field) => {
+    const block = /type CoachingAnalysisDto \{([^}]*)\}/.exec(sdl);
+    expect(block).not.toBeNull();
+    expect(block![1]).toContain(field);
+  });
 
   it.each([
     'executionScore',
@@ -82,10 +83,19 @@ describe('schéma GraphQL coaching', () => {
 
   it('expose la correction du résultat de visite aux admins, directeurs et managers', () => {
     expect(sdl).toContain('updateCoachingVisitOutcome(analysisId: Int!');
-    expect(sdl).toContain('coachingProductStats(startDate: DateTime, endDate: DateTime): CoachingProductStatsDto!');
-    expect(sdl).toContain('coachingJournal(filter: CoachingJournalFilter): CoachingJournalPageDto!');
-    expect(sdl).toContain('setCoachingArchive(s3Key: String!, archived: Boolean!): Boolean!');
-    const roles = Reflect.getMetadata(ROLES_KEY, (CoachingResolver.prototype as any).updateCoachingVisitOutcome);
+    expect(sdl).toContain(
+      'coachingProductStats(startDate: DateTime, endDate: DateTime): CoachingProductStatsDto!',
+    );
+    expect(sdl).toContain(
+      'coachingJournal(filter: CoachingJournalFilter): CoachingJournalPageDto!',
+    );
+    expect(sdl).toContain(
+      'setCoachingArchive(s3Key: String!, archived: Boolean!): Boolean!',
+    );
+    const roles = Reflect.getMetadata(
+      ROLES_KEY,
+      (CoachingResolver.prototype as any).updateCoachingVisitOutcome,
+    );
     expect(roles).toEqual(['admin', 'directeur', 'manager']);
   });
 
@@ -104,7 +114,11 @@ describe('schéma GraphQL coaching', () => {
   it('les citations d’une violation sont non-nullables', () => {
     const block = /type CoachingViolationDto \{([^}]*)\}/.exec(sdl);
     expect(block).not.toBeNull();
-    for (const f of ['quote: String!', 'sheetSays: String!', 'planSays: String!']) {
+    for (const f of [
+      'quote: String!',
+      'sheetSays: String!',
+      'planSays: String!',
+    ]) {
       expect(block![1]).toContain(f);
     }
   });
@@ -143,10 +157,30 @@ describe('schéma GraphQL coaching', () => {
 
   // Lecture : admin et directeur ; toute écriture du référentiel : admin seulement.
   it('les mutations du référentiel sont réservées aux admins, ses requêtes aux admins et directeurs', () => {
-    const queries = ['activeReference', 'referenceVersions', 'referenceVersion', 'referenceDraft', 'coachingOffres'];
-    const mutations = ['openReferenceDraft', 'setReferenceDraftPlan', 'saveReferenceDraftProduct', 'setReferenceDraftProductSheet', 'removeReferenceDraftProduct', 'publishReferenceDraft', 'discardReferenceDraft', 'activateReferenceVersion'];
-    const roles = (method: string) => Reflect.getMetadata(ROLES_KEY, (ReferenceResolver.prototype as any)[method]);
+    const queries = [
+      'activeReference',
+      'referenceVersions',
+      'referenceVersion',
+      'referenceDraft',
+      'coachingOffres',
+    ];
+    const mutations = [
+      'openReferenceDraft',
+      'setReferenceDraftPlan',
+      'saveReferenceDraftProduct',
+      'setReferenceDraftProductSheet',
+      'removeReferenceDraftProduct',
+      'publishReferenceDraft',
+      'discardReferenceDraft',
+      'activateReferenceVersion',
+    ];
+    const roles = (method: string) =>
+      Reflect.getMetadata(
+        ROLES_KEY,
+        (ReferenceResolver.prototype as any)[method],
+      );
     for (const method of mutations) expect(roles(method)).toEqual(['admin']);
-    for (const method of queries) expect(roles(method)).toEqual(['admin', 'directeur']);
+    for (const method of queries)
+      expect(roles(method)).toEqual(['admin', 'directeur']);
   });
 });

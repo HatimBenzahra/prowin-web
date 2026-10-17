@@ -16,11 +16,9 @@ function makeContext(handler: (...args: any[]) => any, role: string): any {
     getClass: () => GpsTrackingResolver,
     getArgByIndex: () => ({ req: { user: { id: 42, role } } }),
   };
-  jest
-    .spyOn(GqlExecutionContext, 'create')
-    .mockReturnValue({
-      getContext: () => ({ req: { user: { id: 42, role } } }),
-    } as any);
+  jest.spyOn(GqlExecutionContext, 'create').mockReturnValue({
+    getContext: () => ({ req: { user: { id: 42, role } } }),
+  } as any);
   return ctx;
 }
 
