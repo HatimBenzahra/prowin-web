@@ -27,7 +27,14 @@ import {
 } from '../coaching.dto';
 import { CriterionScore, StepScore } from '../shared/coaching.types';
 import { CRM_SOURCE, CRM_TENANT } from '../shared/crm-scope';
-import { isScorable, OBJECTIVE_BY_NIVEAU, PROPOSED_STATUSES, ProductStatus, SALE_RESULTS, SCORABLE } from '../shared/visit-outcome';
+import {
+  isScorable,
+  OBJECTIVE_BY_NIVEAU,
+  PROPOSED_STATUSES,
+  ProductStatus,
+  SALE_RESULTS,
+  SCORABLE,
+} from '../shared/visit-outcome';
 
 // Filtre par tranche de durée (secondes) pour la liste de gestion.
 function matchDurationTier(sec: number, tier: string): boolean {
@@ -156,11 +163,20 @@ export class CoachingQueryService {
     const total = pending + processing + ready + failed;
 
     const inexploitable = await this.prisma.coachingAnalysis.count({
-      where: { source: this.CRM_SOURCE, tenantId: CRM_TENANT, quality: CoachingQuality.INEXPLOITABLE },
+      where: {
+        source: this.CRM_SOURCE,
+        tenantId: CRM_TENANT,
+        quality: CoachingQuality.INEXPLOITABLE,
+      },
     });
     const agg = await this.prisma.coachingAnalysis.aggregate({
       _avg: { score: true },
-      where: { source: this.CRM_SOURCE, tenantId: CRM_TENANT, score: { not: null }, ...SCORABLE },
+      where: {
+        source: this.CRM_SOURCE,
+        tenantId: CRM_TENANT,
+        score: { not: null },
+        ...SCORABLE,
+      },
     });
     const avgScore =
       agg._avg.score != null ? Math.round(agg._avg.score * 10) / 10 : null;
@@ -203,14 +219,10 @@ export class CoachingQueryService {
     const where = {
       source: this.CRM_SOURCE,
       tenantId: CRM_TENANT,
-      ...(filter.userId != null
-        ? { userId: filter.userId }
-        : {}),
+      ...(filter.userId != null ? { userId: filter.userId } : {}),
       ...(filter.managerId != null ? { managerId: filter.managerId } : {}),
       ...(filter.porteId != null ? { porteId: filter.porteId } : {}),
-      ...(filter.status
-        ? { status: filter.status as CoachingStatus }
-        : {}),
+      ...(filter.status ? { status: filter.status as CoachingStatus } : {}),
     };
     const [rows, total] = await this.prisma.$transaction([
       this.prisma.coachingAnalysis.findMany({
@@ -259,15 +271,24 @@ export class CoachingQueryService {
   }
 
   /** Objectif de score selon le niveau du commercial (une requête pour le lot). */
-  private async withObjectives(items: CoachingAnalysisDto[]): Promise<CoachingAnalysisDto[]> {
-    const ids = [...new Set(items.map((it) => it.userId).filter((x): x is number => x != null))];
+  private async withObjectives(
+    items: CoachingAnalysisDto[],
+  ): Promise<CoachingAnalysisDto[]> {
+    const ids = [
+      ...new Set(
+        items.map((it) => it.userId).filter((x): x is number => x != null),
+      ),
+    ];
     if (!ids.length) return items;
-    const commercials = await this.prisma.commercial.findMany({ where: { id: { in: ids } }, select: { id: true, niveau: true } });
+    const commercials = await this.prisma.commercial.findMany({
+      where: { id: { in: ids } },
+      select: { id: true, niveau: true },
+    });
     const niveaux = new Map(commercials.map((c) => [c.id, c.niveau as string]));
     for (const it of items) {
       const niveau = it.userId != null ? niveaux.get(it.userId) : undefined;
       it.commercialNiveau = niveau ?? null;
-      it.objectiveScore = niveau ? OBJECTIVE_BY_NIVEAU[niveau] ?? null : null;
+      it.objectiveScore = niveau ? (OBJECTIVE_BY_NIVEAU[niveau] ?? null) : null;
     }
     return items;
   }
@@ -312,7 +333,8 @@ export class CoachingQueryService {
       _max: { durationSec: true },
     });
     const durByKey = new Map<string, number | null>();
-    for (const d of durs) durByKey.set(d.s3KeyOriginal, d._max.durationSec ?? null);
+    for (const d of durs)
+      durByKey.set(d.s3KeyOriginal, d._max.durationSec ?? null);
 
     const subjects = await this.resolveSubjects(rows);
 
@@ -326,7 +348,8 @@ export class CoachingQueryService {
         subjectRole: s?.role ?? null,
         subjectId: s?.id ?? null,
         statutPorte: r.statutPorte ?? null,
-        durationSec: r.transcriptDurationSec ?? durByKey.get(r.s3KeyOriginal) ?? null,
+        durationSec:
+          r.transcriptDurationSec ?? durByKey.get(r.s3KeyOriginal) ?? null,
         createdAt: r.createdAt.toISOString(),
       };
     });
@@ -477,12 +500,21 @@ export class CoachingQueryService {
 
     // Propriétaire (nom + statut) — ne garder que les ACTIF.
     const rows = [...byKey.values()];
-    type OwnerRow = { id: number; nom: string; prenom: string; status: UserStatus };
+    type OwnerRow = {
+      id: number;
+      nom: string;
+      prenom: string;
+      status: UserStatus;
+    };
     const commercialIds = [
-      ...new Set(rows.map((r) => r.commercialId).filter((x): x is number => x != null)),
+      ...new Set(
+        rows.map((r) => r.commercialId).filter((x): x is number => x != null),
+      ),
     ];
     const managerIds = [
-      ...new Set(rows.map((r) => r.managerId).filter((x): x is number => x != null)),
+      ...new Set(
+        rows.map((r) => r.managerId).filter((x): x is number => x != null),
+      ),
     ];
     const [commercials, managers] = await Promise.all([
       commercialIds.length
@@ -520,7 +552,13 @@ export class CoachingQueryService {
           sid = r.managerId;
           active = m.status === UserStatus.ACTIF;
         }
-        return { ...r, subjectName: name, subjectRole: role, subjectId: sid, active };
+        return {
+          ...r,
+          subjectName: name,
+          subjectRole: role,
+          subjectId: sid,
+          active,
+        };
       })
       .filter((r) => r.active);
 
@@ -529,7 +567,13 @@ export class CoachingQueryService {
     const reference = await this.references.getActive();
     const analysisByKey = new Map<
       string,
-      { id: number; status: string; quality: string | null; score: number | null; band: string | null }
+      {
+        id: number;
+        status: string;
+        quality: string | null;
+        score: number | null;
+        band: string | null;
+      }
     >();
     if (reference && withOwner.length) {
       const analyses = await this.prisma.coachingAnalysis.findMany({
@@ -539,7 +583,14 @@ export class CoachingQueryService {
           s3KeyOriginal: { in: withOwner.map((r) => r.s3Key) },
           referenceId: reference.id,
         },
-        select: { s3KeyOriginal: true, id: true, status: true, quality: true, score: true, band: true },
+        select: {
+          s3KeyOriginal: true,
+          id: true,
+          status: true,
+          quality: true,
+          score: true,
+          band: true,
+        },
       });
       for (const a of analyses) {
         analysisByKey.set(a.s3KeyOriginal, {
@@ -558,7 +609,9 @@ export class CoachingQueryService {
     if (filter.subjectId != null)
       list = list.filter((r) => r.subjectId === filter.subjectId);
     if (filter.durationTier)
-      list = list.filter((r) => matchDurationTier(r.durationSec, filter.durationTier!));
+      list = list.filter((r) =>
+        matchDurationTier(r.durationSec, filter.durationTier!),
+      );
     if (filter.notAnalyzedOnly)
       list = list.filter((r) => !analysisByKey.has(r.s3Key)); // aucune analyse encore
     if (filter.search?.trim()) {
@@ -757,50 +810,51 @@ export class CoachingQueryService {
     };
 
     // Sans référentiel actif, aucune analyse : l'id -1 n'existe pas.
-    const [recordings, analyses, commercials, managers, archives] = await Promise.all([
-      this.prisma.recording.findMany({
-        where: { s3Key: { in: keys } },
-        select: { id: true, s3Key: true },
-      }),
-      this.prisma.coachingAnalysis.findMany({
-        where: {
-          source: this.CRM_SOURCE,
-          tenantId: CRM_TENANT,
-          s3KeyOriginal: { in: keys },
-          referenceId: referenceId ?? -1,
-        },
-        select: {
-          id: true,
-          s3KeyOriginal: true,
-          status: true,
-          quality: true,
-          score: true,
-          band: true,
-          executionScore: true,
-          outcomeScore: true,
-          visitResult: true,
-          nonSaleReason: true,
-          productStatuses: true,
-          transcriptDurationSec: true,
-        },
-      }),
-      commercialIds.length
-        ? this.prisma.commercial.findMany({
-            where: { id: { in: commercialIds } },
-            select: { id: true, nom: true, prenom: true, status: true },
-          })
-        : Promise.resolve([] as OwnerRow[]),
-      managerIds.length
-        ? this.prisma.manager.findMany({
-            where: { id: { in: managerIds } },
-            select: { id: true, nom: true, prenom: true, status: true },
-          })
-        : Promise.resolve([] as OwnerRow[]),
-      this.prisma.coachingArchive.findMany({
-        where: { s3Key: { in: keys } },
-        select: { s3Key: true, archivedAt: true },
-      }),
-    ]);
+    const [recordings, analyses, commercials, managers, archives] =
+      await Promise.all([
+        this.prisma.recording.findMany({
+          where: { s3Key: { in: keys } },
+          select: { id: true, s3Key: true },
+        }),
+        this.prisma.coachingAnalysis.findMany({
+          where: {
+            source: this.CRM_SOURCE,
+            tenantId: CRM_TENANT,
+            s3KeyOriginal: { in: keys },
+            referenceId: referenceId ?? -1,
+          },
+          select: {
+            id: true,
+            s3KeyOriginal: true,
+            status: true,
+            quality: true,
+            score: true,
+            band: true,
+            executionScore: true,
+            outcomeScore: true,
+            visitResult: true,
+            nonSaleReason: true,
+            productStatuses: true,
+            transcriptDurationSec: true,
+          },
+        }),
+        commercialIds.length
+          ? this.prisma.commercial.findMany({
+              where: { id: { in: commercialIds } },
+              select: { id: true, nom: true, prenom: true, status: true },
+            })
+          : Promise.resolve([] as OwnerRow[]),
+        managerIds.length
+          ? this.prisma.manager.findMany({
+              where: { id: { in: managerIds } },
+              select: { id: true, nom: true, prenom: true, status: true },
+            })
+          : Promise.resolve([] as OwnerRow[]),
+        this.prisma.coachingArchive.findMany({
+          where: { s3Key: { in: keys } },
+          select: { s3Key: true, archivedAt: true },
+        }),
+      ]);
     const recordingByKey = new Map(recordings.map((r) => [r.s3Key, r.id]));
     const analysisByKey = new Map(analyses.map((a) => [a.s3KeyOriginal, a]));
     const cMap = new Map(commercials.map((c) => [c.id, c]));
@@ -873,7 +927,10 @@ export class CoachingQueryService {
     const coachable = await this.config.getCoachableStatuts();
     if (!coachable.length) return [];
     const portes = await this.prisma.porte.findMany({
-      where: { statut: { in: coachable as StatutPorte[] }, recordingSegments: { some: {} } },
+      where: {
+        statut: { in: coachable as StatutPorte[] },
+        recordingSegments: { some: {} },
+      },
       select: {
         recordingSegments: { select: { commercialId: true, managerId: true } },
       },
@@ -1007,8 +1064,11 @@ export class CoachingQueryService {
       derniereAnalyseAt?: Date;
     };
 
-    const scored = (row: { score: number | null; quality: string | null; band?: string | null }) =>
-      isScorable(row) && row.quality !== CoachingQuality.INEXPLOITABLE;
+    const scored = (row: {
+      score: number | null;
+      quality: string | null;
+      band?: string | null;
+    }) => isScorable(row) && row.quality !== CoachingQuality.INEXPLOITABLE;
 
     const accumulateSteps = (
       target: Map<string, { sum: number; count: number }>,
@@ -1059,7 +1119,10 @@ export class CoachingQueryService {
 
       bucket.scores.push(row.score as number);
       accumulateSteps(bucket.stepTotals, row.subScores);
-      if (!bucket.derniereAnalyseAt || row.createdAt > bucket.derniereAnalyseAt) {
+      if (
+        !bucket.derniereAnalyseAt ||
+        row.createdAt > bucket.derniereAnalyseAt
+      ) {
         bucket.derniereAnalyseAt = row.createdAt;
       }
 
@@ -1084,7 +1147,8 @@ export class CoachingQueryService {
 
     const average = (values: number[]) =>
       values.length
-        ? Math.round((values.reduce((s, v) => s + v, 0) / values.length) * 10) / 10
+        ? Math.round((values.reduce((s, v) => s + v, 0) / values.length) * 10) /
+          10
         : null;
 
     const buildSteps = (
@@ -1147,7 +1211,10 @@ export class CoachingQueryService {
    * produit, opportunités oubliées, produits vendus par visite et par intervenant, causes
    * de perte. Seules les visites exploitables portant des statuts produit comptent.
    */
-  async coachingProductStats(startDate?: Date, endDate?: Date): Promise<CoachingProductStatsDto> {
+  async coachingProductStats(
+    startDate?: Date,
+    endDate?: Date,
+  ): Promise<CoachingProductStatsDto> {
     const rows = await this.prisma.coachingAnalysis.findMany({
       where: {
         source: this.CRM_SOURCE,
@@ -1155,50 +1222,121 @@ export class CoachingQueryService {
         status: CoachingStatus.READY,
         quality: { not: CoachingQuality.INEXPLOITABLE },
         productStatuses: { not: Prisma.DbNull },
-        ...(startDate || endDate ? { createdAt: { ...(startDate ? { gte: startDate } : {}), ...(endDate ? { lte: endDate } : {}) } } : {}),
+        ...(startDate || endDate
+          ? {
+              createdAt: {
+                ...(startDate ? { gte: startDate } : {}),
+                ...(endDate ? { lte: endDate } : {}),
+              },
+            }
+          : {}),
       },
-      select: { id: true, userId: true, managerId: true, productStatuses: true, nonSaleReason: true, visitResult: true },
+      select: {
+        id: true,
+        userId: true,
+        managerId: true,
+        productStatuses: true,
+        nonSaleReason: true,
+        visitResult: true,
+      },
     });
     const subjects = await this.resolveSubjects(rows);
     const production = await this.productionSubjectKeys(subjects);
-    const products = new Map<string, { key: string; label: string; nbVisites: number; nbProposes: number; nbAcceptes: number; nbOublies: number }>();
-    const bySubject = new Map<string, { subjectId: number; subjectName: string; subjectRole: string; nbVisites: number; nbProduitsVendus: number }>();
+    const products = new Map<
+      string,
+      {
+        key: string;
+        label: string;
+        nbVisites: number;
+        nbProposes: number;
+        nbAcceptes: number;
+        nbOublies: number;
+      }
+    >();
+    const bySubject = new Map<
+      string,
+      {
+        subjectId: number;
+        subjectName: string;
+        subjectRole: string;
+        nbVisites: number;
+        nbProduitsVendus: number;
+      }
+    >();
     const causes = new Map<string, number>();
     let nbVisites = 0;
     let vendus = 0;
     for (const row of rows) {
       const subject = subjects.get(row.id);
-      if (!subject || !production.has(`${subject.role}:${subject.id}`)) continue;
+      if (!subject || !production.has(`${subject.role}:${subject.id}`))
+        continue;
       nbVisites += 1;
       let sold = 0;
-      for (const p of (row.productStatuses as unknown as ProductStatus[]) ?? []) {
-        const entry = products.get(p.key) ?? { key: p.key, label: p.label, nbVisites: 0, nbProposes: 0, nbAcceptes: 0, nbOublies: 0 };
+      for (const p of (row.productStatuses as unknown as ProductStatus[]) ??
+        []) {
+        const entry = products.get(p.key) ?? {
+          key: p.key,
+          label: p.label,
+          nbVisites: 0,
+          nbProposes: 0,
+          nbAcceptes: 0,
+          nbOublies: 0,
+        };
         // Le taux de proposition ne compte que les visites où le produit était applicable.
         if (p.status !== 'NON_APPLICABLE') entry.nbVisites += 1;
         if (PROPOSED_STATUSES.includes(p.status)) entry.nbProposes += 1;
-        if (p.status === 'ACCEPTE') { entry.nbAcceptes += 1; sold += 1; }
+        if (p.status === 'ACCEPTE') {
+          entry.nbAcceptes += 1;
+          sold += 1;
+        }
         if (p.opportunity === 'oubliee') entry.nbOublies += 1;
         products.set(p.key, entry);
       }
       vendus += sold;
       const key = `${subject.role}:${subject.id}`;
-      const bucket = bySubject.get(key) ?? { subjectId: subject.id, subjectName: subject.name, subjectRole: subject.role, nbVisites: 0, nbProduitsVendus: 0 };
+      const bucket = bySubject.get(key) ?? {
+        subjectId: subject.id,
+        subjectName: subject.name,
+        subjectRole: subject.role,
+        nbVisites: 0,
+        nbProduitsVendus: 0,
+      };
       bucket.nbVisites += 1;
       bucket.nbProduitsVendus += sold;
       bySubject.set(key, bucket);
       // Une cause de perte n'a de sens que pour une visite sans vente.
-      if (row.nonSaleReason && row.visitResult && !SALE_RESULTS.includes(row.visitResult)) causes.set(row.nonSaleReason, (causes.get(row.nonSaleReason) ?? 0) + 1);
+      if (
+        row.nonSaleReason &&
+        row.visitResult &&
+        !SALE_RESULTS.includes(row.visitResult)
+      )
+        causes.set(row.nonSaleReason, (causes.get(row.nonSaleReason) ?? 0) + 1);
     }
-    const pct = (n: number, d: number) => (d ? Math.round((n / d) * 1000) / 10 : null);
-    const ratio = (n: number, d: number) => (d ? Math.round((n / d) * 100) / 100 : null);
+    const pct = (n: number, d: number) =>
+      d ? Math.round((n / d) * 1000) / 10 : null;
+    const ratio = (n: number, d: number) =>
+      d ? Math.round((n / d) * 100) / 100 : null;
     return {
       nbVisites,
-      products: [...products.values()].map((p) => ({ ...p, tauxProposition: pct(p.nbProposes, p.nbVisites), tauxTransformation: pct(p.nbAcceptes, p.nbProposes) })),
+      products: [...products.values()].map((p) => ({
+        ...p,
+        tauxProposition: pct(p.nbProposes, p.nbVisites),
+        tauxTransformation: pct(p.nbAcceptes, p.nbProposes),
+      })),
       produitsParVisite: ratio(vendus, nbVisites),
       parIntervenant: [...bySubject.values()]
-        .map((b) => ({ ...b, produitsParVisite: ratio(b.nbProduitsVendus, b.nbVisites) }))
-        .sort((a, b) => (b.produitsParVisite ?? 0) - (a.produitsParVisite ?? 0) || a.subjectName.localeCompare(b.subjectName)),
-      causesPerte: [...causes.entries()].map(([reason, count]) => ({ reason, count })).sort((a, b) => b.count - a.count),
+        .map((b) => ({
+          ...b,
+          produitsParVisite: ratio(b.nbProduitsVendus, b.nbVisites),
+        }))
+        .sort(
+          (a, b) =>
+            (b.produitsParVisite ?? 0) - (a.produitsParVisite ?? 0) ||
+            a.subjectName.localeCompare(b.subjectName),
+        ),
+      causesPerte: [...causes.entries()]
+        .map(([reason, count]) => ({ reason, count }))
+        .sort((a, b) => b.count - a.count),
     };
   }
 
@@ -1207,7 +1345,10 @@ export class CoachingQueryService {
    * Un commercial supprimé entre-temps disparaît aussi du comparatif.
    */
   private async productionSubjectKeys(
-    subjects: Map<number, { name: string; role: 'commercial' | 'manager'; id: number }>,
+    subjects: Map<
+      number,
+      { name: string; role: 'commercial' | 'manager'; id: number }
+    >,
   ): Promise<Set<string>> {
     const commercialIds = new Set<number>();
     const managerIds = new Set<number>();
@@ -1257,26 +1398,33 @@ export class CoachingQueryService {
       evaluationAttempts: row.evaluationAttempts ?? 0,
       stageStartedAt: row.stageStartedAt?.toISOString() ?? null,
       transcriptionStartedAt: row.transcriptionStartedAt?.toISOString() ?? null,
-      transcriptionCompletedAt: row.transcriptionCompletedAt?.toISOString() ?? null,
+      transcriptionCompletedAt:
+        row.transcriptionCompletedAt?.toISOString() ?? null,
       evaluationStartedAt: row.evaluationStartedAt?.toISOString() ?? null,
       evaluationCompletedAt: row.evaluationCompletedAt?.toISOString() ?? null,
       nextRetryAt: row.remoteNextSyncAt?.toISOString() ?? null,
       quality: row.quality ?? null,
-      score: row.status === 'READY' ? row.score ?? null : null,
+      score: row.status === 'READY' ? (row.score ?? null) : null,
       scoreBeforeMalus: row.scoreBeforeMalus ?? null,
       malus: row.malus ?? null,
       productAlerts: row.remoteResultSnapshot?.productAlerts ?? [],
-      productVerification: row.remoteResultSnapshot?.productVerification ?? { status: 'unknown', products: [] },
+      productVerification: row.remoteResultSnapshot?.productVerification ?? {
+        status: 'unknown',
+        products: [],
+      },
       // Anciennes analyses et plans silencieux : garder une chaîne vide pour
       // les citations informatives absentes, conformément au contrat non-nullable.
-      violations: ((row.violations as CoachingViolationDto[]) ?? []).map((v) => ({
-        ...v,
-        quote: v.quote ?? '',
-        sheetSays: v.sheetSays ?? '',
-        planSays: v.planSays ?? '',
-      })),
+      violations: ((row.violations as CoachingViolationDto[]) ?? []).map(
+        (v) => ({
+          ...v,
+          quote: v.quote ?? '',
+          sheetSays: v.sheetSays ?? '',
+          planSays: v.planSays ?? '',
+        }),
+      ),
       detectedProducts: (row.detectedProducts as string[]) ?? [],
-      productMapping: (row.productMapping as CoachingAnalysisDto['productMapping']) ?? [],
+      productMapping:
+        (row.productMapping as CoachingAnalysisDto['productMapping']) ?? [],
       confidence: row.confidence ?? null,
       summary: row.summary ?? null,
       strengths: (row.strengths as string[]) ?? [],
@@ -1284,10 +1432,14 @@ export class CoachingQueryService {
       recommendations: (row.recommendations as string[]) ?? [],
       subScores: (row.subScores as StepScore[]) ?? [],
       // Une preuve mal formée ne doit pas annuler toute la réponse GraphQL.
-      criterionResults: ((row.criterionResults as CriterionScore[]) ?? []).map((c: any) => ({
-        ...c,
-        evidenceRefs: Array.isArray(c.evidenceRefs) ? c.evidenceRefs.filter((e: any) => typeof e?.quote === 'string') : null,
-      })),
+      criterionResults: ((row.criterionResults as CriterionScore[]) ?? []).map(
+        (c: any) => ({
+          ...c,
+          evidenceRefs: Array.isArray(c.evidenceRefs)
+            ? c.evidenceRefs.filter((e: any) => typeof e?.quote === 'string')
+            : null,
+        }),
+      ),
       transcript: row.transcript ?? null,
       transcriptDurationSec: row.transcriptDurationSec ?? null,
       error: row.error ?? row.remoteSyncError ?? null,
@@ -1297,11 +1449,19 @@ export class CoachingQueryService {
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
       favori: row.porte?.coachingFavori ?? false,
-      executionScore: row.status === 'READY' ? row.executionScore ?? null : null,
-      outcomeScore: row.status === 'READY' ? row.outcomeScore ?? null : null,
-      outcomeCategory: row.remoteResultSnapshot?.outcome?.outcomeCategory ?? null,
+      executionScore:
+        row.status === 'READY' ? (row.executionScore ?? null) : null,
+      outcomeScore: row.status === 'READY' ? (row.outcomeScore ?? null) : null,
+      outcomeCategory:
+        row.remoteResultSnapshot?.outcome?.outcomeCategory ?? null,
       outcomeComment: row.remoteResultSnapshot?.outcome?.comment ?? null,
-      outcomeEvidence: Array.isArray(row.remoteResultSnapshot?.outcome?.evidence) ? row.remoteResultSnapshot.outcome.evidence.filter((e: unknown) => typeof e === 'string') : [],
+      outcomeEvidence: Array.isArray(
+        row.remoteResultSnapshot?.outcome?.evidence,
+      )
+        ? row.remoteResultSnapshot.outcome.evidence.filter(
+            (e: unknown) => typeof e === 'string',
+          )
+        : [],
       visitResult: row.visitResult ?? null,
       nonSaleReason: row.nonSaleReason ?? null,
       nextAction: row.nextAction ?? null,

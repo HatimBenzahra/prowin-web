@@ -5,7 +5,12 @@ import { StatisticResolver } from './statistic.resolver';
 import { PrismaService } from '../prisma.service';
 
 @Module({
-  providers: [StatisticResolver, StatisticService, StatisticSyncService, PrismaService],
+  providers: [
+    StatisticResolver,
+    StatisticService,
+    StatisticSyncService,
+    PrismaService,
+  ],
   exports: [StatisticSyncService], // Export pour utilisation dans PorteModule
 })
 export class StatisticModule {}

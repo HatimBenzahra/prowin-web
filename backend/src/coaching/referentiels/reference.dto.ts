@@ -38,7 +38,8 @@ export class ProductSheetForbiddenDto {
 @ObjectType()
 export class ReferenceProductSheetDto {
   @Field(() => [String]) facts: string[];
-  @Field(() => [ProductSheetForbiddenDto]) forbidden: ProductSheetForbiddenDto[];
+  @Field(() => [ProductSheetForbiddenDto])
+  forbidden: ProductSheetForbiddenDto[];
   @Field() rawMarkdown: string;
 }
 
@@ -63,7 +64,8 @@ export class ReferenceProductDto {
   @Field(() => String, { nullable: true }) offreFournisseur: string | null;
   /** Les offres liées par identifiant, retrouvées dans le catalogue local. */
   @Field(() => [CoachingOffreDto]) offres: CoachingOffreDto[];
-  @Field(() => ReferenceProductSheetDto, { nullable: true }) sheet: ReferenceProductSheetDto | null;
+  @Field(() => ReferenceProductSheetDto, { nullable: true })
+  sheet: ReferenceProductSheetDto | null;
 }
 
 @ObjectType()

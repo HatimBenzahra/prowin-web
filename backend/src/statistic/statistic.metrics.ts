@@ -175,5 +175,7 @@ export function tauxConversion(
   refus: number,
 ): number {
   const opportunites = contratsSignes + rendezVousPris + refus;
-  return opportunites > 0 ? roundRate((contratsSignes / opportunites) * 100) : 0;
+  return opportunites > 0
+    ? roundRate((contratsSignes / opportunites) * 100)
+    : 0;
 }

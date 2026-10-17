@@ -1,7 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
 import { BadgeCategory } from '@prisma/client';
-import { CreateBadgeDefinitionInput, UpdateBadgeDefinitionInput, AwardBadgeInput } from './gamification.dto';
+import {
+  CreateBadgeDefinitionInput,
+  UpdateBadgeDefinitionInput,
+  AwardBadgeInput,
+} from './gamification.dto';
 
 @Injectable()
 export class BadgeService {
@@ -47,7 +51,8 @@ export class BadgeService {
     if (input.description !== undefined) data.description = input.description;
     if (input.category !== undefined) data.category = input.category;
     if (input.iconUrl !== undefined) data.iconUrl = input.iconUrl;
-    if (input.condition !== undefined) data.condition = JSON.parse(input.condition);
+    if (input.condition !== undefined)
+      data.condition = JSON.parse(input.condition);
     if (input.tier !== undefined) data.tier = input.tier;
     if (input.isActive !== undefined) data.isActive = input.isActive;
 
@@ -61,7 +66,11 @@ export class BadgeService {
   // SEED — Peupler le catalogue (~95 badges, idempotent via code unique)
   // ============================================================================
 
-  async seedBadges(): Promise<{ created: number; skipped: number; total: number }> {
+  async seedBadges(): Promise<{
+    created: number;
+    skipped: number;
+    total: number;
+  }> {
     const badges = this.buildCatalogue();
     let created = 0;
     let skipped = 0;
@@ -89,7 +98,9 @@ export class BadgeService {
       else created++;
     }
 
-    this.logger.log(`Seed badges: ${created} créés, ${skipped} déjà existants (${badges.length} total)`);
+    this.logger.log(
+      `Seed badges: ${created} créés, ${skipped} déjà existants (${badges.length} total)`,
+    );
     return { created, skipped, total: badges.length };
   }
 
@@ -119,14 +130,14 @@ export class BadgeService {
 
   private addProgressionBadges(badges: any[]) {
     const tiers = [
-      { threshold: 1,   nom: 'Déclencheur',         tier: 1 },
-      { threshold: 2,   nom: 'Junior Performer',     tier: 2 },
-      { threshold: 3,   nom: 'Montée en puissance',  tier: 3 },
-      { threshold: 5,   nom: 'Déca Performer',       tier: 4 },
-      { threshold: 10,  nom: 'Objectif 10',          tier: 5 },
-      { threshold: 20,  nom: 'Vingtaine',            tier: 6 },
-      { threshold: 50,  nom: 'Cinquantaine',         tier: 7 },
-      { threshold: 100, nom: 'Centurion',            tier: 8 },
+      { threshold: 1, nom: 'Déclencheur', tier: 1 },
+      { threshold: 2, nom: 'Junior Performer', tier: 2 },
+      { threshold: 3, nom: 'Montée en puissance', tier: 3 },
+      { threshold: 5, nom: 'Déca Performer', tier: 4 },
+      { threshold: 10, nom: 'Objectif 10', tier: 5 },
+      { threshold: 20, nom: 'Vingtaine', tier: 6 },
+      { threshold: 50, nom: 'Cinquantaine', tier: 7 },
+      { threshold: 100, nom: 'Centurion', tier: 8 },
     ];
 
     for (const t of tiers) {
@@ -145,24 +156,40 @@ export class BadgeService {
 
   private addProduitBadges(badges: any[]) {
     const produits = [
-      { key: 'MOBILE',       label: 'Mobile',          categorie: 'Télécom – Mobile' },
-      { key: 'FIBRE',        label: 'Fibre',           categorie: 'Télécom – Fibre' },
-      { key: 'DEPANSSUR',    label: 'Dépanssur',       categorie: 'Énergie – Dépanssur' },
-      { key: 'ELEC_GAZ',     label: 'Électricité/Gaz', categorie: 'Énergie – Électricité/Gaz' },
-      { key: 'CONCIERGERIE', label: 'Conciergerie',    categorie: 'Conciergerie Privée' },
-      { key: 'MONDIAL_TV',   label: 'Mondial TV',      categorie: 'Mondial TV' },
-      { key: 'ASSURANCE',    label: 'Assurance',       categorie: 'Assurance – Mutuelle/Prévoyance/MRH' },
+      { key: 'MOBILE', label: 'Mobile', categorie: 'Télécom – Mobile' },
+      { key: 'FIBRE', label: 'Fibre', categorie: 'Télécom – Fibre' },
+      {
+        key: 'DEPANSSUR',
+        label: 'Dépanssur',
+        categorie: 'Énergie – Dépanssur',
+      },
+      {
+        key: 'ELEC_GAZ',
+        label: 'Électricité/Gaz',
+        categorie: 'Énergie – Électricité/Gaz',
+      },
+      {
+        key: 'CONCIERGERIE',
+        label: 'Conciergerie',
+        categorie: 'Conciergerie Privée',
+      },
+      { key: 'MONDIAL_TV', label: 'Mondial TV', categorie: 'Mondial TV' },
+      {
+        key: 'ASSURANCE',
+        label: 'Assurance',
+        categorie: 'Assurance – Mutuelle/Prévoyance/MRH',
+      },
     ];
 
     const tiers = [
-      { threshold: 1,   prefix: 'Starter',   tier: 1 },
-      { threshold: 2,   prefix: 'Duo',       tier: 2 },
-      { threshold: 3,   prefix: 'Trio',      tier: 3 },
-      { threshold: 5,   prefix: 'Pack 5',    tier: 4 },
-      { threshold: 10,  prefix: 'Top 10',    tier: 5 },
-      { threshold: 20,  prefix: 'Vingtaine', tier: 6 },
-      { threshold: 50,  prefix: 'Expert',    tier: 7 },
-      { threshold: 100, prefix: 'Légende',   tier: 8 },
+      { threshold: 1, prefix: 'Starter', tier: 1 },
+      { threshold: 2, prefix: 'Duo', tier: 2 },
+      { threshold: 3, prefix: 'Trio', tier: 3 },
+      { threshold: 5, prefix: 'Pack 5', tier: 4 },
+      { threshold: 10, prefix: 'Top 10', tier: 5 },
+      { threshold: 20, prefix: 'Vingtaine', tier: 6 },
+      { threshold: 50, prefix: 'Expert', tier: 7 },
+      { threshold: 100, prefix: 'Légende', tier: 8 },
     ];
 
     for (const produit of produits) {
@@ -192,34 +219,48 @@ export class BadgeService {
         code: 'PERF_ARGUMENTATEUR',
         nom: 'Argumentateur',
         description: '20 argumentations réalisées en une seule journée',
-        condition: { metric: 'argumentationsParJour', scope: 'record', threshold: 20 },
+        condition: {
+          metric: 'argumentationsParJour',
+          scope: 'record',
+          threshold: 20,
+        },
       },
       {
         code: 'PERF_PROSPECTEUR_100',
         nom: 'Prospecteur 100',
         description: '100 portes prospectées en une seule journée',
-        condition: { metric: 'portesProspectesParJour', scope: 'record', threshold: 100 },
+        condition: {
+          metric: 'portesProspectesParJour',
+          scope: 'record',
+          threshold: 100,
+        },
       },
       // --- Conversion terrain (source: StatusHistorique) ---
       {
         code: 'PERF_CLOSER',
         nom: 'Closer',
-        description: 'Taux de conversion ARGUMENTE → CONTRAT_SIGNE ≥ 30% sur le mois',
+        description:
+          'Taux de conversion ARGUMENTE → CONTRAT_SIGNE ≥ 30% sur le mois',
         condition: { metric: 'tauxClosing', scope: 'mois', threshold: 30 },
       },
       {
         code: 'PERF_RELANCEUR',
         nom: 'Relanceur',
-        description: '3 portes ABSENT converties en CONTRAT_SIGNÉ via repassage sur le mois',
-        condition: { metric: 'repassageConversion', scope: 'mois', threshold: 3 },
+        description:
+          '3 portes ABSENT converties en CONTRAT_SIGNÉ via repassage sur le mois',
+        condition: {
+          metric: 'repassageConversion',
+          scope: 'mois',
+          threshold: 3,
+        },
       },
       // --- Volume portes (source: StatusHistorique.createdAt par jour) ---
-        {
-          code: 'PERF_MARATHON_PORTES',
-          nom: 'Marathon des Portes',
-          description: '50 portes tapées en une seule journée',
-          condition: { metric: 'portesParJour', threshold: 50 },
-        },
+      {
+        code: 'PERF_MARATHON_PORTES',
+        nom: 'Marathon des Portes',
+        description: '50 portes tapées en une seule journée',
+        condition: { metric: 'portesParJour', threshold: 50 },
+      },
       // --- Multi-signatures/jour (source: dateValidation groupé par jour) ---
       {
         code: 'PERF_COUP_CHAPEAU',
@@ -256,34 +297,49 @@ export class BadgeService {
       {
         code: 'PERF_CONVERSION_KING',
         nom: 'Conversion King',
-        description: 'Meilleur taux de conversion contrats validés / argumentations sur la semaine',
-        condition: { metric: 'tauxConversion', scope: 'semaine', ranking: 'top1' },
+        description:
+          'Meilleur taux de conversion contrats validés / argumentations sur la semaine',
+        condition: {
+          metric: 'tauxConversion',
+          scope: 'semaine',
+          ranking: 'top1',
+        },
       },
       // --- Ratio portes/signatures (source: contrats validés / Statistic.nbPortesProspectes) ---
       {
         code: 'PERF_CHAMPION_TRANSFORMATION',
         nom: 'Champion de la Transformation',
-        description: 'Meilleur ratio portes tapées / contrats validés sur le mois',
-        condition: { metric: 'ratioPortesSignatures', scope: 'mois', ranking: 'top1' },
+        description:
+          'Meilleur ratio portes tapées / contrats validés sur le mois',
+        condition: {
+          metric: 'ratioPortesSignatures',
+          scope: 'mois',
+          ranking: 'top1',
+        },
       },
       // --- Progression (source: comparaison contrats validés entre périodes) ---
       {
         code: 'PERF_CONSTANTE_PROGRESSION',
         nom: 'Constante Progression',
         description: 'A progressé en contrats validés chaque semaine du mois',
-        condition: { metric: 'progressionHebdo', scope: 'mois', type: 'constante' },
+        condition: {
+          metric: 'progressionHebdo',
+          scope: 'mois',
+          type: 'constante',
+        },
       },
       {
         code: 'PERF_PROGRESSION_FULGURANTE',
         nom: 'Progression fulgurante',
-        description: 'Amélioration des contrats validés de plus de 50% d\'un mois à l\'autre',
+        description:
+          "Amélioration des contrats validés de plus de 50% d'un mois à l'autre",
         condition: { metric: 'progressionMensuelle', threshold: 50 },
       },
       // --- Ranking mensuel (source: RankSnapshot) ---
       // --- Ranking mensuel (source: RankSnapshot) ---
       {
         code: 'PERF_CONTRAT_OR',
-        nom: 'Contrat d\'Or',
+        nom: "Contrat d'Or",
         description: 'Meilleur commercial en contrats validés sur le mois',
         condition: { metric: 'contratsSignes', scope: 'mois', ranking: 'top1' },
       },
@@ -324,32 +380,57 @@ export class BadgeService {
       {
         code: 'TROPHEE_TOP_GLOBAL',
         nom: 'Top Producteur Global',
-        description: 'Meilleure performance globale trimestrielle (contrats validés)',
-        condition: { metric: 'contratsSignes', scope: 'trimestre', ranking: 'top1' },
+        description:
+          'Meilleure performance globale trimestrielle (contrats validés)',
+        condition: {
+          metric: 'contratsSignes',
+          scope: 'trimestre',
+          ranking: 'top1',
+        },
       },
       {
         code: 'TROPHEE_TOP_ENERGIE',
         nom: 'Top Producteur Énergie',
         description: 'Meilleur producteur Énergie du trimestre',
-        condition: { metric: 'contratsProduit', categorie: 'Énergie', scope: 'trimestre', ranking: 'top1' },
+        condition: {
+          metric: 'contratsProduit',
+          categorie: 'Énergie',
+          scope: 'trimestre',
+          ranking: 'top1',
+        },
       },
       {
         code: 'TROPHEE_TOP_TELECOM',
         nom: 'Top Producteur Télécom',
         description: 'Meilleur producteur Télécom du trimestre',
-        condition: { metric: 'contratsProduit', categorie: 'Télécom', scope: 'trimestre', ranking: 'top1' },
+        condition: {
+          metric: 'contratsProduit',
+          categorie: 'Télécom',
+          scope: 'trimestre',
+          ranking: 'top1',
+        },
       },
       {
         code: 'TROPHEE_TOP_MTV',
         nom: 'Top Producteur MTV',
         description: 'Meilleur producteur Mondial TV du trimestre',
-        condition: { metric: 'contratsProduit', categorie: 'Mondial TV', scope: 'trimestre', ranking: 'top1' },
+        condition: {
+          metric: 'contratsProduit',
+          categorie: 'Mondial TV',
+          scope: 'trimestre',
+          ranking: 'top1',
+        },
       },
       {
         code: 'TROPHEE_TOP_ASSURANCE',
         nom: 'Top Producteur Assurance',
         description: 'Meilleur producteur Assurance du trimestre',
-        condition: { metric: 'contratsProduit', categorie: 'Assurance', scope: 'trimestre', ranking: 'top1' },
+        condition: {
+          metric: 'contratsProduit',
+          categorie: 'Assurance',
+          scope: 'trimestre',
+          ranking: 'top1',
+        },
       },
     ];
 
@@ -370,7 +451,9 @@ export class BadgeService {
    * Attribue un badge à un commercial pour une période donnée.
    * Idempotent: si le badge existe déjà pour cette période, retourne null.
    */
-  async awardBadge(input: AwardBadgeInput): Promise<{ awarded: boolean; id?: number }> {
+  async awardBadge(
+    input: AwardBadgeInput,
+  ): Promise<{ awarded: boolean; id?: number }> {
     const data: any = {
       badgeDefinitionId: input.badgeDefinitionId,
       periodKey: input.periodKey,
@@ -381,8 +464,20 @@ export class BadgeService {
 
     // Unique constraint: commercialId+badgeDefinitionId+periodKey ou managerId+badgeDefinitionId+periodKey
     const uniqueWhere = input.commercialId
-      ? { commercialId_badgeDefinitionId_periodKey: { commercialId: input.commercialId, badgeDefinitionId: input.badgeDefinitionId, periodKey: input.periodKey } }
-      : { managerId_badgeDefinitionId_periodKey: { managerId: input.managerId!, badgeDefinitionId: input.badgeDefinitionId, periodKey: input.periodKey } };
+      ? {
+          commercialId_badgeDefinitionId_periodKey: {
+            commercialId: input.commercialId,
+            badgeDefinitionId: input.badgeDefinitionId,
+            periodKey: input.periodKey,
+          },
+        }
+      : {
+          managerId_badgeDefinitionId_periodKey: {
+            managerId: input.managerId!,
+            badgeDefinitionId: input.badgeDefinitionId,
+            periodKey: input.periodKey,
+          },
+        };
 
     const record = await this.prisma.commercialBadge.upsert({
       where: uniqueWhere,

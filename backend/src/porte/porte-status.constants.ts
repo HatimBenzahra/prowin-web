@@ -149,7 +149,7 @@ export function getAllStatuses(): StatutPorte[] {
  */
 export function getProspectedStatuses(): StatutPorte[] {
   return getAllStatuses().filter(
-    status => STATUS_CONFIG[status].countAsProspected
+    (status) => STATUS_CONFIG[status].countAsProspected,
   );
 }
 
@@ -182,7 +182,7 @@ export interface StatusStats {
 
 export function calculateStatsForStatus(
   status: StatutPorte | string,
-  count: number
+  count: number,
 ): StatusStats {
   // Convertir le statut en string pour gérer les enums Prisma
   const statusKey = status as StatutPorte;

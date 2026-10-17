@@ -1,5 +1,10 @@
 import { IsEmail, IsString, IsEnum, IsOptional } from 'class-validator';
-import { InputType, Field, ObjectType, registerEnumType } from '@nestjs/graphql';
+import {
+  InputType,
+  Field,
+  ObjectType,
+  registerEnumType,
+} from '@nestjs/graphql';
 
 export enum RoleUtilisateur {
   DIRECTEUR = 'directeur',
@@ -9,7 +14,7 @@ export enum RoleUtilisateur {
 
 registerEnumType(RoleUtilisateur, {
   name: 'RoleUtilisateur',
-  description: 'Rôle de l\'utilisateur dans Pro Win',
+  description: "Rôle de l'utilisateur dans Pro Win",
 });
 
 @InputType()

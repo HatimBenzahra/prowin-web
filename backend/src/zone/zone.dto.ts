@@ -1,4 +1,11 @@
-import { ObjectType, Field, Int, InputType, Float, registerEnumType } from '@nestjs/graphql';
+import {
+  ObjectType,
+  Field,
+  Int,
+  InputType,
+  Float,
+  registerEnumType,
+} from '@nestjs/graphql';
 import {
   IsNotEmpty,
   IsString,
@@ -19,7 +26,7 @@ export { UserType };
 
 registerEnumType(UserType, {
   name: 'UserType',
-  description: 'Type d\'utilisateur pouvant être assigné à une zone',
+  description: "Type d'utilisateur pouvant être assigné à une zone",
 });
 
 @ObjectType()
@@ -265,7 +272,10 @@ export class AssignZoneInput {
   // @deprecated Ignoré. L'assignation est toujours individuelle (aucune
   // cascade). Le champ reste accepté pour ne pas casser les clients mobiles
   // existants qui l'envoient encore ; il sera retiré après leur mise à jour.
-  @Field(() => Boolean, { nullable: true, deprecationReason: 'Ignoré : aucune cascade. Sera retiré.' })
+  @Field(() => Boolean, {
+    nullable: true,
+    deprecationReason: 'Ignoré : aucune cascade. Sera retiré.',
+  })
   @IsOptional()
   @IsBoolean()
   cascade?: boolean;

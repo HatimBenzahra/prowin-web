@@ -19,7 +19,8 @@ export class WinleadPlusAuthService {
   private cachedUntil = 0;
 
   async getServiceToken(): Promise<string> {
-    if (this.cachedToken && Date.now() < this.cachedUntil) return this.cachedToken;
+    if (this.cachedToken && Date.now() < this.cachedUntil)
+      return this.cachedToken;
 
     const username = process.env.WINLEADPLUS_USERNAME?.trim();
     const password = process.env.WINLEADPLUS_PASSWORD;
@@ -27,7 +28,9 @@ export class WinleadPlusAuthService {
     // ProWin's KEYCLOAK_* credentials authenticate CRM users in a different realm.
     // Never silently use them for WinLead+.
     if (!username || !password || !root) {
-      throw new Error('Authentification service WinLead+ indisponible : configuration WINLEADPLUS dédiée absente');
+      throw new Error(
+        'Authentification service WinLead+ indisponible : configuration WINLEADPLUS dédiée absente',
+      );
     }
     const apiBase = root.endsWith('/api') ? root : `${root}/api`;
 
@@ -40,14 +43,21 @@ export class WinleadPlusAuthService {
       ));
     } catch (error: unknown) {
       // Never log Axios errors: they contain the request body (password).
-      const status = axios.isAxiosError(error) ? error.response?.status : undefined;
-      throw new Error(`Connexion WinLead+ refusée${status ? ` (HTTP ${status})` : ''}`);
+      const status = axios.isAxiosError(error)
+        ? error.response?.status
+        : undefined;
+      throw new Error(
+        `Connexion WinLead+ refusée${status ? ` (HTTP ${status})` : ''}`,
+      );
     }
 
     if (typeof data?.access_token !== 'string' || !data.access_token.trim()) {
       throw new Error('Token service WinLead+ absent');
     }
-    const expiresInMs = typeof data.expires_in === 'number' && data.expires_in > 0 ? data.expires_in * 1000 : 0;
+    const expiresInMs =
+      typeof data.expires_in === 'number' && data.expires_in > 0
+        ? data.expires_in * 1000
+        : 0;
     this.cachedToken = data.access_token;
     this.cachedUntil = Date.now() + Math.max(expiresInMs - EXPIRY_MARGIN_MS, 0);
     return data.access_token;

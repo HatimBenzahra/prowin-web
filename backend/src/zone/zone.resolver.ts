@@ -54,7 +54,12 @@ export class ZoneResolver {
     @Args('userType', { type: () => UserType }) userType: UserType,
     @CurrentUser() user: any,
   ) {
-    return this.zoneService.getZonesForUser(userId, userType, user.id, user.role);
+    return this.zoneService.getZonesForUser(
+      userId,
+      userType,
+      user.id,
+      user.role,
+    );
   }
 
   @Mutation(() => Zone)
@@ -88,7 +93,9 @@ export class ZoneResolver {
     @Args('managerId', { type: () => Int }) managerId: number,
     @CurrentUser() user: any,
   ) {
-    return this.zoneService.assignToManager(zoneId, managerId, user.id, user.role).then(() => true);
+    return this.zoneService
+      .assignToManager(zoneId, managerId, user.id, user.role)
+      .then(() => true);
   }
 
   @Mutation(() => Boolean)
@@ -109,7 +116,10 @@ export class ZoneResolver {
 
   @Mutation(() => ZoneEnCours, { name: 'assignZoneToUser' })
   @Roles('admin', 'directeur', 'manager')
-  assignZoneToUser(@Args('input') input: AssignZoneInput, @CurrentUser() user: any) {
+  assignZoneToUser(
+    @Args('input') input: AssignZoneInput,
+    @CurrentUser() user: any,
+  ) {
     // `input.cascade` est accepté mais ignoré (déprécié) : l'assignation est
     // toujours individuelle, sans cascade. Le champ reste dans le schéma pour
     // ne pas casser les clients mobiles qui l'envoient encore.
@@ -129,7 +139,9 @@ export class ZoneResolver {
     @Args('userType', { type: () => UserType }) userType: UserType,
     @CurrentUser() user: any,
   ) {
-    return this.zoneService.unassignUser(userId, userType, user.id, user.role).then(() => true);
+    return this.zoneService
+      .unassignUser(userId, userType, user.id, user.role)
+      .then(() => true);
   }
 
   @Query(() => ZoneEnCours, { name: 'currentUserAssignment', nullable: true })
@@ -139,7 +151,12 @@ export class ZoneResolver {
     @Args('userType', { type: () => UserType }) userType: UserType,
     @CurrentUser() user: any,
   ) {
-    return this.zoneService.getCurrentAssignment(userId, userType, user.id, user.role);
+    return this.zoneService.getCurrentAssignment(
+      userId,
+      userType,
+      user.id,
+      user.role,
+    );
   }
 
   @Query(() => [HistoriqueZone], { name: 'userZoneHistory' })
@@ -149,7 +166,12 @@ export class ZoneResolver {
     @Args('userType', { type: () => UserType }) userType: UserType,
     @CurrentUser() user: any,
   ) {
-    return this.zoneService.getUserZoneHistory(userId, userType, user.id, user.role);
+    return this.zoneService.getUserZoneHistory(
+      userId,
+      userType,
+      user.id,
+      user.role,
+    );
   }
 
   @Query(() => [HistoriqueZone], { name: 'zoneHistory' })
@@ -164,7 +186,11 @@ export class ZoneResolver {
     @Args('zoneId', { type: () => Int }) zoneId: number,
     @CurrentUser() user: any,
   ) {
-    return this.zoneService.getZoneCurrentAssignments(zoneId, user.id, user.role);
+    return this.zoneService.getZoneCurrentAssignments(
+      zoneId,
+      user.id,
+      user.role,
+    );
   }
 
   @Query(() => [HistoriqueZone], { name: 'allZoneHistory' })

@@ -1,10 +1,4 @@
-import {
-  Field,
-  Float,
-  InputType,
-  Int,
-  ObjectType,
-} from '@nestjs/graphql';
+import { Field, Float, InputType, Int, ObjectType } from '@nestjs/graphql';
 
 @ObjectType()
 export class CoachingSubScoreDto {
@@ -43,7 +37,9 @@ export class CoachingCriterionResultDto {
   @Field(() => String, { nullable: true }) dimension?: string | null; // qualite | plan | conformite
   @Field(() => String, { nullable: true }) kind?: string | null; // standard | discovery
   @Field(() => String, { nullable: true }) timing?: string | null; // on_time | late | reordered_justified
-  @Field(() => [CoachingEvidenceRefDto], { nullable: true }) evidenceRefs?: CoachingEvidenceRefDto[] | null;
+  @Field(() => [CoachingEvidenceRefDto], { nullable: true }) evidenceRefs?:
+    | CoachingEvidenceRefDto[]
+    | null;
 }
 
 /** Statut d'un produit du catalogue sur la visite (proposition, refus, oubli…). */
@@ -150,7 +146,8 @@ export class CoachingProductVerificationItemDto {
 @ObjectType()
 export class CoachingProductVerificationDto {
   @Field() status: string;
-  @Field(() => [CoachingProductVerificationItemDto]) products: CoachingProductVerificationItemDto[];
+  @Field(() => [CoachingProductVerificationItemDto])
+  products: CoachingProductVerificationItemDto[];
 }
 
 @ObjectType()
@@ -158,10 +155,16 @@ export class CoachingAnalysisDto {
   @Field(() => Int, { nullable: true }) transcriptionAttempts?: number;
   @Field(() => Int, { nullable: true }) evaluationAttempts?: number;
   @Field(() => String, { nullable: true }) stageStartedAt?: string | null;
-  @Field(() => String, { nullable: true }) transcriptionStartedAt?: string | null;
-  @Field(() => String, { nullable: true }) transcriptionCompletedAt?: string | null;
+  @Field(() => String, { nullable: true }) transcriptionStartedAt?:
+    | string
+    | null;
+  @Field(() => String, { nullable: true }) transcriptionCompletedAt?:
+    | string
+    | null;
   @Field(() => String, { nullable: true }) evaluationStartedAt?: string | null;
-  @Field(() => String, { nullable: true }) evaluationCompletedAt?: string | null;
+  @Field(() => String, { nullable: true }) evaluationCompletedAt?:
+    | string
+    | null;
   @Field(() => String, { nullable: true }) nextRetryAt?: string | null;
   @Field(() => Int) id: number;
   @Field(() => Int, { nullable: true }) recordingId?: number | null;
@@ -176,10 +179,13 @@ export class CoachingAnalysisDto {
   @Field(() => Float, { nullable: true }) scoreBeforeMalus?: number | null;
   @Field(() => Float, { nullable: true }) malus?: number | null; // points retirés (positif)
   @Field(() => [CoachingViolationDto]) violations: CoachingViolationDto[];
-  @Field(() => [CoachingProductAlertDto]) productAlerts?: CoachingProductAlertDto[];
-  @Field(() => CoachingProductVerificationDto) productVerification?: CoachingProductVerificationDto;
+  @Field(() => [CoachingProductAlertDto])
+  productAlerts?: CoachingProductAlertDto[];
+  @Field(() => CoachingProductVerificationDto)
+  productVerification?: CoachingProductVerificationDto;
   @Field(() => [String]) detectedProducts: string[]; // offres PRÉSENTÉES par le commercial
-  @Field(() => [CoachingMappedProductDto]) productMapping: CoachingMappedProductDto[];
+  @Field(() => [CoachingMappedProductDto])
+  productMapping: CoachingMappedProductDto[];
   @Field(() => Float, { nullable: true }) confidence?: number | null;
   @Field(() => String, { nullable: true }) summary?: string | null;
   @Field(() => [String]) strengths: string[];
@@ -214,12 +220,17 @@ export class CoachingAnalysisDto {
   @Field(() => String, { nullable: true }) signatureStatus?: string | null;
   @Field(() => String, { nullable: true }) outcomeOverriddenBy?: string | null;
   @Field(() => String, { nullable: true }) outcomeOverriddenAt?: string | null;
-  @Field(() => [CoachingProductStatusDto]) productStatuses?: CoachingProductStatusDto[];
-  @Field(() => CoachingIndicatorsDto, { nullable: true }) indicators?: CoachingIndicatorsDto | null;
+  @Field(() => [CoachingProductStatusDto])
+  productStatuses?: CoachingProductStatusDto[];
+  @Field(() => CoachingIndicatorsDto, { nullable: true })
+  indicators?: CoachingIndicatorsDto | null;
   @Field(() => String, { nullable: true }) band?: string | null; // maitrise | correct | coaching | insuffisant | non_evaluable
-  @Field(() => CoachingAnalysisConfidenceDto, { nullable: true }) analysisConfidence?: CoachingAnalysisConfidenceDto | null;
-  @Field(() => [CoachingCalculationCheckDto]) calculationChecks?: CoachingCalculationCheckDto[];
-  @Field(() => [CoachingContradictionDto]) contradictions?: CoachingContradictionDto[];
+  @Field(() => CoachingAnalysisConfidenceDto, { nullable: true })
+  analysisConfidence?: CoachingAnalysisConfidenceDto | null;
+  @Field(() => [CoachingCalculationCheckDto])
+  calculationChecks?: CoachingCalculationCheckDto[];
+  @Field(() => [CoachingContradictionDto])
+  contradictions?: CoachingContradictionDto[];
   @Field(() => [CoachingPhaseTimingDto]) phaseTiming?: CoachingPhaseTimingDto[];
   // Niveau du commercial et score attendu à ce niveau (null pour un manager).
   @Field(() => String, { nullable: true }) commercialNiveau?: string | null;
@@ -306,7 +317,9 @@ export class CoachingScoreboardDto {
 
   /** Score moyen toutes analyses confondues — la ligne de référence de l'équipe. */
   @Field(() => Float, { nullable: true }) scoreMoyenEquipe?: number | null;
-  @Field(() => Float, { nullable: true }) scoreMoyenEquipePrecedent?: number | null;
+  @Field(() => Float, { nullable: true }) scoreMoyenEquipePrecedent?:
+    | number
+    | null;
   @Field(() => Int) nbAnalyses: number;
 
   /** Étapes du plan actif, dans l'ordre — axes du comparatif. */
@@ -370,7 +383,8 @@ export class CoachingJournalAnalysisDto {
   @Field(() => Float, { nullable: true }) outcomeScore?: number | null;
   @Field(() => String, { nullable: true }) visitResult?: string | null;
   @Field(() => String, { nullable: true }) nonSaleReason?: string | null;
-  @Field(() => [CoachingJournalProductDto]) productStatuses: CoachingJournalProductDto[];
+  @Field(() => [CoachingJournalProductDto])
+  productStatuses: CoachingJournalProductDto[];
 }
 
 /** Un audio du journal des écoutes : 1 audio = 1 porte (celle du premier segment). */
@@ -393,7 +407,8 @@ export class CoachingJournalRowDto {
   @Field() favori: boolean;
   @Field() archived: boolean;
   @Field(() => String, { nullable: true }) archivedAt?: string | null;
-  @Field(() => CoachingJournalAnalysisDto, { nullable: true }) analysis?: CoachingJournalAnalysisDto | null;
+  @Field(() => CoachingJournalAnalysisDto, { nullable: true })
+  analysis?: CoachingJournalAnalysisDto | null;
 }
 
 /** Une page du journal : des jours ENTIERS, du plus récent au plus ancien. */
@@ -422,7 +437,9 @@ export class CoachingJournalFilter {
   @Field(() => [String], { nullable: true }) visitResult?: string[] | null;
   @Field(() => [String], { nullable: true }) band?: string[] | null;
   @Field(() => String, { nullable: true }) productKey?: string | null;
-  @Field(() => Boolean, { nullable: true }) productAcceptedOnly?: boolean | null;
+  @Field(() => Boolean, { nullable: true }) productAcceptedOnly?:
+    | boolean
+    | null;
   @Field(() => Boolean, { nullable: true }) favorisOnly?: boolean | null;
   @Field(() => Boolean, { nullable: true }) nonAnalysesOnly?: boolean | null;
   // 'hide' (défaut) : sans les archivés ; 'only' : seulement eux.
@@ -468,7 +485,9 @@ export class CoachingConfigDto {
   @Field(() => Int) synthesisCronHour: number;
   @Field(() => Int) synthesisCronMinute: number;
   @Field(() => Int) synthesisCronWeekday: number; // 0=dim..6=sam
-  @Field(() => String, { nullable: true }) synthesisCronLastRunAt?: string | null;
+  @Field(() => String, { nullable: true }) synthesisCronLastRunAt?:
+    | string
+    | null;
 }
 
 @InputType()
@@ -517,6 +536,7 @@ export class CoachingProductStatsDto {
   @Field(() => Int) nbVisites: number;
   @Field(() => [CoachingProductRateDto]) products: CoachingProductRateDto[];
   @Field(() => Float, { nullable: true }) produitsParVisite?: number | null;
-  @Field(() => [CoachingSubjectSalesDto]) parIntervenant: CoachingSubjectSalesDto[];
+  @Field(() => [CoachingSubjectSalesDto])
+  parIntervenant: CoachingSubjectSalesDto[];
   @Field(() => [CoachingLossCauseDto]) causesPerte: CoachingLossCauseDto[];
 }

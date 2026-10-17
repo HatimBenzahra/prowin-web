@@ -28,7 +28,10 @@ export class ManagerResolver {
 
   @Query(() => Manager, { name: 'manager' })
   @Roles('admin', 'directeur', 'manager')
-  findOne(@Args('id', { type: () => Int }) id: number, @CurrentUser() user: any) {
+  findOne(
+    @Args('id', { type: () => Int }) id: number,
+    @CurrentUser() user: any,
+  ) {
     return this.managerService.findOne(id, user.id, user.role);
   }
 
@@ -50,7 +53,10 @@ export class ManagerResolver {
 
   @Query(() => Manager, { name: 'managerFull', nullable: true })
   @Roles('admin', 'directeur', 'manager')
-  findFull(@Args('id', { type: () => Int }) id: number, @CurrentUser() user: any) {
+  findFull(
+    @Args('id', { type: () => Int }) id: number,
+    @CurrentUser() user: any,
+  ) {
     return this.managerService.findFull(id, user.id, user.role);
   }
 
@@ -65,7 +71,10 @@ export class ManagerResolver {
 
   @Mutation(() => Manager)
   @Roles('admin', 'directeur')
-  removeManager(@Args('id', { type: () => Int }) id: number, @CurrentUser() user: any) {
+  removeManager(
+    @Args('id', { type: () => Int }) id: number,
+    @CurrentUser() user: any,
+  ) {
     return this.managerService.remove(id, user.id, user.role);
   }
 }

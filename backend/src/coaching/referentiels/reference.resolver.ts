@@ -6,7 +6,11 @@ import { Roles } from '../../auth/decorators/roles.decorator';
 import { CurrentUser } from '../../auth/decorators/current-user.decorator';
 import { PrismaService } from '../../prisma.service';
 import { ProductContent } from '../coaching-api.client';
-import { ReferenceDraftState, ReferenceService, ReferenceWithProducts } from './reference.service';
+import {
+  ReferenceDraftState,
+  ReferenceService,
+  ReferenceWithProducts,
+} from './reference.service';
 import {
   CoachingOffreDto,
   ReferenceDraftDto,
@@ -19,7 +23,8 @@ import {
 type AuthenticatedUser = { id: number; role: string; email?: string | null };
 
 /** Auteur d'une écriture : l'e-mail Keycloak, sinon le rôle et l'id du compte. */
-const author = (user: AuthenticatedUser): string => user.email?.trim() || `${user.role}#${user.id}`;
+const author = (user: AuthenticatedUser): string =>
+  user.email?.trim() || `${user.role}#${user.id}`;
 
 const SHORT_HASH = 12;
 
@@ -30,7 +35,10 @@ const SHORT_HASH = 12;
 @Resolver()
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class ReferenceResolver {
-  constructor(private readonly references: ReferenceService, private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly references: ReferenceService,
+    private readonly prisma: PrismaService,
+  ) {}
 
   @Query(() => ReferenceDto, { nullable: true })
   @Roles('admin', 'directeur')
@@ -42,12 +50,18 @@ export class ReferenceResolver {
   @Query(() => [ReferenceVersionDto])
   @Roles('admin', 'directeur')
   async referenceVersions(): Promise<ReferenceVersionDto[]> {
-    return (await this.references.listPublished()).map(v => ({ ...v, version: v.version!, contentHash: v.contentHash!.slice(0, SHORT_HASH) }));
+    return (await this.references.listPublished()).map((v) => ({
+      ...v,
+      version: v.version!,
+      contentHash: v.contentHash!.slice(0, SHORT_HASH),
+    }));
   }
 
   @Query(() => ReferenceDto)
   @Roles('admin', 'directeur')
-  async referenceVersion(@Args('id', { type: () => Int }) id: number): Promise<ReferenceDto> {
+  async referenceVersion(
+    @Args('id', { type: () => Int }) id: number,
+  ): Promise<ReferenceDto> {
     return this.toDto(await this.references.getPublished(id));
   }
 
@@ -63,38 +77,62 @@ export class ReferenceResolver {
   @Roles('admin', 'directeur')
   coachingOffres(): Promise<CoachingOffreDto[]> {
     return this.prisma.offre.findMany({
-      select: { externalId: true, nom: true, fournisseur: true, isActive: true, prixBase: true },
+      select: {
+        externalId: true,
+        nom: true,
+        fournisseur: true,
+        isActive: true,
+        prixBase: true,
+      },
       orderBy: [{ fournisseur: 'asc' }, { nom: 'asc' }],
     });
   }
 
   @Mutation(() => ReferenceDraftDto)
   @Roles('admin')
-  async openReferenceDraft(@CurrentUser() user: AuthenticatedUser): Promise<ReferenceDraftDto> {
+  async openReferenceDraft(
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<ReferenceDraftDto> {
     return this.toDraftDto(await this.references.openDraft(author(user)));
   }
 
   @Mutation(() => ReferenceDraftDto)
   @Roles('admin')
-  async setReferenceDraftPlan(@Args('markdown') markdown: string): Promise<ReferenceDraftDto> {
+  async setReferenceDraftPlan(
+    @Args('markdown') markdown: string,
+  ): Promise<ReferenceDraftDto> {
     return this.toDraftDto(await this.references.setDraftPlan(markdown));
   }
 
   @Mutation(() => ReferenceDraftDto)
   @Roles('admin')
-  async saveReferenceDraftProduct(@Args('product') product: ReferenceProductInput): Promise<ReferenceDraftDto> {
-    return this.toDraftDto(await this.references.saveDraftProduct({ ...product, offreFournisseur: product.offreFournisseur ?? null }));
+  async saveReferenceDraftProduct(
+    @Args('product') product: ReferenceProductInput,
+  ): Promise<ReferenceDraftDto> {
+    return this.toDraftDto(
+      await this.references.saveDraftProduct({
+        ...product,
+        offreFournisseur: product.offreFournisseur ?? null,
+      }),
+    );
   }
 
   @Mutation(() => ReferenceDraftDto)
   @Roles('admin')
-  async setReferenceDraftProductSheet(@Args('key') key: string, @Args('markdown') markdown: string): Promise<ReferenceDraftDto> {
-    return this.toDraftDto(await this.references.setDraftProductSheet(key, markdown));
+  async setReferenceDraftProductSheet(
+    @Args('key') key: string,
+    @Args('markdown') markdown: string,
+  ): Promise<ReferenceDraftDto> {
+    return this.toDraftDto(
+      await this.references.setDraftProductSheet(key, markdown),
+    );
   }
 
   @Mutation(() => ReferenceDraftDto)
   @Roles('admin')
-  async removeReferenceDraftProduct(@Args('key') key: string): Promise<ReferenceDraftDto> {
+  async removeReferenceDraftProduct(
+    @Args('key') key: string,
+  ): Promise<ReferenceDraftDto> {
     return this.toDraftDto(await this.references.removeDraftProduct(key));
   }
 
@@ -103,9 +141,12 @@ export class ReferenceResolver {
   @Roles('admin')
   async publishReferenceDraft(
     @CurrentUser() user: AuthenticatedUser,
-    @Args('effectiveFrom', { type: () => Date, nullable: true }) effectiveFrom?: Date | null,
+    @Args('effectiveFrom', { type: () => Date, nullable: true })
+    effectiveFrom?: Date | null,
   ): Promise<ReferenceDto> {
-    return this.toDto(await this.references.publishDraft(author(user), effectiveFrom));
+    return this.toDto(
+      await this.references.publishDraft(author(user), effectiveFrom),
+    );
   }
 
   @Mutation(() => Boolean)
@@ -116,21 +157,42 @@ export class ReferenceResolver {
 
   @Mutation(() => ReferenceDto)
   @Roles('admin')
-  async activateReferenceVersion(@Args('id', { type: () => Int }) id: number): Promise<ReferenceDto> {
+  async activateReferenceVersion(
+    @Args('id', { type: () => Int }) id: number,
+  ): Promise<ReferenceDto> {
     return this.toDto(await this.references.activate(id));
   }
 
-  private async toDraftDto(state: ReferenceDraftState): Promise<ReferenceDraftDto> {
+  private async toDraftDto(
+    state: ReferenceDraftState,
+  ): Promise<ReferenceDraftDto> {
     return {
       reference: await this.toDto(state.reference),
-      issues: state.issues.map(i => ({ level: i.level, code: i.code, message: i.message, productKey: i.productKey ?? null, stepKey: i.stepKey ?? null })),
+      issues: state.issues.map((i) => ({
+        level: i.level,
+        code: i.code,
+        message: i.message,
+        productKey: i.productKey ?? null,
+        stepKey: i.stepKey ?? null,
+      })),
     };
   }
 
   private async toDto(reference: ReferenceWithProducts): Promise<ReferenceDto> {
-    const ids = [...new Set(reference.products.flatMap(p => p.offreExternalIds))];
+    const ids = [
+      ...new Set(reference.products.flatMap((p) => p.offreExternalIds)),
+    ];
     const offres = ids.length
-      ? await this.prisma.offre.findMany({ where: { externalId: { in: ids } }, select: { externalId: true, nom: true, fournisseur: true, isActive: true, prixBase: true } })
+      ? await this.prisma.offre.findMany({
+          where: { externalId: { in: ids } },
+          select: {
+            externalId: true,
+            nom: true,
+            fournisseur: true,
+            isActive: true,
+            prixBase: true,
+          },
+        })
       : [];
     return {
       id: reference.id,
@@ -145,8 +207,9 @@ export class ReferenceResolver {
       publishedAt: reference.publishedAt,
       effectiveFrom: reference.effectiveFrom,
       plan: this.toPlanDto(reference),
-      products: reference.products.map(product => {
-        const content = product.sheetContent as unknown as ProductContent | null;
+      products: reference.products.map((product) => {
+        const content =
+          product.sheetContent as unknown as ProductContent | null;
         return {
           key: product.key,
           label: product.label,
@@ -154,10 +217,20 @@ export class ReferenceResolver {
           sttTerms: product.sttTerms,
           offreExternalIds: product.offreExternalIds,
           offreFournisseur: product.offreFournisseur,
-          offres: offres.filter(o => product.offreExternalIds.includes(o.externalId)),
-          sheet: product.sheetMarkdown && content
-            ? { facts: content.facts, forbidden: content.forbidden.map(f => ({ say: f.say, severity: f.severity })), rawMarkdown: product.sheetMarkdown }
-            : null,
+          offres: offres.filter((o) =>
+            product.offreExternalIds.includes(o.externalId),
+          ),
+          sheet:
+            product.sheetMarkdown && content
+              ? {
+                  facts: content.facts,
+                  forbidden: content.forbidden.map((f) => ({
+                    say: f.say,
+                    severity: f.severity,
+                  })),
+                  rawMarkdown: product.sheetMarkdown,
+                }
+              : null,
         };
       }),
     };
@@ -171,12 +244,12 @@ export class ReferenceResolver {
       title: plan.title,
       scoringScale: plan.scoringScale,
       rawMarkdown: reference.planMarkdown,
-      steps: (plan.steps ?? []).map(s => ({
+      steps: (plan.steps ?? []).map((s) => ({
         key: s.key,
         label: s.label,
         weight: s.weight,
         appliesWhen: s.appliesWhen,
-        criteria: (s.criteria ?? []).map(c => ({
+        criteria: (s.criteria ?? []).map((c) => ({
           key: c.key,
           label: c.label,
           points: c.points,

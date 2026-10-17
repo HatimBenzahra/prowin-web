@@ -1,6 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
-import { WinleadPlusUser, MappingSuggestion, MappingEntry } from './gamification.dto';
+import {
+  WinleadPlusUser,
+  MappingSuggestion,
+  MappingEntry,
+} from './gamification.dto';
 import { WinleadPlusApiService } from './winleadplus-api.service';
 
 @Injectable()
@@ -30,25 +34,45 @@ export class MappingService {
     const [commercials, managers] = await Promise.all([
       this.prisma.commercial.findMany({
         where: { status: 'ACTIF' },
-        select: { id: true, nom: true, prenom: true, email: true, winleadPlusId: true },
+        select: {
+          id: true,
+          nom: true,
+          prenom: true,
+          email: true,
+          winleadPlusId: true,
+        },
       }),
       this.prisma.manager.findMany({
         where: { status: 'ACTIF' },
-        select: { id: true, nom: true, prenom: true, email: true, winleadPlusId: true },
+        select: {
+          id: true,
+          nom: true,
+          prenom: true,
+          email: true,
+          winleadPlusId: true,
+        },
       }),
     ]);
 
     const suggestions: MappingSuggestion[] = [];
 
     // Les admins WinLead+ signent aussi : candidats pour les deux types.
-    const winleadCommercials = winleadUsers.filter((u) => ['COMMERCIAL', 'ADMIN'].includes(u.role));
+    const winleadCommercials = winleadUsers.filter((u) =>
+      ['COMMERCIAL', 'ADMIN'].includes(u.role),
+    );
     for (const commercial of commercials) {
-      suggestions.push(this.buildSuggestion(commercial, 'COMMERCIAL', winleadCommercials));
+      suggestions.push(
+        this.buildSuggestion(commercial, 'COMMERCIAL', winleadCommercials),
+      );
     }
 
-    const winleadManagers = winleadUsers.filter((u) => ['MANAGER', 'ADMIN'].includes(u.role));
+    const winleadManagers = winleadUsers.filter((u) =>
+      ['MANAGER', 'ADMIN'].includes(u.role),
+    );
     for (const manager of managers) {
-      suggestions.push(this.buildSuggestion(manager, 'MANAGER', winleadManagers));
+      suggestions.push(
+        this.buildSuggestion(manager, 'MANAGER', winleadManagers),
+      );
     }
 
     return suggestions;
@@ -135,7 +159,9 @@ export class MappingService {
     winleadUsers: WinleadPlusUser[],
   ): MappingSuggestion {
     if (prowinUser.winleadPlusId) {
-      const matched = winleadUsers.find((u) => u.id === prowinUser.winleadPlusId);
+      const matched = winleadUsers.find(
+        (u) => u.id === prowinUser.winleadPlusId,
+      );
       return {
         prowinId: prowinUser.id,
         prowinNom: prowinUser.nom,
@@ -206,10 +232,15 @@ export class MappingService {
       //la condition ajoute pour un utilisateur qui a le compte gmail dans prowin et a 2 comptes gmail et winlead dans winlead plus
       // À égalité, le compte du même rôle l'emporte sur un compte admin homonyme.
       const sameRole = (u: WinleadPlusUser | null) => u?.role === type;
-      if (confidence > bestConfidence ||
-          (confidence === bestConfidence && sameRole(wUser) && !sameRole(bestMatch)) ||
-          (confidence === bestConfidence && sameRole(wUser) === sameRole(bestMatch) &&
-            wUser.email?.endsWith('@winleadplus.com'))) {
+      if (
+        confidence > bestConfidence ||
+        (confidence === bestConfidence &&
+          sameRole(wUser) &&
+          !sameRole(bestMatch)) ||
+        (confidence === bestConfidence &&
+          sameRole(wUser) === sameRole(bestMatch) &&
+          wUser.email?.endsWith('@winleadplus.com'))
+      ) {
         bestConfidence = confidence;
         bestMatch = wUser;
       }
@@ -230,6 +261,6 @@ export class MappingService {
       .toLowerCase()
       .normalize('NFD')
       .replace(/[\u0300-\u036f]/g, '') // accents
-      .replace(/[^a-z0-9]/g, '');       // caractères spéciaux
+      .replace(/[^a-z0-9]/g, ''); // caractères spéciaux
   }
 }

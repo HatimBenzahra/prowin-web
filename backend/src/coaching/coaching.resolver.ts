@@ -133,14 +133,34 @@ export class CoachingResolver {
   updateCoachingVisitOutcome(
     @Args('analysisId', { type: () => Int }) analysisId: number,
     @CurrentUser() user: { id: number; role: string; email?: string | null },
-    @Args('visitResult', { type: () => String, nullable: true }) visitResult?: string | null,
-    @Args('nonSaleReason', { type: () => String, nullable: true }) nonSaleReason?: string | null,
-    @Args('nextAction', { type: () => String, nullable: true }) nextAction?: string | null,
-    @Args('ribStatus', { type: () => String, nullable: true }) ribStatus?: string | null,
-    @Args('signatureStatus', { type: () => String, nullable: true }) signatureStatus?: string | null,
-    @Args('productStatuses', { type: () => [CoachingProductStatusInput], nullable: true }) productStatuses?: CoachingProductStatusInput[] | null,
+    @Args('visitResult', { type: () => String, nullable: true })
+    visitResult?: string | null,
+    @Args('nonSaleReason', { type: () => String, nullable: true })
+    nonSaleReason?: string | null,
+    @Args('nextAction', { type: () => String, nullable: true })
+    nextAction?: string | null,
+    @Args('ribStatus', { type: () => String, nullable: true })
+    ribStatus?: string | null,
+    @Args('signatureStatus', { type: () => String, nullable: true })
+    signatureStatus?: string | null,
+    @Args('productStatuses', {
+      type: () => [CoachingProductStatusInput],
+      nullable: true,
+    })
+    productStatuses?: CoachingProductStatusInput[] | null,
   ): Promise<CoachingAnalysisDto> {
-    return this.coaching.updateVisitOutcome(analysisId, { visitResult, nonSaleReason, nextAction, ribStatus, signatureStatus, productStatuses }, user);
+    return this.coaching.updateVisitOutcome(
+      analysisId,
+      {
+        visitResult,
+        nonSaleReason,
+        nextAction,
+        ribStatus,
+        signatureStatus,
+        productStatuses,
+      },
+      user,
+    );
   }
 
   @Mutation(() => CoachingConfigDto)

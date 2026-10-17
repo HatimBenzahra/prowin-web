@@ -36,7 +36,12 @@ export class RankingService {
     { key: 'PLATINUM', label: 'Platinum', minPoints: 1200, maxPoints: 2199 },
     { key: 'DIAMOND', label: 'Diamond', minPoints: 2200, maxPoints: 3499 },
     { key: 'MASTER', label: 'Master', minPoints: 3500, maxPoints: 4999 },
-    { key: 'GRANDMASTER', label: 'Grandmaster', minPoints: 5000, maxPoints: 6999 },
+    {
+      key: 'GRANDMASTER',
+      label: 'Grandmaster',
+      minPoints: 5000,
+      maxPoints: 6999,
+    },
     { key: 'LEGEND', label: 'Legend', minPoints: 7000, maxPoints: null },
   ];
 
@@ -91,7 +96,13 @@ export class RankingService {
         periodField,
         periodKey,
       );
-      scores.push({ id: commercial.id, commercialId: commercial.id, managerId: null, points, contratsSignes });
+      scores.push({
+        id: commercial.id,
+        commercialId: commercial.id,
+        managerId: null,
+        points,
+        contratsSignes,
+      });
     }
 
     for (const manager of managers) {
@@ -101,7 +112,13 @@ export class RankingService {
         periodField,
         periodKey,
       );
-      scores.push({ id: manager.id, commercialId: null, managerId: manager.id, points, contratsSignes });
+      scores.push({
+        id: manager.id,
+        commercialId: null,
+        managerId: manager.id,
+        points,
+        contratsSignes,
+      });
     }
 
     // 4. Trier par points décroissants, puis par contrats signés en cas d'égalité
@@ -121,7 +138,11 @@ export class RankingService {
       const pointTier = this.resolvePointTier(entry.points);
 
       // Récupérer le rang précédent pour le metadata
-      const previousSnapshot = await this.findPreviousSnapshot(entry, period, periodKey);
+      const previousSnapshot = await this.findPreviousSnapshot(
+        entry,
+        period,
+        periodKey,
+      );
       const previousRank = previousSnapshot?.rank ?? null;
       const delta = previousRank !== null ? previousRank - currentRank : null;
 
@@ -189,10 +210,18 @@ export class RankingService {
 
     if (this.requiresDynamicRanking(contractStatuses)) {
       if (!token) {
-        throw new Error('Token requis pour filtrer le classement par statuts de contrats');
+        throw new Error(
+          'Token requis pour filtrer le classement par statuts de contrats',
+        );
       }
 
-      return this.getDynamicRanking(period, periodKey, includeContratFinie, contractStatuses, token);
+      return this.getDynamicRanking(
+        period,
+        periodKey,
+        includeContratFinie,
+        contractStatuses,
+        token,
+      );
     }
 
     const statusFilter = includeContratFinie
@@ -204,7 +233,9 @@ export class RankingService {
         period,
         periodKey,
         OR: [
-          { commercial: { winleadPlusId: { not: null }, status: statusFilter } },
+          {
+            commercial: { winleadPlusId: { not: null }, status: statusFilter },
+          },
           { manager: { winleadPlusId: { not: null }, status: statusFilter } },
         ],
       },
@@ -228,7 +259,8 @@ export class RankingService {
 
     const countByOffre: Record<number, number> = {};
     for (const c of contrats) {
-      if (c.offreId) countByOffre[c.offreId] = (countByOffre[c.offreId] || 0) + 1;
+      if (c.offreId)
+        countByOffre[c.offreId] = (countByOffre[c.offreId] || 0) + 1;
     }
 
     const offreIds = Object.keys(countByOffre).map(Number);
@@ -236,13 +268,19 @@ export class RankingService {
 
     const offres = await this.prisma.offre.findMany({
       where: { id: { in: offreIds } },
-      select: { id: true, nom: true, categorie: true, fournisseur: true, logoUrl: true },
+      select: {
+        id: true,
+        nom: true,
+        categorie: true,
+        fournisseur: true,
+        logoUrl: true,
+      },
     });
 
-    const offreMap = new Map(offres.map(o => [o.id, o]));
+    const offreMap = new Map(offres.map((o) => [o.id, o]));
 
     return offreIds
-      .map(id => {
+      .map((id) => {
         const offre = offreMap.get(id);
         return {
           offreId: id,
@@ -395,7 +433,9 @@ export class RankingService {
 
     const periodField = this.getPeriodField(period);
     const allowedStatuses = this.mapContractStatuses(contractStatuses);
-    const offrePointsMap = new Map(offres.map((offre) => [offre.externalId, offre.points ?? 0]));
+    const offrePointsMap = new Map(
+      offres.map((offre) => [offre.externalId, offre.points ?? 0]),
+    );
     const scores = new Map<string, ScoreEntry>();
 
     for (const commercial of commercials) {
@@ -438,7 +478,9 @@ export class RankingService {
     );
 
     for (const prospect of prospects) {
-      const mappedCommercialId = commercialIdByWinlead.get(prospect.commercialId);
+      const mappedCommercialId = commercialIdByWinlead.get(
+        prospect.commercialId,
+      );
       const mappedManagerId = managerIdByWinlead.get(prospect.commercialId);
 
       for (const souscription of prospect.Souscription || []) {
@@ -446,7 +488,7 @@ export class RankingService {
         // Score configurable de l'offre (Offre.points). Pas d'équivalent "live"
         // côté WinLead+ → 0 si l'offre n'est pas mappée localement.
         const contractPoints = offreExternalId
-          ? offrePointsMap.get(offreExternalId) ?? 0
+          ? (offrePointsMap.get(offreExternalId) ?? 0)
           : 0;
 
         for (const contrat of souscription.contrats || []) {
@@ -465,7 +507,9 @@ export class RankingService {
           }
 
           if (mappedCommercialId) {
-            const commercialEntry = scores.get(`commercial:${mappedCommercialId}`);
+            const commercialEntry = scores.get(
+              `commercial:${mappedCommercialId}`,
+            );
             if (commercialEntry) {
               commercialEntry.contratsSignes += 1;
               commercialEntry.points += contractPoints;
@@ -514,20 +558,34 @@ export class RankingService {
         },
         computedAt: new Date(),
         commercial: entry.commercialId
-          ? { id: entry.commercialId, nom: entry.commercialNom, prenom: entry.commercialPrenom }
+          ? {
+              id: entry.commercialId,
+              nom: entry.commercialNom,
+              prenom: entry.commercialPrenom,
+            }
           : undefined,
         manager: entry.managerId
-          ? { id: entry.managerId, nom: entry.managerNom, prenom: entry.managerPrenom }
+          ? {
+              id: entry.managerId,
+              nom: entry.managerNom,
+              prenom: entry.managerPrenom,
+            }
           : undefined,
       };
     });
   }
 
-  private requiresDynamicRanking(contractStatuses: ContractRankingStatus[]): boolean {
-    return contractStatuses.some((status) => status !== ContractRankingStatus.VALIDE);
+  private requiresDynamicRanking(
+    contractStatuses: ContractRankingStatus[],
+  ): boolean {
+    return contractStatuses.some(
+      (status) => status !== ContractRankingStatus.VALIDE,
+    );
   }
 
-  private mapContractStatuses(contractStatuses: ContractRankingStatus[]): Set<string> {
+  private mapContractStatuses(
+    contractStatuses: ContractRankingStatus[],
+  ): Set<string> {
     return new Set(
       contractStatuses.map((status) => {
         switch (status) {
@@ -563,11 +621,15 @@ export class RankingService {
   }
 
   private getISOWeek(date: Date): string {
-    const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+    const d = new Date(
+      Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()),
+    );
     const dayNum = d.getUTCDay() || 7;
     d.setUTCDate(d.getUTCDate() + 4 - dayNum);
     const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
-    const weekNo = Math.ceil(((d.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
+    const weekNo = Math.ceil(
+      ((d.getTime() - yearStart.getTime()) / 86400000 + 1) / 7,
+    );
     return String(weekNo).padStart(2, '0');
   }
 
@@ -634,7 +696,11 @@ export class RankingService {
         return tier;
       }
 
-      if (tier.maxPoints !== null && safePoints >= tier.minPoints && safePoints <= tier.maxPoints) {
+      if (
+        tier.maxPoints !== null &&
+        safePoints >= tier.minPoints &&
+        safePoints <= tier.maxPoints
+      ) {
         return tier;
       }
     }

@@ -57,16 +57,14 @@ export class GamificationResolver {
 
   @Query(() => [WinleadPlusUser], { name: 'winleadPlusUsers' })
   @Roles('admin', 'directeur')
-  async getWinleadPlusUsers(
-  ): Promise<WinleadPlusUser[]> {
+  async getWinleadPlusUsers(): Promise<WinleadPlusUser[]> {
     const token = await this.winleadPlusAuth.getServiceToken();
     return this.mappingService.getWinleadPlusUsers(token);
   }
 
   @Query(() => [MappingSuggestion], { name: 'mappingSuggestions' })
   @Roles('admin', 'directeur')
-  async getMappingSuggestions(
-  ): Promise<MappingSuggestion[]> {
+  async getMappingSuggestions(): Promise<MappingSuggestion[]> {
     const token = await this.winleadPlusAuth.getServiceToken();
     return this.mappingService.getMappingSuggestions(token);
   }
@@ -111,7 +109,8 @@ export class GamificationResolver {
   @Query(() => [Offre], { name: 'offres' })
   @Roles('admin', 'directeur', 'manager', 'commercial')
   async getOffres(
-    @Args('activeOnly', { type: () => Boolean, defaultValue: true }) activeOnly: boolean,
+    @Args('activeOnly', { type: () => Boolean, defaultValue: true })
+    activeOnly: boolean,
   ): Promise<Offre[]> {
     const offres = await this.offreService.getOffres(activeOnly);
     return offres.map((o) => ({
@@ -127,8 +126,7 @@ export class GamificationResolver {
 
   @Mutation(() => SyncOffresResult, { name: 'syncOffres' })
   @Roles('admin', 'directeur')
-  async syncOffres(
-  ): Promise<SyncOffresResult> {
+  async syncOffres(): Promise<SyncOffresResult> {
     const token = await this.winleadPlusAuth.getServiceToken();
     const result = await this.offreService.syncOffres(token);
     return {
@@ -179,10 +177,15 @@ export class GamificationResolver {
   @Query(() => [BadgeDefinitionType], { name: 'badgeDefinitions' })
   @Roles('admin', 'directeur', 'manager', 'commercial')
   async getBadgeDefinitions(
-    @Args('category', { type: () => BadgeCategory, nullable: true }) category?: BadgeCategory,
-    @Args('activeOnly', { type: () => Boolean, defaultValue: true }) activeOnly?: boolean,
+    @Args('category', { type: () => BadgeCategory, nullable: true })
+    category?: BadgeCategory,
+    @Args('activeOnly', { type: () => Boolean, defaultValue: true })
+    activeOnly?: boolean,
   ): Promise<BadgeDefinitionType[]> {
-    const badges = await this.badgeService.getBadgeDefinitions(category, activeOnly);
+    const badges = await this.badgeService.getBadgeDefinitions(
+      category,
+      activeOnly,
+    );
     return badges.map((b) => this.toBadgeType(b));
   }
 
@@ -361,7 +364,8 @@ export class GamificationResolver {
   async getRanking(
     @Args('period', { type: () => RankPeriod }) period: RankPeriod,
     @Args('periodKey') periodKey: string,
-    @Args('includeContratFinie', { type: () => Boolean, defaultValue: false }) includeContratFinie: boolean,
+    @Args('includeContratFinie', { type: () => Boolean, defaultValue: false })
+    includeContratFinie: boolean,
     @Args('contractStatuses', {
       type: () => [ContractRankingStatus],
       nullable: true,
@@ -412,7 +416,8 @@ export class GamificationResolver {
   async getCommercialRankings(
     @Args('commercialId', { type: () => Int }) commercialId: number,
   ): Promise<RankSnapshotType[]> {
-    const snapshots = await this.rankingService.getCommercialRankings(commercialId);
+    const snapshots =
+      await this.rankingService.getCommercialRankings(commercialId);
     return snapshots.map((s) => {
       const tier = this.rankingService.resolvePointTier(s.points);
       return {
@@ -516,7 +521,9 @@ export class GamificationResolver {
   async batchUpdateOffreBadgeProductKey(
     @Args('input') input: BatchUpdateOffreBadgeProductKeyInput,
   ): Promise<MappingResult> {
-    const result = await this.offreService.batchUpdateOffreBadgeProductKey(input.offres);
+    const result = await this.offreService.batchUpdateOffreBadgeProductKey(
+      input.offres,
+    );
     return {
       success: result.updated > 0,
       message: `${result.updated}/${result.total} offre(s) mise(s) à jour`,
@@ -531,8 +538,7 @@ export class GamificationResolver {
 
   @Mutation(() => SyncContratsResult, { name: 'syncContrats' })
   @Roles('admin', 'directeur')
-  async syncContrats(
-  ): Promise<SyncContratsResult> {
+  async syncContrats(): Promise<SyncContratsResult> {
     const token = await this.winleadPlusAuth.getServiceToken();
     const result = await this.contratService.syncContrats(token);
     return {
@@ -620,7 +626,8 @@ export class GamificationResolver {
   async evaluatePerformanceRanking(
     @Args('month') month: string,
   ): Promise<AwardBadgesResult> {
-    const result = await this.evaluationService.evaluatePerformanceRanking(month);
+    const result =
+      await this.evaluationService.evaluatePerformanceRanking(month);
     return {
       success: true,
       message: `Performance ranking ${month}: ${result.awarded} badge(s) attribué(s), ${result.skipped} déjà existant(s)`,
@@ -635,7 +642,8 @@ export class GamificationResolver {
   async evaluateConversionRanking(
     @Args('weekKey') weekKey: string,
   ): Promise<AwardBadgesResult> {
-    const result = await this.evaluationService.evaluateConversionRanking(weekKey);
+    const result =
+      await this.evaluationService.evaluateConversionRanking(weekKey);
     return {
       success: true,
       message: `Conversion ranking ${weekKey}: ${result.awarded} badge(s) attribué(s), ${result.skipped} déjà existant(s)`,
@@ -650,7 +658,8 @@ export class GamificationResolver {
   async evaluateTransformationRanking(
     @Args('month') month: string,
   ): Promise<AwardBadgesResult> {
-    const result = await this.evaluationService.evaluateTransformationRanking(month);
+    const result =
+      await this.evaluationService.evaluateTransformationRanking(month);
     return {
       success: true,
       message: `Transformation ranking ${month}: ${result.awarded} badge(s) attribué(s), ${result.skipped} déjà existant(s)`,

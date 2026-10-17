@@ -1,4 +1,4 @@
-import { registerEnumType } from '@nestjs/graphql'
+import { registerEnumType } from '@nestjs/graphql';
 
 export enum CommercialNiveau {
   EN_FORMATION = 'EN_FORMATION',
@@ -10,4 +10,4 @@ export enum CommercialNiveau {
 registerEnumType(CommercialNiveau, {
   name: 'CommercialNiveau',
   description: 'Niveau d’un commercial : fixe son objectif de score coaching',
-})
+});

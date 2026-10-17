@@ -1,4 +1,10 @@
-import { ObjectType, Field, Int, InputType, registerEnumType } from '@nestjs/graphql';
+import {
+  ObjectType,
+  Field,
+  Int,
+  InputType,
+  registerEnumType,
+} from '@nestjs/graphql';
 import { IsNotEmpty, IsString, IsEnum, IsOptional } from 'class-validator';
 import { GraphQLJSON } from 'graphql-type-json';
 import { NotificationType, UserType } from '@prisma/client';

@@ -39,7 +39,8 @@ export class StatisticResolver {
   @Query(() => [Statistic], { name: 'statistics' })
   @Roles('admin', 'directeur', 'manager', 'commercial')
   findAll(
-    @Args('commercialId', { type: () => Int, nullable: true }) commercialId: number | undefined,
+    @Args('commercialId', { type: () => Int, nullable: true })
+    commercialId: number | undefined,
     @CurrentUser() user: any,
   ) {
     return this.statisticService.findAll(commercialId, user.id, user.role);
@@ -47,7 +48,10 @@ export class StatisticResolver {
 
   @Query(() => Statistic, { name: 'statistic' })
   @Roles('admin', 'directeur', 'manager', 'commercial')
-  findOne(@Args('id', { type: () => Int }) id: number, @CurrentUser() user: any) {
+  findOne(
+    @Args('id', { type: () => Int }) id: number,
+    @CurrentUser() user: any,
+  ) {
     return this.statisticService.findOne(id, user.id, user.role);
   }
 
@@ -57,12 +61,19 @@ export class StatisticResolver {
     @Args('updateStatisticInput') updateStatisticInput: UpdateStatisticInput,
     @CurrentUser() user: any,
   ) {
-    return this.statisticService.update(updateStatisticInput, user.id, user.role);
+    return this.statisticService.update(
+      updateStatisticInput,
+      user.id,
+      user.role,
+    );
   }
 
   @Mutation(() => Statistic)
   @Roles('admin', 'directeur')
-  removeStatistic(@Args('id', { type: () => Int }) id: number, @CurrentUser() user: any) {
+  removeStatistic(
+    @Args('id', { type: () => Int }) id: number,
+    @CurrentUser() user: any,
+  ) {
     return this.statisticService.remove(id, user.id, user.role);
   }
 
@@ -75,7 +86,10 @@ export class StatisticResolver {
   @Query(() => [TeamLastStatusActivity], { name: 'teamLastStatusActivities' })
   @Roles('admin', 'directeur', 'manager', 'commercial')
   teamLastStatusActivities(@CurrentUser() user: any) {
-    return this.statisticService.getTeamLastStatusActivities(user.id, user.role);
+    return this.statisticService.getTeamLastStatusActivities(
+      user.id,
+      user.role,
+    );
   }
 
   @Mutation(() => String, { name: 'recalculateAllStats' })
@@ -115,8 +129,10 @@ export class StatisticResolver {
   @Roles('admin', 'directeur', 'manager', 'commercial')
   statsTimelineByCommercial(
     @Args('commercialId', { type: () => Int }) commercialId: number,
-    @Args('startDate', { type: () => Date, nullable: true }) startDate: Date | undefined,
-    @Args('endDate', { type: () => Date, nullable: true }) endDate: Date | undefined,
+    @Args('startDate', { type: () => Date, nullable: true })
+    startDate: Date | undefined,
+    @Args('endDate', { type: () => Date, nullable: true })
+    endDate: Date | undefined,
     @CurrentUser() user: any,
   ) {
     return this.statisticService.statsTimelineByCommercial(
@@ -131,11 +147,16 @@ export class StatisticResolver {
   @Query(() => [TimelinePoint], { name: 'statsTimeline' })
   @Roles('admin', 'directeur', 'manager', 'commercial')
   statsTimeline(
-    @Args('scopeType', { type: () => String, nullable: true }) scopeType: string | undefined,
-    @Args('ownerType', { type: () => String, nullable: true }) ownerType: string | undefined,
-    @Args('ownerId', { type: () => Int, nullable: true }) ownerId: number | undefined,
-    @Args('startDate', { type: () => Date, nullable: true }) startDate: Date | undefined,
-    @Args('endDate', { type: () => Date, nullable: true }) endDate: Date | undefined,
+    @Args('scopeType', { type: () => String, nullable: true })
+    scopeType: string | undefined,
+    @Args('ownerType', { type: () => String, nullable: true })
+    ownerType: string | undefined,
+    @Args('ownerId', { type: () => Int, nullable: true })
+    ownerId: number | undefined,
+    @Args('startDate', { type: () => Date, nullable: true })
+    startDate: Date | undefined,
+    @Args('endDate', { type: () => Date, nullable: true })
+    endDate: Date | undefined,
     @CurrentUser() user: any,
   ) {
     return this.statisticService.statsTimeline(
@@ -152,11 +173,16 @@ export class StatisticResolver {
   @Query(() => [OwnerActivityStatistic], { name: 'statsActivityByOwner' })
   @Roles('admin', 'directeur', 'manager', 'commercial')
   statsActivityByOwner(
-    @Args('scopeType', { type: () => String, nullable: true }) scopeType: string | undefined,
-    @Args('ownerType', { type: () => String, nullable: true }) ownerType: string | undefined,
-    @Args('ownerId', { type: () => Int, nullable: true }) ownerId: number | undefined,
-    @Args('startDate', { type: () => Date, nullable: true }) startDate: Date | undefined,
-    @Args('endDate', { type: () => Date, nullable: true }) endDate: Date | undefined,
+    @Args('scopeType', { type: () => String, nullable: true })
+    scopeType: string | undefined,
+    @Args('ownerType', { type: () => String, nullable: true })
+    ownerType: string | undefined,
+    @Args('ownerId', { type: () => Int, nullable: true })
+    ownerId: number | undefined,
+    @Args('startDate', { type: () => Date, nullable: true })
+    startDate: Date | undefined,
+    @Args('endDate', { type: () => Date, nullable: true })
+    endDate: Date | undefined,
     @CurrentUser() user: any,
   ) {
     return this.statisticService.statsActivityByOwner(
@@ -173,11 +199,16 @@ export class StatisticResolver {
   @Query(() => StatsPeriodComparison, { name: 'statsPeriodComparison' })
   @Roles('admin', 'directeur', 'manager', 'commercial')
   statsPeriodComparison(
-    @Args('scopeType', { type: () => String, nullable: true }) scopeType: string | undefined,
-    @Args('ownerType', { type: () => String, nullable: true }) ownerType: string | undefined,
-    @Args('ownerId', { type: () => Int, nullable: true }) ownerId: number | undefined,
-    @Args('startDate', { type: () => Date, nullable: true }) startDate: Date | undefined,
-    @Args('endDate', { type: () => Date, nullable: true }) endDate: Date | undefined,
+    @Args('scopeType', { type: () => String, nullable: true })
+    scopeType: string | undefined,
+    @Args('ownerType', { type: () => String, nullable: true })
+    ownerType: string | undefined,
+    @Args('ownerId', { type: () => Int, nullable: true })
+    ownerId: number | undefined,
+    @Args('startDate', { type: () => Date, nullable: true })
+    startDate: Date | undefined,
+    @Args('endDate', { type: () => Date, nullable: true })
+    endDate: Date | undefined,
     @CurrentUser() user: any,
   ) {
     return this.statisticService.statsPeriodComparison(
@@ -194,11 +225,16 @@ export class StatisticResolver {
   @Query(() => StatsEffort, { name: 'statsEffort' })
   @Roles('admin', 'directeur', 'manager', 'commercial')
   statsEffort(
-    @Args('scopeType', { type: () => String, nullable: true }) scopeType: string | undefined,
-    @Args('ownerType', { type: () => String, nullable: true }) ownerType: string | undefined,
-    @Args('ownerId', { type: () => Int, nullable: true }) ownerId: number | undefined,
-    @Args('startDate', { type: () => Date, nullable: true }) startDate: Date | undefined,
-    @Args('endDate', { type: () => Date, nullable: true }) endDate: Date | undefined,
+    @Args('scopeType', { type: () => String, nullable: true })
+    scopeType: string | undefined,
+    @Args('ownerType', { type: () => String, nullable: true })
+    ownerType: string | undefined,
+    @Args('ownerId', { type: () => Int, nullable: true })
+    ownerId: number | undefined,
+    @Args('startDate', { type: () => Date, nullable: true })
+    startDate: Date | undefined,
+    @Args('endDate', { type: () => Date, nullable: true })
+    endDate: Date | undefined,
     @CurrentUser() user: any,
   ) {
     return this.statisticService.statsEffort(
@@ -215,12 +251,18 @@ export class StatisticResolver {
   @Query(() => ContratsValidesAggregate, { name: 'contratsValidesAggregate' })
   @Roles('admin', 'directeur', 'manager', 'commercial')
   contratsValidesAggregate(
-    @Args('scopeType', { type: () => String, nullable: true }) scopeType: string | undefined,
-    @Args('ownerType', { type: () => String, nullable: true }) ownerType: string | undefined,
-    @Args('ownerId', { type: () => Int, nullable: true }) ownerId: number | undefined,
-    @Args('startDate', { type: () => Date, nullable: true }) startDate: Date | undefined,
-    @Args('endDate', { type: () => Date, nullable: true }) endDate: Date | undefined,
-    @Args('granularity', { type: () => String, nullable: true }) granularity: string | undefined,
+    @Args('scopeType', { type: () => String, nullable: true })
+    scopeType: string | undefined,
+    @Args('ownerType', { type: () => String, nullable: true })
+    ownerType: string | undefined,
+    @Args('ownerId', { type: () => Int, nullable: true })
+    ownerId: number | undefined,
+    @Args('startDate', { type: () => Date, nullable: true })
+    startDate: Date | undefined,
+    @Args('endDate', { type: () => Date, nullable: true })
+    endDate: Date | undefined,
+    @Args('granularity', { type: () => String, nullable: true })
+    granularity: string | undefined,
     @CurrentUser() user: any,
   ) {
     return this.statisticService.contratsValidesAggregate(
@@ -239,9 +281,12 @@ export class StatisticResolver {
   @Query(() => ProspectionPipeline, { name: 'prospectionPipeline' })
   @Roles('admin', 'directeur', 'manager', 'commercial')
   prospectionPipeline(
-    @Args('scopeType', { type: () => String, nullable: true }) scopeType: string | undefined,
-    @Args('ownerType', { type: () => String, nullable: true }) ownerType: string | undefined,
-    @Args('ownerId', { type: () => Int, nullable: true }) ownerId: number | undefined,
+    @Args('scopeType', { type: () => String, nullable: true })
+    scopeType: string | undefined,
+    @Args('ownerType', { type: () => String, nullable: true })
+    ownerType: string | undefined,
+    @Args('ownerId', { type: () => Int, nullable: true })
+    ownerId: number | undefined,
     @CurrentUser() user: any,
   ) {
     return this.statisticService.prospectionPipeline(

@@ -36,9 +36,7 @@ export class NotificationsResolver {
 
   @Mutation(() => Boolean, { name: 'unregisterDeviceToken' })
   @Roles('commercial', 'manager')
-  unregisterDeviceToken(
-    @Args('token') token: string,
-  ): Promise<boolean> {
+  unregisterDeviceToken(@Args('token') token: string): Promise<boolean> {
     return this.notifications.unregisterDeviceToken(token);
   }
 
@@ -75,9 +73,6 @@ export class NotificationsResolver {
   markAllNotificationsRead(
     @CurrentUser() user: { id: number; role: string },
   ): Promise<boolean> {
-    return this.notifications.markAllAsRead(
-      user.id,
-      roleToUserType(user.role),
-    );
+    return this.notifications.markAllAsRead(user.id, roleToUserType(user.role));
   }
 }

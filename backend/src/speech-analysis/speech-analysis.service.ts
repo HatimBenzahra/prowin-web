@@ -1,8 +1,5 @@
 import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
-import {
-  S3Client,
-  GetObjectCommand,
-} from '@aws-sdk/client-s3';
+import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
 import { spawn } from 'child_process';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
@@ -89,7 +86,9 @@ export class SpeechAnalysisService implements OnModuleDestroy {
     return result;
   }
 
-  async getStoredScores(keys: string[]): Promise<Map<string, StoredSpeechScore>> {
+  async getStoredScores(
+    keys: string[],
+  ): Promise<Map<string, StoredSpeechScore>> {
     const uniqueKeys = [...new Set(keys.filter(Boolean))];
     const result = new Map<string, StoredSpeechScore>();
     if (!uniqueKeys.length) return result;
@@ -280,13 +279,8 @@ export class SpeechAnalysisService implements OnModuleDestroy {
         `Score silencedetect pour ${s3Key}: ${score}% (${speechDurationSec.toFixed(1)}s parole / ${totalDuration.toFixed(1)}s total)`,
       );
     } catch (error) {
-      await this.persistAnalysisFailure(
-        s3Key,
-        error?.message || String(error),
-      );
-      this.logger.error(
-        `Erreur analyse ${s3Key}: ${error?.message || error}`,
-      );
+      await this.persistAnalysisFailure(s3Key, error?.message || String(error));
+      this.logger.error(`Erreur analyse ${s3Key}: ${error?.message || error}`);
     } finally {
       this.cleanupDir(tmpDir);
       this.analyzing.delete(s3Key);
@@ -306,7 +300,9 @@ export class SpeechAnalysisService implements OnModuleDestroy {
         select: { id: true },
       });
       if (!recording) {
-        this.logger.warn(`RecordingAnalysis skipped: no Recording for ${s3Key}`);
+        this.logger.warn(
+          `RecordingAnalysis skipped: no Recording for ${s3Key}`,
+        );
         return;
       }
 
@@ -404,9 +400,7 @@ export class SpeechAnalysisService implements OnModuleDestroy {
       const duration = parseFloat(parsed?.format?.duration ?? '0');
       return Number.isFinite(duration) ? duration : 0;
     } catch (error) {
-      this.logger.error(
-        `ffprobe échoué: ${error?.message || error}`,
-      );
+      this.logger.error(`ffprobe échoué: ${error?.message || error}`);
       return 0;
     }
   }
@@ -418,7 +412,7 @@ export class SpeechAnalysisService implements OnModuleDestroy {
   private detectSilences(
     filePath: string,
   ): Promise<Array<{ start: number; end: number }>> {
-    return new Promise((resolve, reject) => {
+    return new Promise((resolve) => {
       const silences: Array<{ start: number; end: number }> = [];
       let currentStart: number | null = null;
       let stderrBuffer = '';
@@ -458,7 +452,7 @@ export class SpeechAnalysisService implements OnModuleDestroy {
         }
       });
 
-      proc.on('close', (code) => {
+      proc.on('close', () => {
         // ffmpeg returns 0 on success, but also sometimes 1 for audio issues
         // We still want partial results in those cases
         resolve(silences);

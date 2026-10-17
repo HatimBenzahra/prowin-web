@@ -53,7 +53,8 @@ export class GamificationCronService {
       // Étape 2b: Évaluer le badge conversion hebdo (classement comparatif)
       const now = new Date();
       const currentWeek = `${now.getFullYear()}-W${this.getISOWeek(now)}`;
-      const conversionResult = await this.evaluationService.evaluateConversionRanking(currentWeek);
+      const conversionResult =
+        await this.evaluationService.evaluateConversionRanking(currentWeek);
       this.logger.log(
         `✅ Conversion hebdo ${currentWeek}: ${conversionResult.awarded} attribués, ${conversionResult.skipped} déjà existants`,
       );
@@ -87,7 +88,8 @@ export class GamificationCronService {
       this.logger.log(`🏆 Évaluation trophées trimestre: ${previousQuarter}`);
 
       try {
-        const result = await this.evaluationService.evaluateTrophees(previousQuarter);
+        const result =
+          await this.evaluationService.evaluateTrophees(previousQuarter);
         this.logger.log(
           `✅ Trophées ${previousQuarter}: ${result.awarded} attribués, ${result.skipped} déjà existants`,
         );
@@ -104,7 +106,8 @@ export class GamificationCronService {
     this.logger.log(`🥇 Évaluation performance ranking: ${previousMonth}`);
 
     try {
-      const result = await this.evaluationService.evaluatePerformanceRanking(previousMonth);
+      const result =
+        await this.evaluationService.evaluatePerformanceRanking(previousMonth);
       this.logger.log(
         `✅ Performance ${previousMonth}: ${result.awarded} attribués, ${result.skipped} déjà existants`,
       );
@@ -119,7 +122,10 @@ export class GamificationCronService {
     this.logger.log(`🏅 Évaluation transformation ranking: ${previousMonth}`);
 
     try {
-      const transformResult = await this.evaluationService.evaluateTransformationRanking(previousMonth);
+      const transformResult =
+        await this.evaluationService.evaluateTransformationRanking(
+          previousMonth,
+        );
       this.logger.log(
         `✅ Transformation ${previousMonth}: ${transformResult.awarded} attribués, ${transformResult.skipped} déjà existants`,
       );
@@ -136,7 +142,11 @@ export class GamificationCronService {
   // ============================================================================
 
   private async syncContratsWithServiceToken() {
-    if (!this.keycloakBaseUrl || !this.keycloakClientId || !this.keycloakClientSecret) {
+    if (
+      !this.keycloakBaseUrl ||
+      !this.keycloakClientId ||
+      !this.keycloakClientSecret
+    ) {
       this.logger.warn(
         '⚠️ Variables Keycloak manquantes (KEYCLOAK_BASE_URL, KEYCLOAK_CLIENT_ID, KEYCLOAK_CLIENT_SECRET). Sync contrats ignorée.',
       );
@@ -174,7 +184,10 @@ export class GamificationCronService {
     const periodQuarter = `${y}-Q${Math.ceil((now.getMonth() + 1) / 3)}`;
     const periodYear = `${y}`;
 
-    const periods: Array<{ period: 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'QUARTERLY' | 'YEARLY'; key: string }> = [
+    const periods: Array<{
+      period: 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'QUARTERLY' | 'YEARLY';
+      key: string;
+    }> = [
       { period: 'DAILY', key: periodDay },
       { period: 'WEEKLY', key: periodWeek },
       { period: 'MONTHLY', key: periodMonth },
@@ -184,7 +197,9 @@ export class GamificationCronService {
 
     for (const { period, key } of periods) {
       const result = await this.rankingService.computeRanking(period, key);
-      this.logger.log(`✅ Classement ${period}/${key}: ${result.computed} commerciaux`);
+      this.logger.log(
+        `✅ Classement ${period}/${key}: ${result.computed} commerciaux`,
+      );
     }
   }
 
@@ -193,11 +208,15 @@ export class GamificationCronService {
   // ============================================================================
 
   private getISOWeek(date: Date): string {
-    const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+    const d = new Date(
+      Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()),
+    );
     const dayNum = d.getUTCDay() || 7;
     d.setUTCDate(d.getUTCDate() + 4 - dayNum);
     const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
-    const weekNo = Math.ceil(((d.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
+    const weekNo = Math.ceil(
+      ((d.getTime() - yearStart.getTime()) / 86400000 + 1) / 7,
+    );
     return String(weekNo).padStart(2, '0');
   }
 

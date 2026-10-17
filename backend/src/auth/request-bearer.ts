@@ -3,7 +3,11 @@ export interface BearerRequestContext {
   req?: { headers?: { authorization?: string | string[] } };
 }
 
-export function requestBearer(context?: BearerRequestContext): string | undefined {
+export function requestBearer(
+  context?: BearerRequestContext,
+): string | undefined {
   const header = context?.req?.headers?.authorization;
-  return typeof header === 'string' ? /^Bearer\s+(\S+)$/i.exec(header.trim())?.[1] : undefined;
+  return typeof header === 'string'
+    ? /^Bearer\s+(\S+)$/i.exec(header.trim())?.[1]
+    : undefined;
 }

@@ -83,10 +83,7 @@ export class StatisticService {
           ],
         },
         {
-          OR: [
-            { managerId: null },
-            { manager: this.productionUserWhere() },
-          ],
+          OR: [{ managerId: null }, { manager: this.productionUserWhere() }],
         },
         {
           OR: [
@@ -108,10 +105,7 @@ export class StatisticService {
           ],
         },
         {
-          OR: [
-            { managerId: null },
-            { manager: this.productionUserWhere() },
-          ],
+          OR: [{ managerId: null }, { manager: this.productionUserWhere() }],
         },
       ],
     };
@@ -357,7 +351,9 @@ export class StatisticService {
 
     const ownerFilters: any[] = [];
     if (accessibleOwners.commercialIds.length) {
-      ownerFilters.push({ commercialId: { in: accessibleOwners.commercialIds } });
+      ownerFilters.push({
+        commercialId: { in: accessibleOwners.commercialIds },
+      });
     }
     if (accessibleOwners.managerIds.length) {
       ownerFilters.push({ managerId: { in: accessibleOwners.managerIds } });
@@ -461,10 +457,7 @@ export class StatisticService {
       return statistic;
     }
 
-    if (
-      userRole === 'commercial' &&
-      statistic.commercialId !== userId
-    ) {
+    if (userRole === 'commercial' && statistic.commercialId !== userId) {
       throw new ForbiddenException('Access denied');
     }
 
@@ -748,11 +741,7 @@ export class StatisticService {
     ].sort((a, b) => b.changedAt.getTime() - a.changedAt.getTime());
   }
 
-  async update(
-    data: UpdateStatisticInput,
-    userId: number,
-    userRole: string,
-  ) {
+  async update(data: UpdateStatisticInput, userId: number, userRole: string) {
     const { id, ...updateData } = data;
 
     const statistic = await this.assertStatisticAccess(id, userId, userRole);
@@ -929,15 +918,13 @@ export class StatisticService {
           currentAssignments
             .filter(
               (a) =>
-                commercialIds.includes(a.userId) &&
-                a.userType === 'COMMERCIAL',
+                commercialIds.includes(a.userId) && a.userType === 'COMMERCIAL',
             )
             .forEach((a) => authorizedZoneIds.add(a.zoneId));
           historyAssignments
             .filter(
               (h) =>
-                commercialIds.includes(h.userId) &&
-                h.userType === 'COMMERCIAL',
+                commercialIds.includes(h.userId) && h.userType === 'COMMERCIAL',
             )
             .forEach((h) => authorizedZoneIds.add(h.zoneId));
           break;
@@ -1062,11 +1049,11 @@ export class StatisticService {
           const statusStats = calculateStatsForStatus(group.statut, count);
 
           if (group.statut === 'CONTRAT_SIGNE') {
-             totalStats.contratsSignes += totalContrats;
+            totalStats.contratsSignes += totalContrats;
           } else {
-             totalStats.contratsSignes += statusStats.contratsSignes;
+            totalStats.contratsSignes += statusStats.contratsSignes;
           }
-          
+
           totalStats.rendezVousPris += statusStats.rendezVousPris;
           totalStats.refus += statusStats.refus;
           totalStats.portesProspectes += statusStats.nbPortesProspectes;
@@ -1289,9 +1276,7 @@ export class StatisticService {
       // peut représenter plusieurs contrats signés à la fois). Pour les
       // autres statuts, on compte 1 par évènement.
       const count =
-        entry.statut === 'CONTRAT_SIGNE'
-          ? entry.porte?.nbContrats || 1
-          : 1;
+        entry.statut === 'CONTRAT_SIGNE' ? entry.porte?.nbContrats || 1 : 1;
       const current = grouped.get(dayKey)!;
       this.accumulateStatusStats(current, entry.statut, count);
     });
@@ -1346,9 +1331,7 @@ export class StatisticService {
       }
 
       const count =
-        entry.statut === 'CONTRAT_SIGNE'
-          ? entry.porte?.nbContrats || 1
-          : 1;
+        entry.statut === 'CONTRAT_SIGNE' ? entry.porte?.nbContrats || 1 : 1;
       this.accumulateStatusStats(grouped.get(dayKey)!, entry.statut, count);
     });
 
@@ -1500,9 +1483,7 @@ export class StatisticService {
       }
 
       const count =
-        entry.statut === 'CONTRAT_SIGNE'
-          ? entry.porte?.nbContrats || 1
-          : 1;
+        entry.statut === 'CONTRAT_SIGNE' ? entry.porte?.nbContrats || 1 : 1;
       const current = grouped.get(key)!;
       this.accumulateStatusStats(current, entry.statut, count);
       current.lastActivityAt = entry.createdAt;
@@ -1747,8 +1728,7 @@ export class StatisticService {
       dureeMoyenneParPassageSec: nbPassagesMesures
         ? Math.round((dureeTotaleSec / nbPassagesMesures) * 10) / 10
         : 0,
-      dureeMedianeParPassageSec:
-        Math.round(this.median(durees) * 10) / 10,
+      dureeMedianeParPassageSec: Math.round(this.median(durees) * 10) / 10,
       dureeParContratSignesSec: contratsSignes
         ? Math.round((dureeTotaleSec / contratsSignes) * 10) / 10
         : undefined,
@@ -1983,7 +1963,10 @@ export class StatisticService {
       count: 0,
     }));
 
-    const repassages = { total: 0, plusAncienJours: undefined as number | undefined };
+    const repassages = {
+      total: 0,
+      plusAncienJours: undefined as number | undefined,
+    };
     const rdv = {
       total: 0,
       aujourdhui: 0,
@@ -2014,15 +1997,13 @@ export class StatisticService {
     for (const immeuble of immeubles) {
       const effectif = effectiveTypeHabitat(immeuble);
 
-      const habitat =
-        habitatMap.get(effectif) ??
-        {
-          batiments: 0,
-          portesCreees: 0,
-          capaciteDeclaree: 0,
-          prospectees: 0,
-          aTraiter: 0,
-        };
+      const habitat = habitatMap.get(effectif) ?? {
+        batiments: 0,
+        portesCreees: 0,
+        capaciteDeclaree: 0,
+        prospectees: 0,
+        aTraiter: 0,
+      };
       habitat.batiments += 1;
       habitat.capaciteDeclaree += declaredDoorCount(immeuble);
 

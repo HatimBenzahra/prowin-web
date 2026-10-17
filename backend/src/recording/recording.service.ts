@@ -485,12 +485,15 @@ export class RecordingService {
     // cette requête; le calcul audio reste asynchrone. Le module coaching
     // re-transcrit depuis S3, il ne dépend pas des RecordingSegment.
     const primaryDoor = doorSegments?.[0] ?? null;
-    await this.coaching.enqueue({
-      s3Key,
-      porteId: primaryDoor?.porteId ?? null,
-      statut: (primaryDoor?.statut as string | undefined) ?? null,
-      durationSec: duration ?? null,
-    }, userToken);
+    await this.coaching.enqueue(
+      {
+        s3Key,
+        porteId: primaryDoor?.porteId ?? null,
+        statut: (primaryDoor?.statut as string | undefined) ?? null,
+        durationSec: duration ?? null,
+      },
+      userToken,
+    );
 
     const url = await this.signedUrlOrUndefined(s3Key);
 
@@ -583,10 +586,7 @@ export class RecordingService {
 
     const segments = await this.prisma.recordingSegment.findMany({
       where: {
-        OR: [
-          { commercialId },
-          { porte: { immeuble: { commercialId } } },
-        ],
+        OR: [{ commercialId }, { porte: { immeuble: { commercialId } } }],
       },
       include: {
         porte: {
@@ -990,7 +990,9 @@ export class RecordingService {
     ]);
 
     return [
-      ...commercials.map((commercial) => this.roomNameFor(commercial.id, 'COMMERCIAL')),
+      ...commercials.map((commercial) =>
+        this.roomNameFor(commercial.id, 'COMMERCIAL'),
+      ),
       ...managers.map((manager) => this.roomNameFor(manager.id, 'MANAGER')),
     ];
   }
@@ -1050,13 +1052,15 @@ export class RecordingService {
     };
   }
 
-  async getSpeechScores(keys: string[]): Promise<Array<{
-    key: string;
-    score?: number;
-    totalDurationSec?: number;
-    speechDurationSec?: number;
-    status: string;
-  }>> {
+  async getSpeechScores(keys: string[]): Promise<
+    Array<{
+      key: string;
+      score?: number;
+      totalDurationSec?: number;
+      speechDurationSec?: number;
+      status: string;
+    }>
+  > {
     const validKeys = keys.filter((k) => !k.endsWith('_conv.mp4'));
 
     const stored = await this.speechAnalysis.getStoredScores(validKeys);

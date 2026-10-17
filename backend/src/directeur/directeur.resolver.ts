@@ -32,7 +32,10 @@ export class DirecteurResolver {
 
   @Query(() => Directeur, { name: 'directeur' })
   @Roles('admin', 'directeur')
-  findOne(@Args('id', { type: () => Int }) id: number, @CurrentUser() user: any) {
+  findOne(
+    @Args('id', { type: () => Int }) id: number,
+    @CurrentUser() user: any,
+  ) {
     return this.directeurService.findOne(id, user.id, user.role);
   }
 
@@ -42,12 +45,19 @@ export class DirecteurResolver {
     @Args('updateDirecteurInput') updateDirecteurInput: UpdateDirecteurInput,
     @CurrentUser() user: any,
   ) {
-    return this.directeurService.update(updateDirecteurInput, user.id, user.role);
+    return this.directeurService.update(
+      updateDirecteurInput,
+      user.id,
+      user.role,
+    );
   }
 
   @Mutation(() => Directeur)
   @Roles('admin')
-  removeDirecteur(@Args('id', { type: () => Int }) id: number, @CurrentUser() user: any) {
+  removeDirecteur(
+    @Args('id', { type: () => Int }) id: number,
+    @CurrentUser() user: any,
+  ) {
     return this.directeurService.remove(id, user.id, user.role);
   }
 }

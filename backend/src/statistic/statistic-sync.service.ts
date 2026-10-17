@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
 import {
   StatutPorte,
-  calculateStatsForStatus
+  calculateStatsForStatus,
 } from '../porte/porte-status.constants';
 
 /**
@@ -25,12 +25,14 @@ export class StatisticSyncService {
         where: { id: immeubleId },
         include: {
           commercial: true,
-          manager: true
-        }
+          manager: true,
+        },
       });
 
       if (!immeuble?.commercial && !immeuble?.manager) {
-        this.logger.warn(`Immeuble ${immeubleId} n'a ni commercial ni manager associé`);
+        this.logger.warn(
+          `Immeuble ${immeubleId} n'a ni commercial ni manager associé`,
+        );
         return;
       }
 
@@ -39,7 +41,10 @@ export class StatisticSyncService {
         const commercialId = immeuble.commercial.id;
         const realStats = await this.calculateRealStats(commercialId);
         await this.upsertStatistic(commercialId, realStats);
-        this.logger.debug(`Stats mises à jour pour commercial ${commercialId}:`, realStats);
+        this.logger.debug(
+          `Stats mises à jour pour commercial ${commercialId}:`,
+          realStats,
+        );
 
         // 3. Si le commercial a un manager, synchroniser aussi les stats du manager
         if (immeuble.commercial.managerId) {
@@ -55,9 +60,11 @@ export class StatisticSyncService {
       if (immeuble.managerId) {
         await this.syncManagerStats(immeuble.managerId);
       }
-
     } catch (error) {
-      this.logger.error(`Erreur sync stats pour immeuble ${immeubleId}:`, error);
+      this.logger.error(
+        `Erreur sync stats pour immeuble ${immeubleId}:`,
+        error,
+      );
       throw error;
     }
   }
@@ -73,18 +80,20 @@ export class StatisticSyncService {
       // Mettre à jour ou créer la statistique
       await this.upsertManagerStatistic(managerId, realStats);
 
-      this.logger.debug(`Stats mises à jour pour manager ${managerId}:`, realStats);
+      this.logger.debug(
+        `Stats mises à jour pour manager ${managerId}:`,
+        realStats,
+      );
 
       // Si le manager a un directeur, synchroniser aussi les stats du directeur
       const manager = await this.prisma.manager.findUnique({
         where: { id: managerId },
-        select: { directeurId: true }
+        select: { directeurId: true },
       });
 
       if (manager?.directeurId) {
         await this.syncDirecteurStats(manager.directeurId);
       }
-
     } catch (error) {
       this.logger.error(`Erreur sync stats pour manager ${managerId}:`, error);
       throw error;
@@ -102,10 +111,15 @@ export class StatisticSyncService {
       // Mettre à jour ou créer la statistique
       await this.upsertDirecteurStatistic(directeurId, realStats);
 
-      this.logger.debug(`Stats mises à jour pour directeur ${directeurId}:`, realStats);
-
+      this.logger.debug(
+        `Stats mises à jour pour directeur ${directeurId}:`,
+        realStats,
+      );
     } catch (error) {
-      this.logger.error(`Erreur sync stats pour directeur ${directeurId}:`, error);
+      this.logger.error(
+        `Erreur sync stats pour directeur ${directeurId}:`,
+        error,
+      );
       throw error;
     }
   }
@@ -119,15 +133,15 @@ export class StatisticSyncService {
       by: ['statut'],
       where: {
         immeuble: {
-          commercialId: commercialId
-        }
+          commercialId: commercialId,
+        },
       },
       _count: {
-        statut: true
+        statut: true,
       },
       _sum: {
-        nbContrats: true
-      }
+        nbContrats: true,
+      },
     });
 
     // Calculer aussi le nombre d'immeubles visités (au moins une porte non NON_VISITE)
@@ -137,11 +151,11 @@ export class StatisticSyncService {
         portes: {
           some: {
             statut: {
-              not: StatutPorte.NON_VISITE
-            }
-          }
-        }
-      }
+              not: StatutPorte.NON_VISITE,
+            },
+          },
+        },
+      },
     });
 
     // Transformer en stats
@@ -153,11 +167,11 @@ export class StatisticSyncService {
       argumentes: 0,
       immeublesVisites: immeublesVisites,
       nbImmeublesProspectes: immeublesVisites, // Pour l'instant identique
-      nbPortesProspectes: 0
+      nbPortesProspectes: 0,
     };
 
     // Utilisation du helper centralisé pour calculer les stats
-    result.forEach(group => {
+    result.forEach((group) => {
       const count = group._count.statut;
       const totalContrats = group._sum.nbContrats || 0;
       const statusStats = calculateStatsForStatus(group.statut, count);
@@ -189,15 +203,15 @@ export class StatisticSyncService {
       by: ['statut'],
       where: {
         immeuble: {
-          managerId: managerId
-        }
+          managerId: managerId,
+        },
       },
       _count: {
-        statut: true
+        statut: true,
       },
       _sum: {
-        nbContrats: true
-      }
+        nbContrats: true,
+      },
     });
 
     // Calculer aussi le nombre d'immeubles visités (au moins une porte non NON_VISITE)
@@ -207,11 +221,11 @@ export class StatisticSyncService {
         portes: {
           some: {
             statut: {
-              not: StatutPorte.NON_VISITE
-            }
-          }
-        }
-      }
+              not: StatutPorte.NON_VISITE,
+            },
+          },
+        },
+      },
     });
 
     // Transformer en stats
@@ -223,11 +237,11 @@ export class StatisticSyncService {
       argumentes: 0,
       immeublesVisites: immeublesVisites,
       nbImmeublesProspectes: immeublesVisites, // Pour l'instant identique
-      nbPortesProspectes: 0
+      nbPortesProspectes: 0,
     };
 
     // Utilisation du helper centralisé pour calculer les stats
-    result.forEach(group => {
+    result.forEach((group) => {
       const count = group._count.statut;
       const totalContrats = group._sum.nbContrats || 0;
       const statusStats = calculateStatsForStatus(group.statut, count);
@@ -258,8 +272,8 @@ export class StatisticSyncService {
     const managerStats = await this.prisma.statistic.aggregate({
       where: {
         manager: {
-          directeurId: directeurId
-        }
+          directeurId: directeurId,
+        },
       },
       _sum: {
         contratsSignes: true,
@@ -270,15 +284,15 @@ export class StatisticSyncService {
         immeublesVisites: true,
         nbImmeublesProspectes: true,
         nbPortesProspectes: true,
-      }
+      },
     });
 
     // 2. Somme des stats de TOUS les commerciaux du directeur (avec ou sans manager)
     const commercialStats = await this.prisma.statistic.aggregate({
       where: {
         commercial: {
-          directeurId: directeurId
-        }
+          directeurId: directeurId,
+        },
       },
       _sum: {
         contratsSignes: true,
@@ -289,19 +303,32 @@ export class StatisticSyncService {
         immeublesVisites: true,
         nbImmeublesProspectes: true,
         nbPortesProspectes: true,
-      }
+      },
     });
 
     // 3. Fusionner les deux sommes
     const stats = {
-      contratsSignes: (managerStats._sum.contratsSignes || 0) + (commercialStats._sum.contratsSignes || 0),
-      rendezVousPris: (managerStats._sum.rendezVousPris || 0) + (commercialStats._sum.rendezVousPris || 0),
+      contratsSignes:
+        (managerStats._sum.contratsSignes || 0) +
+        (commercialStats._sum.contratsSignes || 0),
+      rendezVousPris:
+        (managerStats._sum.rendezVousPris || 0) +
+        (commercialStats._sum.rendezVousPris || 0),
       refus: (managerStats._sum.refus || 0) + (commercialStats._sum.refus || 0),
-      absents: (managerStats._sum.absents || 0) + (commercialStats._sum.absents || 0),
-      argumentes: (managerStats._sum.argumentes || 0) + (commercialStats._sum.argumentes || 0),
-      immeublesVisites: (managerStats._sum.immeublesVisites || 0) + (commercialStats._sum.immeublesVisites || 0),
-      nbImmeublesProspectes: (managerStats._sum.nbImmeublesProspectes || 0) + (commercialStats._sum.nbImmeublesProspectes || 0),
-      nbPortesProspectes: (managerStats._sum.nbPortesProspectes || 0) + (commercialStats._sum.nbPortesProspectes || 0),
+      absents:
+        (managerStats._sum.absents || 0) + (commercialStats._sum.absents || 0),
+      argumentes:
+        (managerStats._sum.argumentes || 0) +
+        (commercialStats._sum.argumentes || 0),
+      immeublesVisites:
+        (managerStats._sum.immeublesVisites || 0) +
+        (commercialStats._sum.immeublesVisites || 0),
+      nbImmeublesProspectes:
+        (managerStats._sum.nbImmeublesProspectes || 0) +
+        (commercialStats._sum.nbImmeublesProspectes || 0),
+      nbPortesProspectes:
+        (managerStats._sum.nbPortesProspectes || 0) +
+        (commercialStats._sum.nbPortesProspectes || 0),
     };
 
     return stats;
@@ -325,7 +352,7 @@ export class StatisticSyncService {
 
     // Chercher d'abord s'il existe une stat pour ce commercial
     const existingStat = await this.prisma.statistic.findFirst({
-      where: { commercialId: commercialId }
+      where: { commercialId: commercialId },
     });
 
     if (existingStat) {
@@ -335,8 +362,8 @@ export class StatisticSyncService {
         data: {
           ...stats,
           zoneId, // Synchroniser avec la zone du commercial
-          updatedAt: new Date()
-        }
+          updatedAt: new Date(),
+        },
       });
     } else {
       // Créer (incluant zoneId)
@@ -344,8 +371,8 @@ export class StatisticSyncService {
         data: {
           commercialId: commercialId,
           zoneId, // Assigner automatiquement la zone du commercial
-          ...stats
-        }
+          ...stats,
+        },
       });
     }
   }
@@ -368,7 +395,7 @@ export class StatisticSyncService {
 
     // Chercher d'abord s'il existe une stat pour ce manager
     const existingStat = await this.prisma.statistic.findFirst({
-      where: { managerId: managerId }
+      where: { managerId: managerId },
     });
 
     if (existingStat) {
@@ -378,8 +405,8 @@ export class StatisticSyncService {
         data: {
           ...stats,
           zoneId, // Synchroniser avec la zone du manager
-          updatedAt: new Date()
-        }
+          updatedAt: new Date(),
+        },
       });
     } else {
       // Créer (incluant zoneId)
@@ -387,8 +414,8 @@ export class StatisticSyncService {
         data: {
           managerId: managerId,
           zoneId, // Assigner automatiquement la zone du manager
-          ...stats
-        }
+          ...stats,
+        },
       });
     }
   }
@@ -411,7 +438,7 @@ export class StatisticSyncService {
 
     // Chercher d'abord s'il existe une stat pour ce directeur
     const existingStat = await this.prisma.statistic.findFirst({
-      where: { directeurId: directeurId }
+      where: { directeurId: directeurId },
     });
 
     if (existingStat) {
@@ -421,8 +448,8 @@ export class StatisticSyncService {
         data: {
           ...stats,
           zoneId, // Synchroniser avec la zone du directeur
-          updatedAt: new Date()
-        }
+          updatedAt: new Date(),
+        },
       });
     } else {
       // Créer (incluant zoneId)
@@ -430,8 +457,8 @@ export class StatisticSyncService {
         data: {
           directeurId: directeurId,
           zoneId, // Assigner automatiquement la zone du directeur
-          ...stats
-        }
+          ...stats,
+        },
       });
     }
   }
@@ -446,7 +473,7 @@ export class StatisticSyncService {
     try {
       // Récupérer tous les commerciaux
       const commerciaux = await this.prisma.commercial.findMany({
-        select: { id: true }
+        select: { id: true },
       });
 
       for (const commercial of commerciaux) {
@@ -455,14 +482,17 @@ export class StatisticSyncService {
           await this.upsertStatistic(commercial.id, stats);
           updated++;
         } catch (error) {
-          this.logger.error(`Erreur recalcul stats commercial ${commercial.id}:`, error);
+          this.logger.error(
+            `Erreur recalcul stats commercial ${commercial.id}:`,
+            error,
+          );
           errors++;
         }
       }
 
       // Récupérer tous les managers
       const managers = await this.prisma.manager.findMany({
-        select: { id: true }
+        select: { id: true },
       });
 
       for (const manager of managers) {
@@ -471,14 +501,17 @@ export class StatisticSyncService {
           await this.upsertManagerStatistic(manager.id, stats);
           updated++;
         } catch (error) {
-          this.logger.error(`Erreur recalcul stats manager ${manager.id}:`, error);
+          this.logger.error(
+            `Erreur recalcul stats manager ${manager.id}:`,
+            error,
+          );
           errors++;
         }
       }
 
       // Récupérer tous les directeurs
       const directeurs = await this.prisma.directeur.findMany({
-        select: { id: true }
+        select: { id: true },
       });
 
       for (const directeur of directeurs) {
@@ -487,14 +520,18 @@ export class StatisticSyncService {
           await this.upsertDirecteurStatistic(directeur.id, stats);
           updated++;
         } catch (error) {
-          this.logger.error(`Erreur recalcul stats directeur ${directeur.id}:`, error);
+          this.logger.error(
+            `Erreur recalcul stats directeur ${directeur.id}:`,
+            error,
+          );
           errors++;
         }
       }
 
-      this.logger.log(`Recalcul terminé: ${updated} mis à jour, ${errors} erreurs`);
+      this.logger.log(
+        `Recalcul terminé: ${updated} mis à jour, ${errors} erreurs`,
+      );
       return { updated, errors };
-
     } catch (error) {
       this.logger.error('Erreur générale recalcul stats:', error);
       throw error;
@@ -515,20 +552,19 @@ export class StatisticSyncService {
 
     try {
       const statistics = await this.prisma.statistic.findMany({
-        include: { commercial: true }
+        include: { commercial: true },
       });
 
       for (const stat of statistics) {
         if (!stat.commercialId) continue; // Skip si pas de commercial associé
-        
+
         const realStats = await this.calculateRealStats(stat.commercialId);
-        
-        const isValid = (
+
+        const isValid =
           stat.contratsSignes === realStats.contratsSignes &&
           stat.rendezVousPris === realStats.rendezVousPris &&
           stat.refus === realStats.refus &&
-          stat.immeublesVisites === realStats.immeublesVisites
-        );
+          stat.immeublesVisites === realStats.immeublesVisites;
 
         if (isValid) {
           valid++;
@@ -540,15 +576,14 @@ export class StatisticSyncService {
               contratsSignes: stat.contratsSignes,
               rendezVousPris: stat.rendezVousPris,
               refus: stat.refus,
-              immeublesVisites: stat.immeublesVisites
+              immeublesVisites: stat.immeublesVisites,
             },
-            real: realStats
+            real: realStats,
           });
         }
       }
 
       return { valid, invalid };
-
     } catch (error) {
       this.logger.error('Erreur validation cohérence:', error);
       throw error;

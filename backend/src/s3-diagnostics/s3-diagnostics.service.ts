@@ -1,10 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { S3Client } from '@aws-sdk/client-s3';
 import { AsyncLocalStorage } from 'async_hooks';
-import {
-  S3DiagnosticOperation,
-  S3DiagnosticsSnapshot,
-} from './s3-diagnostics.dto';
+import { S3DiagnosticsSnapshot } from './s3-diagnostics.dto';
 
 type OperationStats = {
   source: string;
@@ -49,7 +46,10 @@ export class S3DiagnosticsService {
     return client;
   }
 
-  runWithOperation<T>(operation: string, callback: () => Promise<T>): Promise<T> {
+  runWithOperation<T>(
+    operation: string,
+    callback: () => Promise<T>,
+  ): Promise<T> {
     return this.operationContext.run(operation, callback);
   }
 

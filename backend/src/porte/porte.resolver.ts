@@ -1,7 +1,13 @@
 import { Resolver, Query, Mutation, Args, Int } from '@nestjs/graphql';
 import { UseGuards } from '@nestjs/common';
 import { PorteService } from './porte.service';
-import { Porte, CreatePorteInput, UpdatePorteInput, PorteStatistics, StatusHistorique } from './porte.dto';
+import {
+  Porte,
+  CreatePorteInput,
+  UpdatePorteInput,
+  PorteStatistics,
+  StatusHistorique,
+} from './porte.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -29,7 +35,10 @@ export class PorteResolver {
 
   @Query(() => Porte, { name: 'porte' })
   @Roles('admin', 'directeur', 'manager', 'commercial')
-  findOne(@Args('id', { type: () => Int }) id: number, @CurrentUser() user: any) {
+  findOne(
+    @Args('id', { type: () => Int }) id: number,
+    @CurrentUser() user: any,
+  ) {
     return this.porteService.findOne(id, user.id, user.role);
   }
 
@@ -42,7 +51,14 @@ export class PorteResolver {
     @Args('etage', { type: () => Int, nullable: true }) etage: number,
     @CurrentUser() user: any,
   ) {
-    return this.porteService.findByImmeuble(immeubleId, user.id, user.role, skip, take, etage);
+    return this.porteService.findByImmeuble(
+      immeubleId,
+      user.id,
+      user.role,
+      skip,
+      take,
+      etage,
+    );
   }
 
   @Query(() => PorteStatistics, { name: 'porteStatistics' })
@@ -51,7 +67,11 @@ export class PorteResolver {
     @Args('immeubleId', { type: () => Int }) immeubleId: number,
     @CurrentUser() user: any,
   ) {
-    return this.porteService.getStatistiquesPortes(immeubleId, user.id, user.role);
+    return this.porteService.getStatistiquesPortes(
+      immeubleId,
+      user.id,
+      user.role,
+    );
   }
 
   @Mutation(() => Porte)
@@ -65,7 +85,10 @@ export class PorteResolver {
 
   @Mutation(() => Porte)
   @Roles('admin', 'directeur')
-  removePorte(@Args('id', { type: () => Int }) id: number, @CurrentUser() user: any) {
+  removePorte(
+    @Args('id', { type: () => Int }) id: number,
+    @CurrentUser() user: any,
+  ) {
     return this.porteService.remove(id, user.id, user.role);
   }
 
@@ -124,7 +147,11 @@ export class PorteResolver {
     @Args('porteId', { type: () => Int }) porteId: number,
     @CurrentUser() user: any,
   ) {
-    return this.porteService.getStatusHistoriqueByPorte(porteId, user.id, user.role);
+    return this.porteService.getStatusHistoriqueByPorte(
+      porteId,
+      user.id,
+      user.role,
+    );
   }
 
   @Query(() => [StatusHistorique], { name: 'statusHistoriqueByImmeuble' })
@@ -133,6 +160,10 @@ export class PorteResolver {
     @Args('immeubleId', { type: () => Int }) immeubleId: number,
     @CurrentUser() user: any,
   ) {
-    return this.porteService.getStatusHistoriqueByImmeuble(immeubleId, user.id, user.role);
+    return this.porteService.getStatusHistoriqueByImmeuble(
+      immeubleId,
+      user.id,
+      user.role,
+    );
   }
 }

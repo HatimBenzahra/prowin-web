@@ -1,4 +1,8 @@
-import { Injectable, ForbiddenException, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
 import { prodImmeubleWhere } from '../enumeration-Status/prod-immeuble-where.util';
 import { CreateManagerInput, UpdateManagerInput } from './manager.dto';

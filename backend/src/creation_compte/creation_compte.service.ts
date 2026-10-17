@@ -217,9 +217,7 @@ export class CreationCompteService {
       { headers: { Authorization: `Bearer ${token}` } },
     );
 
-    const group = childrenResponse.data.find(
-      (g: any) => g.name === groupName,
-    );
+    const group = childrenResponse.data.find((g: any) => g.name === groupName);
     if (!group) {
       throw new Error(`Groupe ${groupName} non trouvé dans Keycloak`);
     }
@@ -268,7 +266,7 @@ export class CreationCompteService {
     } catch (error: any) {
       this.logger.error(`❌ Failed to delete user: ${error.message}`);
       throw new BadRequestException(
-        error.message || 'Erreur lors de la suppression de l\'utilisateur',
+        error.message || "Erreur lors de la suppression de l'utilisateur",
       );
     }
   }
@@ -295,7 +293,11 @@ export class CreationCompteService {
       }
 
       // 2. Changer le mot de passe dans Keycloak
-      await this.changerMotDePasseKeycloak(adminToken, userId, nouveauMotDePasse);
+      await this.changerMotDePasseKeycloak(
+        adminToken,
+        userId,
+        nouveauMotDePasse,
+      );
 
       this.logger.log(`✅ Password changed for user ${email}`);
 

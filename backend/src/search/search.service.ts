@@ -14,19 +14,24 @@ export class SearchService {
     const q = query.trim();
     const groups: SearchResultGroup[] = [];
 
-    const [commerciaux, managers, directeurs, immeubles, portes, zones] = await Promise.all([
-      this.searchCommerciaux(q, limit),
-      this.searchManagers(q, limit),
-      this.searchDirecteurs(q, limit),
-      this.searchImmeubles(q, limit),
-      this.searchPortes(q, limit),
-      this.searchZones(q, limit),
-    ]);
+    const [commerciaux, managers, directeurs, immeubles, portes, zones] =
+      await Promise.all([
+        this.searchCommerciaux(q, limit),
+        this.searchManagers(q, limit),
+        this.searchDirecteurs(q, limit),
+        this.searchImmeubles(q, limit),
+        this.searchPortes(q, limit),
+        this.searchZones(q, limit),
+      ]);
 
-    if (commerciaux.length > 0) groups.push({ category: 'Commerciaux', items: commerciaux });
-    if (managers.length > 0) groups.push({ category: 'Managers', items: managers });
-    if (directeurs.length > 0) groups.push({ category: 'Directeurs', items: directeurs });
-    if (immeubles.length > 0) groups.push({ category: 'Immeubles', items: immeubles });
+    if (commerciaux.length > 0)
+      groups.push({ category: 'Commerciaux', items: commerciaux });
+    if (managers.length > 0)
+      groups.push({ category: 'Managers', items: managers });
+    if (directeurs.length > 0)
+      groups.push({ category: 'Directeurs', items: directeurs });
+    if (immeubles.length > 0)
+      groups.push({ category: 'Immeubles', items: immeubles });
     if (portes.length > 0) groups.push({ category: 'Portes', items: portes });
     if (zones.length > 0) groups.push({ category: 'Zones', items: zones });
 
@@ -45,14 +50,25 @@ export class SearchService {
         ],
       },
       take: limit,
-      select: { id: true, nom: true, prenom: true, email: true, manager: { select: { nom: true, prenom: true } } },
+      select: {
+        id: true,
+        nom: true,
+        prenom: true,
+        email: true,
+        manager: { select: { nom: true, prenom: true } },
+      },
     });
 
     return results.map((c) => ({
       type: 'commercial',
       id: c.id,
       label: `${c.prenom} ${c.nom}`,
-      sublabel: [c.email, c.manager ? `Manager: ${c.manager.prenom} ${c.manager.nom}` : null].filter(Boolean).join(' · '),
+      sublabel: [
+        c.email,
+        c.manager ? `Manager: ${c.manager.prenom} ${c.manager.nom}` : null,
+      ]
+        .filter(Boolean)
+        .join(' · '),
       url: `/commerciaux/${c.id}`,
     }));
   }
@@ -68,14 +84,25 @@ export class SearchService {
         ],
       },
       take: limit,
-      select: { id: true, nom: true, prenom: true, email: true, directeur: { select: { nom: true, prenom: true } } },
+      select: {
+        id: true,
+        nom: true,
+        prenom: true,
+        email: true,
+        directeur: { select: { nom: true, prenom: true } },
+      },
     });
 
     return results.map((m) => ({
       type: 'manager',
       id: m.id,
       label: `${m.prenom} ${m.nom}`,
-      sublabel: [m.email, m.directeur ? `Dir: ${m.directeur.prenom} ${m.directeur.nom}` : null].filter(Boolean).join(' · '),
+      sublabel: [
+        m.email,
+        m.directeur ? `Dir: ${m.directeur.prenom} ${m.directeur.nom}` : null,
+      ]
+        .filter(Boolean)
+        .join(' · '),
       url: `/managers/${m.id}`,
     }));
   }
@@ -109,12 +136,25 @@ export class SearchService {
         OR: [
           { adresse: { contains: q, mode: 'insensitive' } },
           { digitalCode: { contains: q, mode: 'insensitive' } },
-          { commercial: { OR: [{ nom: { contains: q, mode: 'insensitive' } }, { prenom: { contains: q, mode: 'insensitive' } }] } },
+          {
+            commercial: {
+              OR: [
+                { nom: { contains: q, mode: 'insensitive' } },
+                { prenom: { contains: q, mode: 'insensitive' } },
+              ],
+            },
+          },
           { zone: { nom: { contains: q, mode: 'insensitive' } } },
         ],
       },
       take: limit,
-      select: { id: true, adresse: true, nbEtages: true, commercial: { select: { nom: true, prenom: true } }, zone: { select: { nom: true } } },
+      select: {
+        id: true,
+        adresse: true,
+        nbEtages: true,
+        commercial: { select: { nom: true, prenom: true } },
+        zone: { select: { nom: true } },
+      },
     });
 
     return results.map((i) => ({
@@ -125,7 +165,9 @@ export class SearchService {
         `${i.nbEtages} étage${i.nbEtages > 1 ? 's' : ''}`,
         i.commercial ? `${i.commercial.prenom} ${i.commercial.nom}` : null,
         i.zone ? i.zone.nom : null,
-      ].filter(Boolean).join(' · '),
+      ]
+        .filter(Boolean)
+        .join(' · '),
       url: `/immeubles/${i.id}`,
     }));
   }
@@ -141,14 +183,26 @@ export class SearchService {
         ],
       },
       take: limit,
-      select: { id: true, numero: true, nomPersonnalise: true, etage: true, statut: true, immeuble: { select: { id: true, adresse: true } } },
+      select: {
+        id: true,
+        numero: true,
+        nomPersonnalise: true,
+        etage: true,
+        statut: true,
+        immeuble: { select: { id: true, adresse: true } },
+      },
     });
 
     return results.map((p) => ({
       type: 'porte',
       id: p.id,
       label: `Porte ${p.nomPersonnalise || p.numero} — Ét. ${p.etage}`,
-      sublabel: [p.immeuble?.adresse, p.statut?.replace(/_/g, ' ').toLowerCase()].filter(Boolean).join(' · '),
+      sublabel: [
+        p.immeuble?.adresse,
+        p.statut?.replace(/_/g, ' ').toLowerCase(),
+      ]
+        .filter(Boolean)
+        .join(' · '),
       url: `/immeubles/${p.immeuble?.id}/portes/${p.id}`,
     }));
   }

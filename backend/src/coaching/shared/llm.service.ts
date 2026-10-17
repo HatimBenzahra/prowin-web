@@ -9,7 +9,10 @@ import axios, { AxiosInstance } from 'axios';
 export class LlmService {
   private readonly logger = new Logger(LlmService.name);
 
-  private readonly baseUrl = (process.env.VLLM_BASE_URL ?? '').replace(/\/+$/, '');
+  private readonly baseUrl = (process.env.VLLM_BASE_URL ?? '').replace(
+    /\/+$/,
+    '',
+  );
   private readonly model = process.env.VLLM_MODEL ?? '';
   private readonly apiKey = process.env.VLLM_API_KEY ?? '';
   // Public : entre dans le calcul du seuil de requeue "job bloqué" du coaching.
@@ -28,7 +31,9 @@ export class LlmService {
    */
   async chatJson(systemPrompt: string, userPrompt: string): Promise<string> {
     if (!this.isConfigured()) {
-      throw new Error('vLLM non configuré (VLLM_BASE_URL / VLLM_MODEL absents)');
+      throw new Error(
+        'vLLM non configuré (VLLM_BASE_URL / VLLM_MODEL absents)',
+      );
     }
 
     const url = `${this.baseUrl}/chat/completions`;
@@ -48,7 +53,9 @@ export class LlmService {
       ],
     };
 
-    this.logger.debug(`Appel vLLM model=${this.model} timeout=${this.timeoutMs}ms`);
+    this.logger.debug(
+      `Appel vLLM model=${this.model} timeout=${this.timeoutMs}ms`,
+    );
     const resp = await this.http.post(url, body, {
       headers,
       timeout: this.timeoutMs,

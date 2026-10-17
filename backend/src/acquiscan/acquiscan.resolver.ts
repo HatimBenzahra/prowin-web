@@ -28,7 +28,9 @@ import { Zone } from '../zone/zone.dto';
 export class AcquiscanResolver {
   constructor(private readonly acquiscanService: AcquiscanService) {}
 
-  @Query(() => [AcquiscanAddressSuggestion], { name: 'acquiscanAddressSuggestions' })
+  @Query(() => [AcquiscanAddressSuggestion], {
+    name: 'acquiscanAddressSuggestions',
+  })
   @Roles('admin', 'directeur')
   searchAddressSuggestions(@Args('input') input: AcquiscanAddressSearchInput) {
     return this.acquiscanService.searchAddressSuggestions(input);
@@ -46,21 +48,31 @@ export class AcquiscanResolver {
     return this.acquiscanService.findAddresses(input);
   }
 
-  @Query(() => AcquiscanDepartmentOpportunitiesPage, { name: 'acquiscanDepartmentOpportunities' })
+  @Query(() => AcquiscanDepartmentOpportunitiesPage, {
+    name: 'acquiscanDepartmentOpportunities',
+  })
   @Roles('admin', 'directeur')
   findDepartmentOpportunities() {
     return this.acquiscanService.findDepartmentOpportunities();
   }
 
-  @Query(() => AcquiscanCommuneOpportunitiesPage, { name: 'acquiscanCommuneOpportunities' })
+  @Query(() => AcquiscanCommuneOpportunitiesPage, {
+    name: 'acquiscanCommuneOpportunities',
+  })
   @Roles('admin', 'directeur')
-  findCommuneOpportunities(@Args('input') input: AcquiscanCommuneOpportunitiesInput) {
+  findCommuneOpportunities(
+    @Args('input') input: AcquiscanCommuneOpportunitiesInput,
+  ) {
     return this.acquiscanService.findCommuneOpportunities(input);
   }
 
-  @Query(() => AcquiscanCopperBuildingsPage, { name: 'acquiscanCopperBuildings' })
+  @Query(() => AcquiscanCopperBuildingsPage, {
+    name: 'acquiscanCopperBuildings',
+  })
   @Roles('admin', 'directeur')
-  findCopperBuildingOpportunities(@Args('input') input: AcquiscanCopperBuildingsInput) {
+  findCopperBuildingOpportunities(
+    @Args('input') input: AcquiscanCopperBuildingsInput,
+  ) {
     return this.acquiscanService.findCopperBuildingOpportunities(input);
   }
 

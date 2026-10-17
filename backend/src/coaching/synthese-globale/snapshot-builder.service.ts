@@ -70,8 +70,14 @@ export class SnapshotBuilderService {
   }
 
   async buildSnapshot(subjectType: SubjectType, subjectId: number) {
-    const { activityWhere, analysisWhere, ownerWhere, zoneUserType, teamIds, teamNames } =
-      await this.resolveScope(subjectType, subjectId);
+    const {
+      activityWhere,
+      analysisWhere,
+      ownerWhere,
+      zoneUserType,
+      teamIds,
+      teamNames,
+    } = await this.resolveScope(subjectType, subjectId);
     const round = (n: number) => Math.round(n * 10) / 10;
 
     const subject =
@@ -88,7 +94,12 @@ export class SnapshotBuilderService {
     // Analyses coaching READY (verdicts LLM par critère + score backend).
     const analyses = await this.prisma.coachingAnalysis.findMany({
       // Le bilan d'un commercial ProWin ne compte que les analyses de ProWin.
-      where: { ...analysisWhere, source: CRM_SOURCE, tenantId: CRM_TENANT, status: CoachingStatus.READY },
+      where: {
+        ...analysisWhere,
+        source: CRM_SOURCE,
+        tenantId: CRM_TENANT,
+        status: CoachingStatus.READY,
+      },
       select: {
         id: true,
         score: true,
@@ -159,12 +170,26 @@ export class SnapshotBuilderService {
     for (const a of analyses) {
       const crits = (a.criterionResults as any[]) ?? [];
       for (const c of crits) {
-        if (c.status === 'non_applicable' || c.status === 'non_evaluable') continue;
+        if (c.status === 'non_applicable' || c.status === 'non_evaluable')
+          continue;
         const key = c.criterionKey || c.title;
-        const cur =
-          critMap.get(key) ?? { titre: c.title, atteint: 0, partiel: 0, absent: 0 };
+        const cur = critMap.get(key) ?? {
+          titre: c.title,
+          atteint: 0,
+          partiel: 0,
+          absent: 0,
+        };
         // Échelle à 5 niveaux et découverte ramenées aux trois comptes de la synthèse.
-        if (['atteint', 'maitrise', 'correct', 'obtenue_question', 'obtenue_spontanement'].includes(c.status)) cur.atteint++;
+        if (
+          [
+            'atteint',
+            'maitrise',
+            'correct',
+            'obtenue_question',
+            'obtenue_spontanement',
+          ].includes(c.status)
+        )
+          cur.atteint++;
         else if (c.status === 'partiel' || c.status === 'faible') cur.partiel++;
         else cur.absent++;
         critMap.set(key, cur);
@@ -189,8 +214,12 @@ export class SnapshotBuilderService {
         // La ligne de fiche contredite fait office de famille d'écart.
         const contredit = String(v.sheetSays ?? '').slice(0, 120);
         const key = `${produit}::${contredit}`;
-        const cur =
-          violMap.get(key) ?? { produit, contredit, grave: 0, modere: 0 };
+        const cur = violMap.get(key) ?? {
+          produit,
+          contredit,
+          grave: 0,
+          modere: 0,
+        };
         if (v.severity === 'grave') cur.grave++;
         else cur.modere++;
         violMap.set(key, cur);
@@ -226,7 +255,10 @@ export class SnapshotBuilderService {
       if (h.porteId == null) continue;
       latestParPorte.set(h.porteId, h.statut);
       if (h.duree && h.duree > 0) {
-        dureeParPorte.set(h.porteId, (dureeParPorte.get(h.porteId) ?? 0) + h.duree);
+        dureeParPorte.set(
+          h.porteId,
+          (dureeParPorte.get(h.porteId) ?? 0) + h.duree,
+        );
       }
     }
 
@@ -270,7 +302,13 @@ export class SnapshotBuilderService {
       const key = localDayKey(h.createdAt);
       let e = jourMap.get(key);
       if (!e) {
-        e = { portes: new Set(), evenements: 0, parStatut: {}, dureeSum: 0, dureeN: 0 };
+        e = {
+          portes: new Set(),
+          evenements: 0,
+          parStatut: {},
+          dureeSum: 0,
+          dureeN: 0,
+        };
         jourMap.set(key, e);
       }
       if (h.porteId != null) e.portes.add(h.porteId);
@@ -287,7 +325,9 @@ export class SnapshotBuilderService {
     // Contrats indexés par jour (clé periodDay, ou dérivée de dateValidation).
     const contratsParDay: Record<string, number> = {};
     for (const c of contrats) {
-      const key = c.periodDay ?? (c.dateValidation ? localDayKey(c.dateValidation) : null);
+      const key =
+        c.periodDay ??
+        (c.dateValidation ? localDayKey(c.dateValidation) : null);
       if (key) contratsParDay[key] = (contratsParDay[key] ?? 0) + 1;
     }
 
@@ -349,8 +389,12 @@ export class SnapshotBuilderService {
     const analyseTimes = analyses
       .map((a) => a.recording?.createdAt.getTime())
       .filter((t): t is number => t != null);
-    const periodStart = analyseTimes.length ? new Date(Math.min(...analyseTimes)) : null;
-    const periodEnd = analyseTimes.length ? new Date(Math.max(...analyseTimes)) : null;
+    const periodStart = analyseTimes.length
+      ? new Date(Math.min(...analyseTimes))
+      : null;
+    const periodEnd = analyseTimes.length
+      ? new Date(Math.max(...analyseTimes))
+      : null;
     const dayStart = periodStart ? localDayKey(periodStart) : null;
     const dayEnd = periodEnd ? localDayKey(periodEnd) : null;
     const parJour = [...jourMap.entries()]
@@ -372,11 +416,15 @@ export class SnapshotBuilderService {
 
     // --- Date de début de prospection (cascade de fallbacks) -----------------
     let dateDebut: Date | null = history.length ? history[0].createdAt : null;
-    let sourceDateDebut: string | null = history.length ? 'status_historique' : null;
+    let sourceDateDebut: string | null = history.length
+      ? 'status_historique'
+      : null;
     if (!dateDebut && contrats.length) {
       const min = contrats.reduce<Date | null>(
         (m, c) =>
-          c.dateValidation && (!m || c.dateValidation < m) ? c.dateValidation : m,
+          c.dateValidation && (!m || c.dateValidation < m)
+            ? c.dateValidation
+            : m,
         null,
       );
       if (min) {
@@ -436,7 +484,9 @@ export class SnapshotBuilderService {
             commentaire: c.comment ?? null,
             // Citations verbatim de ce que le commercial a dit (matière première
             // du coaching : ce qu'il dit / ne dit pas vs le plan de vente).
-            preuves: Array.isArray(c.evidence) ? c.evidence.slice(0, PREUVES_PAR_CRITERE) : [],
+            preuves: Array.isArray(c.evidence)
+              ? c.evidence.slice(0, PREUVES_PAR_CRITERE)
+              : [],
           })),
       })),
     );
@@ -468,21 +518,31 @@ export class SnapshotBuilderService {
       const offre = c.offre?.nom ?? c.offre?.badgeProductKey ?? 'Inconnu';
       const pts = c.offre?.points ?? 0;
       const key = `${categorie}|${offre}`;
-      const cur =
-        parTypeMap.get(key) ??
-        { categorie, offre, count: 0, pointsUnite: pts, pointsTotal: 0 };
+      const cur = parTypeMap.get(key) ?? {
+        categorie,
+        offre,
+        count: 0,
+        pointsUnite: pts,
+        pointsTotal: 0,
+      };
       cur.count++;
       cur.pointsTotal += pts;
       parTypeMap.set(key, cur);
       pointsTotal += pts;
     }
-    const ventesPeriode = new Set(contratsPeriode.map((c) => c.externalProspectId)).size;
+    const ventesPeriode = new Set(
+      contratsPeriode.map((c) => c.externalProspectId),
+    ).size;
 
     // Signatures déclarées sur le terrain pendant la période : portes passées en
     // CONTRAT_SIGNE, une porte = un client, comparable aux ventes validées.
     const portesSigneesPeriode = new Set<number>();
     for (const h of history) {
-      if (h.statut === 'CONTRAT_SIGNE' && h.porteId != null && inPeriod(localDayKey(h.createdAt))) {
+      if (
+        h.statut === 'CONTRAT_SIGNE' &&
+        h.porteId != null &&
+        inPeriod(localDayKey(h.createdAt))
+      ) {
         portesSigneesPeriode.add(h.porteId);
       }
     }
@@ -532,41 +592,67 @@ export class SnapshotBuilderService {
       if (imm.zone?.nom) zonesReelles.add(imm.zone.nom);
       if (imm.quartier?.nom) quartiersReels.add(imm.quartier.nom);
       if (imm.typeHabitat)
-        habitatCount[imm.typeHabitat] = (habitatCount[imm.typeHabitat] ?? 0) + 1;
+        habitatCount[imm.typeHabitat] =
+          (habitatCount[imm.typeHabitat] ?? 0) + 1;
     }
 
     // --- Bloc équipe (manager uniquement) ------------------------------------
     let equipe: Record<string, unknown> | undefined;
     if (subjectType === 'manager' && teamIds) {
-      const [byAnalyse, avgByUser, byContrat, perso, persoAvg] = await Promise.all([
-        this.prisma.coachingAnalysis.groupBy({
-          by: ['userId'],
-          where: { source: CRM_SOURCE, tenantId: CRM_TENANT, userId: { in: teamIds }, status: CoachingStatus.READY },
-          _count: { _all: true },
-        }),
-        // Moyennes sans les visites non évaluables, qui restent comptées comme analyses.
-        this.prisma.coachingAnalysis.groupBy({
-          by: ['userId'],
-          where: { source: CRM_SOURCE, tenantId: CRM_TENANT, userId: { in: teamIds }, status: CoachingStatus.READY, ...SCORABLE },
-          _avg: { score: true },
-        }),
-        this.prisma.contratValide.groupBy({
-          by: ['commercialId'],
-          where: {
-            commercialId: { in: teamIds },
-            ...(dayStart && dayEnd ? { periodDay: { gte: dayStart, lte: dayEnd } } : {}),
-          },
-          _count: { _all: true },
-        }),
-        this.prisma.coachingAnalysis.aggregate({
-          where: { source: CRM_SOURCE, tenantId: CRM_TENANT, managerId: subjectId, status: CoachingStatus.READY },
-          _count: { _all: true },
-        }),
-        this.prisma.coachingAnalysis.aggregate({
-          where: { source: CRM_SOURCE, tenantId: CRM_TENANT, managerId: subjectId, status: CoachingStatus.READY, ...SCORABLE },
-          _avg: { score: true },
-        }),
-      ]);
+      const [byAnalyse, avgByUser, byContrat, perso, persoAvg] =
+        await Promise.all([
+          this.prisma.coachingAnalysis.groupBy({
+            by: ['userId'],
+            where: {
+              source: CRM_SOURCE,
+              tenantId: CRM_TENANT,
+              userId: { in: teamIds },
+              status: CoachingStatus.READY,
+            },
+            _count: { _all: true },
+          }),
+          // Moyennes sans les visites non évaluables, qui restent comptées comme analyses.
+          this.prisma.coachingAnalysis.groupBy({
+            by: ['userId'],
+            where: {
+              source: CRM_SOURCE,
+              tenantId: CRM_TENANT,
+              userId: { in: teamIds },
+              status: CoachingStatus.READY,
+              ...SCORABLE,
+            },
+            _avg: { score: true },
+          }),
+          this.prisma.contratValide.groupBy({
+            by: ['commercialId'],
+            where: {
+              commercialId: { in: teamIds },
+              ...(dayStart && dayEnd
+                ? { periodDay: { gte: dayStart, lte: dayEnd } }
+                : {}),
+            },
+            _count: { _all: true },
+          }),
+          this.prisma.coachingAnalysis.aggregate({
+            where: {
+              source: CRM_SOURCE,
+              tenantId: CRM_TENANT,
+              managerId: subjectId,
+              status: CoachingStatus.READY,
+            },
+            _count: { _all: true },
+          }),
+          this.prisma.coachingAnalysis.aggregate({
+            where: {
+              source: CRM_SOURCE,
+              tenantId: CRM_TENANT,
+              managerId: subjectId,
+              status: CoachingStatus.READY,
+              ...SCORABLE,
+            },
+            _avg: { score: true },
+          }),
+        ]);
       const avgOf = new Map(avgByUser.map((r) => [r.userId, r._avg.score]));
       const contratByComm = new Map<number, number>(
         byContrat
@@ -578,7 +664,10 @@ export class SnapshotBuilderService {
         .map((r) => ({
           nom: teamNames.get(r.userId as number) ?? `#${r.userId}`,
           nbAnalyses: r._count._all,
-          scoreMoyen: avgOf.get(r.userId) != null ? round(avgOf.get(r.userId) as number) : null,
+          scoreMoyen:
+            avgOf.get(r.userId) != null
+              ? round(avgOf.get(r.userId) as number)
+              : null,
           nbContrats: contratByComm.get(r.userId as number) ?? 0,
         }))
         .sort((a, b) => b.nbAnalyses - a.nbAnalyses)
@@ -588,7 +677,8 @@ export class SnapshotBuilderService {
         parCommercial: equipeParCommercial,
         activiteManagerPerso: {
           nbAnalyses: perso._count._all,
-          scoreMoyen: persoAvg._avg.score != null ? round(persoAvg._avg.score) : null,
+          scoreMoyen:
+            persoAvg._avg.score != null ? round(persoAvg._avg.score) : null,
         },
       };
     }
@@ -599,7 +689,9 @@ export class SnapshotBuilderService {
         nom: subject ? `${subject.prenom} ${subject.nom}`.trim() : null,
       },
       parcours: {
-        dateDebutProspection: dateDebut ? dateDebut.toISOString().slice(0, 10) : null,
+        dateDebutProspection: dateDebut
+          ? dateDebut.toISOString().slice(0, 10)
+          : null,
         ancienneteJours,
         nbJoursActifs,
         sourceDateDebut,
@@ -640,7 +732,9 @@ export class SnapshotBuilderService {
           : null,
         // Points gamification (barème d'offre), pas des euros. Mix trié par points.
         pointsTotal,
-        pointsMoyenParVente: ventesPeriode ? round(pointsTotal / ventesPeriode) : null,
+        pointsMoyenParVente: ventesPeriode
+          ? round(pointsTotal / ventesPeriode)
+          : null,
         contratsSansOffre: sansOffre,
         parType: [...parTypeMap.values()].sort(
           (a, b) => b.pointsTotal - a.pointsTotal || b.count - a.count,
@@ -648,7 +742,8 @@ export class SnapshotBuilderService {
         // Contexte uniquement : historique WinLead+, antérieur à ProWin le cas échéant.
         historique: {
           depuis: premierContrat ? localDayKey(premierContrat) : null,
-          ventesValidees: new Set(contrats.map((c) => c.externalProspectId)).size,
+          ventesValidees: new Set(contrats.map((c) => c.externalProspectId))
+            .size,
           contratsValides: contrats.length,
         },
       },
@@ -683,11 +778,15 @@ function localDayKey(date: Date): string {
 
 /** Semaine ISO "YYYY-Www". */
 function isoWeek(date: Date): string {
-  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  const d = new Date(
+    Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()),
+  );
   const day = d.getUTCDay() || 7;
   d.setUTCDate(d.getUTCDate() + 4 - day);
   const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
-  const week = Math.ceil(((d.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
+  const week = Math.ceil(
+    ((d.getTime() - yearStart.getTime()) / 86400000 + 1) / 7,
+  );
   return `${d.getUTCFullYear()}-W${String(week).padStart(2, '0')}`;
 }
 
@@ -695,7 +794,8 @@ function isoWeek(date: Date): string {
 function trendDirection(points: number[]): string {
   if (points.length < 2) return 'stagne';
   const mid = Math.floor(points.length / 2);
-  const avg = (arr: number[]) => arr.reduce((a, b) => a + b, 0) / (arr.length || 1);
+  const avg = (arr: number[]) =>
+    arr.reduce((a, b) => a + b, 0) / (arr.length || 1);
   const first = avg(points.slice(0, mid));
   const second = avg(points.slice(mid));
   const delta = second - first;
@@ -729,21 +829,29 @@ function extractVille(adresse: string): string | null {
   return m ? `${m[1]} ${m[2].trim()}` : null;
 }
 
-type Session = { criteres?: unknown[]; forces?: unknown[]; axes?: unknown[] } & Record<string, unknown>;
+type Session = {
+  criteres?: unknown[];
+  forces?: unknown[];
+  axes?: unknown[];
+} & Record<string, unknown>;
 
 /**
  * Tient les sessions dans le budget du prompt, du plus récent au plus ancien : les
  * plus récentes gardent leurs critères, les autres leur seul résumé. Si cela dépasse
  * encore, moins de sessions sont détaillées, puis les plus anciennes sont retirées.
  */
-export function fitSessions<T extends Session>(sessions: T[], budget = SESSIONS_BUDGET_CHARS): T[] {
+export function fitSessions<T extends Session>(
+  sessions: T[],
+  budget = SESSIONS_BUDGET_CHARS,
+): T[] {
   const summary = (s: T): T => {
     const { criteres: _c, forces: _f, axes: _a, ...rest } = s;
     return rest as T;
   };
   let detailed = Math.min(SESSIONS_DETAILLEES, sessions.length);
   let kept = sessions.length;
-  const build = () => sessions.slice(0, kept).map((s, i) => (i < detailed ? s : summary(s)));
+  const build = () =>
+    sessions.slice(0, kept).map((s, i) => (i < detailed ? s : summary(s)));
   let result = build();
   while (JSON.stringify(result).length > budget && kept > 0) {
     if (detailed > 0) detailed = Math.floor(detailed / 2);

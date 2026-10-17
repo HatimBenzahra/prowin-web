@@ -1,4 +1,4 @@
-import { registerEnumType } from '@nestjs/graphql'
+import { registerEnumType } from '@nestjs/graphql';
 
 export enum UserStatus {
   ACTIF = 'ACTIF',
@@ -9,4 +9,4 @@ export enum UserStatus {
 registerEnumType(UserStatus, {
   name: 'UserStatus',
   description: 'Statut d’un utilisateur (commercial, manager ou directeur)',
-})
+});

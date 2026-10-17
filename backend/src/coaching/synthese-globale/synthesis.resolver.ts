@@ -27,7 +27,10 @@ export class SynthesisResolver {
     @Args('subjectType') subjectType: string,
     @Args('subjectId', { type: () => Int }) subjectId: number,
   ): Promise<CoachingSynthesisDto | null> {
-    return this.synthesis.getSynthesis(normalizeSubject(subjectType), subjectId);
+    return this.synthesis.getSynthesis(
+      normalizeSubject(subjectType),
+      subjectId,
+    );
   }
 
   @Mutation(() => CoachingSynthesisDto)
@@ -36,7 +39,10 @@ export class SynthesisResolver {
     @Args('subjectType') subjectType: string,
     @Args('subjectId', { type: () => Int }) subjectId: number,
   ): Promise<CoachingSynthesisDto> {
-    return this.synthesis.requestGenerate(normalizeSubject(subjectType), subjectId);
+    return this.synthesis.requestGenerate(
+      normalizeSubject(subjectType),
+      subjectId,
+    );
   }
 
   /** Configure la planif du cron de synthèse (rythme + heure). */

@@ -19,7 +19,7 @@ export class GpsTrackingService {
     userType: UserType,
     inputs: ReportPositionInput[],
   ): Promise<number> {
-    const data = inputs.map(input => ({
+    const data = inputs.map((input) => ({
       userId,
       userType,
       latitude: input.latitude,
@@ -45,7 +45,7 @@ export class GpsTrackingService {
     });
 
     const now = Date.now();
-    return rows.map(row => ({
+    return rows.map((row) => ({
       ...row,
       isOnline: now - row.recordedAt.getTime() <= ONLINE_THRESHOLD_MS,
     }));

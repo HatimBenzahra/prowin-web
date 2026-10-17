@@ -71,7 +71,7 @@ export class JwtAuthGuard implements CanActivate {
   ): Promise<KeycloakAccessToken> {
     try {
       return await verifyKeycloakToken(token);
-    } catch (error) {
+    } catch {
       throw new UnauthorizedException('Impossible de valider le token');
     }
   }

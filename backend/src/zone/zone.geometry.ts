@@ -128,8 +128,7 @@ export function pointInRing(lng: number, lat: number, ring: Ring): boolean {
     const [xi, yi] = ring[i];
     const [xj, yj] = ring[j];
     const intersect =
-      yi > lat !== yj > lat &&
-      lng < ((xj - xi) * (lat - yi)) / (yj - yi) + xi;
+      yi > lat !== yj > lat && lng < ((xj - xi) * (lat - yi)) / (yj - yi) + xi;
     if (intersect) {
       inside = !inside;
     }

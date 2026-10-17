@@ -59,8 +59,7 @@ export class NotificationsListenerService
   private async connect(): Promise<void> {
     if (this.stopped) return;
 
-    const connectionString =
-      process.env.DIRECT_URL || process.env.DATABASE_URL;
+    const connectionString = process.env.DIRECT_URL || process.env.DATABASE_URL;
     if (!connectionString) {
       this.logger.error(
         'DATABASE_URL/DIRECT_URL manquant : listener de notifications désactivé',
@@ -78,7 +77,9 @@ export class NotificationsListenerService
     client.on('end', () => {
       if (!this.stopped) this.scheduleReconnect();
     });
-    client.on('notification', (msg) => this.handleRaw(msg.channel, msg.payload));
+    client.on('notification', (msg) =>
+      this.handleRaw(msg.channel, msg.payload),
+    );
 
     try {
       await client.connect();

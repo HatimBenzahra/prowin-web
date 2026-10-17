@@ -331,7 +331,11 @@ export class ZoneService {
     }
 
     if (userRole === 'admin') {
-      return { createdById: userId, createdByType: null, createdByName: 'Admin' };
+      return {
+        createdById: userId,
+        createdByType: null,
+        createdByName: 'Admin',
+      };
     }
 
     const select = { prenom: true, nom: true };
@@ -341,15 +345,24 @@ export class ZoneService {
     switch (userRole) {
       case 'manager':
         createdByType = UserType.MANAGER;
-        user = await this.prisma.manager.findUnique({ where: { id: userId }, select });
+        user = await this.prisma.manager.findUnique({
+          where: { id: userId },
+          select,
+        });
         break;
       case 'directeur':
         createdByType = UserType.DIRECTEUR;
-        user = await this.prisma.directeur.findUnique({ where: { id: userId }, select });
+        user = await this.prisma.directeur.findUnique({
+          where: { id: userId },
+          select,
+        });
         break;
       case 'commercial':
         createdByType = UserType.COMMERCIAL;
-        user = await this.prisma.commercial.findUnique({ where: { id: userId }, select });
+        user = await this.prisma.commercial.findUnique({
+          where: { id: userId },
+          select,
+        });
         break;
     }
 
@@ -580,9 +593,8 @@ export class ZoneService {
 
       case 'manager': {
         if (userType === UserType.COMMERCIAL) {
-          const commercialIds = await this.getCommercialsUnderManager(
-            requestUserId,
-          );
+          const commercialIds =
+            await this.getCommercialsUnderManager(requestUserId);
           if (commercialIds.includes(userId)) {
             return;
           }
@@ -621,7 +633,9 @@ export class ZoneService {
           ? {
               OR: [
                 { managerId: userId },
-                { zoneEnCours: { some: { userId, userType: UserType.MANAGER } } },
+                {
+                  zoneEnCours: { some: { userId, userType: UserType.MANAGER } },
+                },
               ],
             }
           : {
@@ -1288,9 +1302,7 @@ export class ZoneService {
         ? `${h.commercial.prenom} ${h.commercial.nom}`
         : null,
       managerId: h.manager?.id ?? null,
-      managerNom: h.manager
-        ? `${h.manager.prenom} ${h.manager.nom}`
-        : null,
+      managerNom: h.manager ? `${h.manager.prenom} ${h.manager.nom}` : null,
       statut: h.statut,
       date: h.createdAt,
       dureeSec: h.duree ?? null,

@@ -11,7 +11,10 @@ import { ReferenceService } from '../coaching/referentiels/reference.service';
 async function main() {
   const prisma = new PrismaService();
   try {
-    const result = await new ReferenceService(prisma, new CoachingApiClient()).migrateLegacy();
+    const result = await new ReferenceService(
+      prisma,
+      new CoachingApiClient(),
+    ).migrateLegacy();
     console.log(JSON.stringify(result));
   } finally {
     await prisma.$disconnect();

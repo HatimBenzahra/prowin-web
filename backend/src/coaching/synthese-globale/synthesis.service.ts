@@ -52,7 +52,9 @@ export class SynthesisService {
     const scopeWhere = await this.analysisScopeWhere(subjectType, subjectId);
     const period = await this.prisma.recording.aggregate({
       where: {
-        coachingAnalyses: { some: { ...scopeWhere, status: CoachingStatus.READY } },
+        coachingAnalyses: {
+          some: { ...scopeWhere, status: CoachingStatus.READY },
+        },
       },
       _min: { createdAt: true },
       _max: { createdAt: true },
@@ -90,7 +92,10 @@ export class SynthesisService {
   }
 
   /** Pipeline de génération : snapshot → LLM → stockage. */
-  async runGenerate(subjectType: SubjectType, subjectId: number): Promise<void> {
+  async runGenerate(
+    subjectType: SubjectType,
+    subjectId: number,
+  ): Promise<void> {
     const subjectKey = `${subjectType}:${subjectId}`;
     try {
       const snapshot = await this.snapshotBuilder.buildSnapshot(
@@ -116,7 +121,9 @@ export class SynthesisService {
           generatedAt: new Date(),
         },
       });
-      this.logger.log(`Synthèse ${subjectKey} générée (${snapshot.coaching.nbAnalyses} analyses)`);
+      this.logger.log(
+        `Synthèse ${subjectKey} générée (${snapshot.coaching.nbAnalyses} analyses)`,
+      );
     } catch (e) {
       const error = describeFailure(e);
       this.logger.error(`Synthèse ${subjectKey} échouée: ${error}`);
@@ -135,7 +142,9 @@ export class SynthesisService {
   @Cron(CronExpression.EVERY_10_MINUTES)
   async synthesisTick(): Promise<void> {
     if (!this.llm.isConfigured()) return;
-    const cfg = await this.prisma.coachingConfig.findUnique({ where: { id: 1 } });
+    const cfg = await this.prisma.coachingConfig.findUnique({
+      where: { id: 1 },
+    });
     if (!cfg || (cfg.synthesisCronFrequency ?? 'daily') === 'off') return;
 
     const now = new Date();
@@ -219,18 +228,30 @@ export class SynthesisService {
     // Commerciaux ayant des analyses READY + managers ayant des analyses perso.
     const [comm, mgrPerso] = await Promise.all([
       this.prisma.coachingAnalysis.findMany({
-        where: { source: CRM_SOURCE, tenantId: CRM_TENANT, status: CoachingStatus.READY, userId: { not: null } },
+        where: {
+          source: CRM_SOURCE,
+          tenantId: CRM_TENANT,
+          status: CoachingStatus.READY,
+          userId: { not: null },
+        },
         distinct: ['userId'],
         select: { userId: true },
       }),
       this.prisma.coachingAnalysis.findMany({
-        where: { source: CRM_SOURCE, tenantId: CRM_TENANT, status: CoachingStatus.READY, managerId: { not: null } },
+        where: {
+          source: CRM_SOURCE,
+          tenantId: CRM_TENANT,
+          status: CoachingStatus.READY,
+          managerId: { not: null },
+        },
         distinct: ['managerId'],
         select: { managerId: true },
       }),
     ]);
     const commIds = comm.map((c) => c.userId!).filter((x) => x != null);
-    const mgrPersoIds = mgrPerso.map((m) => m.managerId!).filter((x) => x != null);
+    const mgrPersoIds = mgrPerso
+      .map((m) => m.managerId!)
+      .filter((x) => x != null);
 
     // Un manager n'a quasi jamais d'analyse à son nom : on le trouve par son équipe.
     const commRows = commIds.length
@@ -275,12 +296,21 @@ export class SynthesisService {
       where: { subjectKey: `${subjectType}:${subjectId}` },
       select: { status: true, generatedAt: true },
     });
-    if (!existing || existing.status !== CoachingStatus.READY || !existing.generatedAt) {
+    if (
+      !existing ||
+      existing.status !== CoachingStatus.READY ||
+      !existing.generatedAt
+    ) {
       return true;
     }
     const scopeWhere = await this.analysisScopeWhere(subjectType, subjectId);
     const last = await this.prisma.coachingAnalysis.findFirst({
-      where: { ...scopeWhere, source: CRM_SOURCE, tenantId: CRM_TENANT, status: CoachingStatus.READY },
+      where: {
+        ...scopeWhere,
+        source: CRM_SOURCE,
+        tenantId: CRM_TENANT,
+        status: CoachingStatus.READY,
+      },
       orderBy: { createdAt: 'desc' },
       select: { createdAt: true },
     });
@@ -292,7 +322,8 @@ export class SynthesisService {
     period?: { periodStart: string | null; periodEnd: string | null },
   ): CoachingSynthesisDto {
     const s = (row.sections as Record<string, string[]>) ?? {};
-    const arr = (v: unknown): string[] => (Array.isArray(v) ? (v as string[]) : []);
+    const arr = (v: unknown): string[] =>
+      Array.isArray(v) ? (v as string[]) : [];
     return {
       subjectType: row.subjectType,
       subjectId: row.commercialId ?? row.managerId ?? null,
@@ -364,9 +395,11 @@ export function synthesisScheduleLabel(
 /** Ce que l'écran affiche d'un échec : une cause compréhensible, pas un statut HTTP. */
 export function describeFailure(error: unknown): string {
   if (axios.isAxiosError(error)) {
-    if (error.response?.status === 400) return 'Le modèle a refusé la demande (contenu trop volumineux ou invalide).';
-    if (error.response) return `Le modèle a répondu une erreur (${error.response.status}).`;
-    return 'Le modèle est injoignable ou n\'a pas répondu à temps.';
+    if (error.response?.status === 400)
+      return 'Le modèle a refusé la demande (contenu trop volumineux ou invalide).';
+    if (error.response)
+      return `Le modèle a répondu une erreur (${error.response.status}).`;
+    return "Le modèle est injoignable ou n'a pas répondu à temps.";
   }
   return (error as Error).message;
 }

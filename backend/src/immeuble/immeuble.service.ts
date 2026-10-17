@@ -188,9 +188,7 @@ export class ImmeubleService {
    * Ne duplique jamais le lancer de rayon : toute la géométrie passe par
    * `resolveContainingZoneId` (zone.geometry.ts).
    */
-  async reresolveAllImmeubleZones(
-    tx?: any,
-  ): Promise<{
+  async reresolveAllImmeubleZones(tx?: any): Promise<{
     scanned: number;
     updated: number;
     attached: number;
@@ -989,7 +987,10 @@ export class ImmeubleService {
     // recalcule le zoneId depuis les nouvelles coordonnées ; sinon on ne
     // touche pas au zoneId existant.
     delete (updateData as Record<string, unknown>).zoneId;
-    if (updateData.latitude !== undefined || updateData.longitude !== undefined) {
+    if (
+      updateData.latitude !== undefined ||
+      updateData.longitude !== undefined
+    ) {
       const latitude = updateData.latitude ?? immeuble.latitude ?? undefined;
       const longitude = updateData.longitude ?? immeuble.longitude ?? undefined;
       (updateData as Record<string, unknown>).zoneId =

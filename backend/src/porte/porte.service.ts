@@ -14,7 +14,7 @@ import { shouldIncrementRepassages } from './porte.repassage';
 export class PorteService {
   constructor(
     private prisma: PrismaService,
-    private statisticSyncService: StatisticSyncService
+    private statisticSyncService: StatisticSyncService,
   ) {}
 
   private validateImmeubleOwnership(
@@ -148,9 +148,17 @@ export class PorteService {
     }
   }
 
-  async create(createPorteInput: CreatePorteInput, userId: number, userRole: string) {
+  async create(
+    createPorteInput: CreatePorteInput,
+    userId: number,
+    userRole: string,
+  ) {
     // Anti-IDOR : on ne peut créer une porte que sur un immeuble accessible.
-    await this.ensureImmeubleAccess(createPorteInput.immeubleId, userId, userRole);
+    await this.ensureImmeubleAccess(
+      createPorteInput.immeubleId,
+      userId,
+      userRole,
+    );
     return this.prisma.porte.create({
       data: createPorteInput,
     });
@@ -228,7 +236,11 @@ export class PorteService {
     const updatedPorte = await this.prisma.porte.update({
       where: { id },
       data: nouveauPassage
-        ? { ...data, rdvDate: data.rdvDate ?? null, rdvTime: data.rdvTime ?? null }
+        ? {
+            ...data,
+            rdvDate: data.rdvDate ?? null,
+            rdvTime: data.rdvTime ?? null,
+          }
         : data,
       include: {
         immeuble: true,
@@ -249,12 +261,13 @@ export class PorteService {
       data.nbContrats !== currentPorte.nbContrats;
     if (statutChanged || contratsChanged) {
       try {
-        await this.statisticSyncService.syncCommercialStats(updatedPorte.immeubleId);
+        await this.statisticSyncService.syncCommercialStats(
+          updatedPorte.immeubleId,
+        );
       } catch (error) {
         // Log l'erreur mais ne fait pas échouer la mise à jour de la porte
         console.error('Erreur sync statistiques:', error);
       }
-
     }
 
     if (statutChanged && data.statut) {
@@ -274,7 +287,8 @@ export class PorteService {
             rdvDate: data.rdvDate || null,
             rdvTime: data.rdvTime || null,
             duree: data.duree ?? null,
-            commercialId: userRole === 'commercial' ? userId : immeuble?.commercialId,
+            commercialId:
+              userRole === 'commercial' ? userId : immeuble?.commercialId,
             managerId: userRole === 'manager' ? userId : immeuble?.managerId,
           },
         });
@@ -349,17 +363,19 @@ export class PorteService {
 
     // Créer un objet avec tous les compteurs initialisés à 0
     const statusCounts: Record<string, number> = {};
-    getAllStatuses().forEach(status => {
+    getAllStatuses().forEach((status) => {
       statusCounts[status] = 0;
     });
 
     // Remplir avec les vrais comptages
-    portesGrouped.forEach(group => {
+    portesGrouped.forEach((group) => {
       statusCounts[group.statut] = group._count.statut;
     });
 
     // Pour CONTRAT_SIGNE, utiliser la somme des nbContrats au lieu du simple count
-    const contratsSignesGroup = portesGrouped.find(g => g.statut === StatutPorte.CONTRAT_SIGNE);
+    const contratsSignesGroup = portesGrouped.find(
+      (g) => g.statut === StatutPorte.CONTRAT_SIGNE,
+    );
     const totalContratsSignes = contratsSignesGroup?._sum?.nbContrats || 0;
 
     // Statistiques par étage
@@ -374,7 +390,7 @@ export class PorteService {
       },
     });
 
-    const portesParEtage = etagesGrouped.map(group => ({
+    const portesParEtage = etagesGrouped.map((group) => ({
       etage: group.etage,
       count: group._count._all,
     }));
@@ -535,7 +551,11 @@ export class PorteService {
   /**
    * Récupère l'historique des statuts d'un immeuble
    */
-  async createCapped(createPorteInput: CreatePorteInput, userId: number, userRole: string) {
+  async createCapped(
+    createPorteInput: CreatePorteInput,
+    userId: number,
+    userRole: string,
+  ) {
     const immeuble = await this.prisma.immeuble.findUnique({
       where: { id: createPorteInput.immeubleId },
       select: {
@@ -557,17 +577,25 @@ export class PorteService {
       },
     });
     if (!immeuble) {
-      throw new NotFoundException(`Immeuble ${createPorteInput.immeubleId} introuvable`);
+      throw new NotFoundException(
+        `Immeuble ${createPorteInput.immeubleId} introuvable`,
+      );
     }
     // Anti-IDOR : valider l'ownership de l'immeuble cible avant création.
     this.validateImmeubleOwnership(immeuble, userId, userRole);
-    if (createPorteInput.etage < 1 || createPorteInput.etage > immeuble.nbEtages) {
+    if (
+      createPorteInput.etage < 1 ||
+      createPorteInput.etage > immeuble.nbEtages
+    ) {
       throw new BadRequestException(
         `Étage ${createPorteInput.etage} invalide (1 à ${immeuble.nbEtages}).`,
       );
     }
     const count = await this.prisma.porte.count({
-      where: { immeubleId: createPorteInput.immeubleId, etage: createPorteInput.etage },
+      where: {
+        immeubleId: createPorteInput.immeubleId,
+        etage: createPorteInput.etage,
+      },
     });
     if (count >= immeuble.nbPortesParEtage) {
       throw new BadRequestException(

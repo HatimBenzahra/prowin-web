@@ -1,5 +1,19 @@
-import { ObjectType, Field, Int, Float, InputType, registerEnumType } from '@nestjs/graphql';
-import { IsInt, IsString, IsEnum, IsOptional, Min, MaxLength } from 'class-validator';
+import {
+  ObjectType,
+  Field,
+  Int,
+  Float,
+  InputType,
+  registerEnumType,
+} from '@nestjs/graphql';
+import {
+  IsInt,
+  IsString,
+  IsEnum,
+  IsOptional,
+  Min,
+  MaxLength,
+} from 'class-validator';
 import {
   BadgeCategory as PrismaBadgeCategory,
   RankPeriod as PrismaRankPeriod,

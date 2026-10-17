@@ -25,7 +25,11 @@ export class EvaluationService {
   // ENTRY POINT — Évaluer tous les badges pour tous les participants mappés
   // ============================================================================
 
-  async evaluateAll(): Promise<{ evaluated: number; awarded: number; skipped: number }> {
+  async evaluateAll(): Promise<{
+    evaluated: number;
+    awarded: number;
+    skipped: number;
+  }> {
     const commercials = await this.prisma.commercial.findMany({
       where: { status: 'ACTIF', winleadPlusId: { not: null } },
       select: { id: true, winleadPlusId: true },
@@ -44,7 +48,11 @@ export class EvaluationService {
     let totalSkipped = 0;
 
     for (const commercial of commercials) {
-      const result = await this.evaluateUser('commercialId', commercial.id, badges);
+      const result = await this.evaluateUser(
+        'commercialId',
+        commercial.id,
+        badges,
+      );
       totalAwarded += result.awarded;
       totalSkipped += result.skipped;
     }
@@ -108,7 +116,10 @@ export class EvaluationService {
   // CONTEXTE D'ÉVALUATION — Données pré-chargées pour un participant
   // ============================================================================
 
-  private async buildEvaluationContext(userField: 'commercialId' | 'managerId', userId: number) {
+  private async buildEvaluationContext(
+    userField: 'commercialId' | 'managerId',
+    userId: number,
+  ) {
     const now = new Date();
     const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
     const currentQuarter = `${now.getFullYear()}-Q${Math.ceil((now.getMonth() + 1) / 3)}`;
@@ -140,13 +151,19 @@ export class EvaluationService {
     // Contrats par semaine (pour records hebdo)
     const contratsByWeek = new Map<string, number>();
     for (const c of allContrats) {
-      contratsByWeek.set(c.periodWeek, (contratsByWeek.get(c.periodWeek) ?? 0) + 1);
+      contratsByWeek.set(
+        c.periodWeek,
+        (contratsByWeek.get(c.periodWeek) ?? 0) + 1,
+      );
     }
 
     // Contrats par mois (pour progression)
     const contratsByMonth = new Map<string, number>();
     for (const c of allContrats) {
-      contratsByMonth.set(c.periodMonth, (contratsByMonth.get(c.periodMonth) ?? 0) + 1);
+      contratsByMonth.set(
+        c.periodMonth,
+        (contratsByMonth.get(c.periodMonth) ?? 0) + 1,
+      );
     }
 
     // Contrats par trimestre par catégorie produit (pour trophées)
@@ -155,22 +172,31 @@ export class EvaluationService {
       const prodKey = c.offre?.badgeProductKey;
       if (prodKey) {
         const key = `${c.periodQuarter}:${prodKey}`;
-        contratsByQuarterProduct.set(key, (contratsByQuarterProduct.get(key) ?? 0) + 1);
+        contratsByQuarterProduct.set(
+          key,
+          (contratsByQuarterProduct.get(key) ?? 0) + 1,
+        );
       }
     }
 
     // Contrats du mois en cours (pour ranking mensuel)
-    const contratsThisMonth = allContrats.filter((c) => c.periodMonth === currentMonth).length;
+    const contratsThisMonth = allContrats.filter(
+      (c) => c.periodMonth === currentMonth,
+    ).length;
 
     // Contrats du trimestre en cours
-    const contratsThisQuarter = allContrats.filter((c) => c.periodQuarter === currentQuarter).length;
+    const contratsThisQuarter = allContrats.filter(
+      (c) => c.periodQuarter === currentQuarter,
+    ).length;
 
     // Badges déjà obtenus (pour meta-badge Grand Chelem)
     const existingBadges = await this.prisma.commercialBadge.findMany({
       where: { [userField]: userId },
       select: { badgeDefinitionId: true },
     });
-    const distinctBadgeCount = new Set(existingBadges.map((b) => b.badgeDefinitionId)).size;
+    const distinctBadgeCount = new Set(
+      existingBadges.map((b) => b.badgeDefinitionId),
+    ).size;
 
     // Timing: heures des contrats validés aujourd'hui
     const todayContrats = allContrats.filter((c) => c.periodDay === currentDay);
@@ -205,18 +231,26 @@ export class EvaluationService {
       repassageContrats = await this.countRepassageContrats(userId);
 
       // Max argumentations en un seul jour (StatusHistorique: statut=ARGUMENTE groupé par jour)
-      maxArgumentationsParJour = await this.getMaxStatutParJour(userId, 'ARGUMENTE');
+      maxArgumentationsParJour = await this.getMaxStatutParJour(
+        userId,
+        'ARGUMENTE',
+      );
 
       // Max portes prospectées en un seul jour (StatusHistorique: tout statut groupé par jour)
-      maxPortesProspectesParJour = await this.getMaxPortesProspectesParJour(userId);
+      maxPortesProspectesParJour =
+        await this.getMaxPortesProspectesParJour(userId);
 
       // Taux closing du mois en cours: ARGUMENTE et CONTRAT_SIGNE ce mois-ci
-      const monthClosingStats = await this.getMonthClosingStats(userId, currentMonth);
+      const monthClosingStats = await this.getMonthClosingStats(
+        userId,
+        currentMonth,
+      );
       argumentesThisMonth = monthClosingStats.argumentes;
       closedThisMonth = monthClosingStats.closed;
 
       // Repassage conversions du mois en cours: portes ABSENT → CONTRAT_SIGNE ce mois-ci
-      repassageConversionsThisMonth = await this.countRepassageConversionsThisMonth(userId, currentMonth);
+      repassageConversionsThisMonth =
+        await this.countRepassageConversionsThisMonth(userId, currentMonth);
     }
 
     return {
@@ -403,14 +437,18 @@ export class EvaluationService {
 
   /** PROGRESSION HEBDO: a progressé chaque semaine du mois en cours */
   private evalProgressionHebdo(condition: any, ctx: any): boolean {
-    if (condition.scope !== 'mois' || condition.type !== 'constante') return false;
+    if (condition.scope !== 'mois' || condition.type !== 'constante')
+      return false;
 
     // Récupérer les semaines du mois en cours et vérifier progression constante
     const currentMonth = ctx.currentMonth;
     const weeksInMonth: string[] = [];
 
     for (const c of ctx.allContrats) {
-      if (c.periodMonth === currentMonth && !weeksInMonth.includes(c.periodWeek)) {
+      if (
+        c.periodMonth === currentMonth &&
+        !weeksInMonth.includes(c.periodWeek)
+      ) {
         weeksInMonth.push(c.periodWeek);
       }
     }
@@ -474,7 +512,12 @@ export class EvaluationService {
         [winner.winnerField]: winner.winnerId,
         badgeDefinitionId: trophee.id,
         periodKey: quarter,
-        metadata: JSON.stringify({ quarter, auto: true, metric: condition.metric, ranking: condition.ranking }),
+        metadata: JSON.stringify({
+          quarter,
+          auto: true,
+          metric: condition.metric,
+          ranking: condition.ranking,
+        }),
       } as any);
 
       if (result.awarded) awarded++;
@@ -490,7 +533,10 @@ export class EvaluationService {
   private async findTropheeWinner(
     condition: any,
     quarter: string,
-  ): Promise<{ winnerId: number; winnerField: 'commercialId' | 'managerId' } | null> {
+  ): Promise<{
+    winnerId: number;
+    winnerField: 'commercialId' | 'managerId';
+  } | null> {
     if (condition.metric === 'contratsSignes') {
       // Top producteur global — plus de contrats validés sur le trimestre
       const topCommercial = await this.prisma.contratValide.groupBy({
@@ -515,7 +561,10 @@ export class EvaluationService {
       if (commercialCount === 0 && managerCount === 0) return null;
 
       if (commercialCount >= managerCount && topCommercial[0]?.commercialId) {
-        return { winnerId: topCommercial[0].commercialId, winnerField: 'commercialId' };
+        return {
+          winnerId: topCommercial[0].commercialId,
+          winnerField: 'commercialId',
+        };
       }
 
       if (topManager[0]?.managerId) {
@@ -523,7 +572,10 @@ export class EvaluationService {
       }
 
       if (topCommercial[0]?.commercialId) {
-        return { winnerId: topCommercial[0].commercialId, winnerField: 'commercialId' };
+        return {
+          winnerId: topCommercial[0].commercialId,
+          winnerField: 'commercialId',
+        };
       }
 
       return null;
@@ -565,7 +617,10 @@ export class EvaluationService {
       if (commercialCount === 0 && managerCount === 0) return null;
 
       if (commercialCount >= managerCount && topCommercial[0]?.commercialId) {
-        return { winnerId: topCommercial[0].commercialId, winnerField: 'commercialId' };
+        return {
+          winnerId: topCommercial[0].commercialId,
+          winnerField: 'commercialId',
+        };
       }
 
       if (topManager[0]?.managerId) {
@@ -573,7 +628,10 @@ export class EvaluationService {
       }
 
       if (topCommercial[0]?.commercialId) {
-        return { winnerId: topCommercial[0].commercialId, winnerField: 'commercialId' };
+        return {
+          winnerId: topCommercial[0].commercialId,
+          winnerField: 'commercialId',
+        };
       }
 
       return null;
@@ -722,7 +780,12 @@ export class EvaluationService {
     }
 
     // Calculer le taux de conversion pour chaque commercial
-    const rankings: Array<{ commercialId: number; rate: number; contrats: number; argumentes: number }> = [];
+    const rankings: Array<{
+      commercialId: number;
+      rate: number;
+      contrats: number;
+      argumentes: number;
+    }> = [];
 
     for (const entry of contratsByCommercial) {
       if (entry.commercialId == null) continue;
@@ -733,7 +796,12 @@ export class EvaluationService {
       if (argumentes === 0) continue;
 
       const rate = contrats / argumentes;
-      rankings.push({ commercialId: entry.commercialId, rate, contrats, argumentes });
+      rankings.push({
+        commercialId: entry.commercialId,
+        rate,
+        contrats,
+        argumentes,
+      });
     }
 
     // Trier par taux décroissant
@@ -824,7 +892,12 @@ export class EvaluationService {
     }
 
     // Calculer le ratio pour chaque commercial
-    const rankings: Array<{ commercialId: number; rate: number; contrats: number; portes: number }> = [];
+    const rankings: Array<{
+      commercialId: number;
+      rate: number;
+      contrats: number;
+      portes: number;
+    }> = [];
 
     for (const entry of contratsByCommercial) {
       if (entry.commercialId == null) continue;
@@ -835,7 +908,12 @@ export class EvaluationService {
       if (portes === 0) continue;
 
       const rate = contrats / portes;
-      rankings.push({ commercialId: entry.commercialId, rate, contrats, portes });
+      rankings.push({
+        commercialId: entry.commercialId,
+        rate,
+        contrats,
+        portes,
+      });
     }
 
     // Trier par ratio décroissant
@@ -940,9 +1018,9 @@ export class EvaluationService {
       'Mondial TV': ['MONDIAL_TV'],
       'Assurance – Mutuelle/Prévoyance/MRH': ['ASSURANCE'],
       // Catégories trophées (plus larges)
-      'Énergie': ['DEPANSSUR', 'ELEC_GAZ'],
-      'Télécom': ['MOBILE', 'FIBRE'],
-      'Assurance': ['ASSURANCE'],
+      Énergie: ['DEPANSSUR', 'ELEC_GAZ'],
+      Télécom: ['MOBILE', 'FIBRE'],
+      Assurance: ['ASSURANCE'],
     };
 
     return mapping[categorie] ?? [];
@@ -1011,7 +1089,10 @@ export class EvaluationService {
    * Ex: getMaxStatutParJour(userId, 'ARGUMENTE') → max argumentations en 1 jour.
    * Source: StatusHistorique groupé par DATE(createdAt) filtré sur statut.
    */
-  private async getMaxStatutParJour(commercialId: number, statut: string): Promise<number> {
+  private async getMaxStatutParJour(
+    commercialId: number,
+    statut: string,
+  ): Promise<number> {
     const result = await this.prisma.$queryRaw<Array<{ count: bigint }>>`
       SELECT COUNT(*) as count
       FROM "StatusHistorique"
@@ -1030,7 +1111,9 @@ export class EvaluationService {
    * Compte les portes DISTINCTES visitées par jour (une porte visitée 2x le même jour = 1).
    * Source: StatusHistorique groupé par DATE(createdAt), COUNT(DISTINCT porteId).
    */
-  private async getMaxPortesProspectesParJour(commercialId: number): Promise<number> {
+  private async getMaxPortesProspectesParJour(
+    commercialId: number,
+  ): Promise<number> {
     const result = await this.prisma.$queryRaw<Array<{ count: bigint }>>`
       SELECT COUNT(DISTINCT "porteId") as count
       FROM "StatusHistorique"
@@ -1151,7 +1234,10 @@ export class EvaluationService {
    * Permet au frontend d'afficher les vraies valeurs (ex: "3 contrats signés" au lieu de "? contrats signés").
    */
   private buildBadgeMetadata(condition: any, ctx: any): Record<string, any> {
-    const base: Record<string, any> = { evaluatedAt: new Date().toISOString(), auto: true };
+    const base: Record<string, any> = {
+      evaluatedAt: new Date().toISOString(),
+      auto: true,
+    };
 
     switch (condition.metric) {
       case 'contratsSignes':
@@ -1159,7 +1245,10 @@ export class EvaluationService {
         break;
       case 'contratsProduit': {
         const keys = this.mapCategorieToProductKeys(condition.categorie || '');
-        const count = keys.reduce((sum, k) => sum + (ctx.contratsByProduct.get(k) ?? 0), 0);
+        const count = keys.reduce(
+          (sum, k) => sum + (ctx.contratsByProduct.get(k) ?? 0),
+          0,
+        );
         base.contratsCategorie = count;
         base.categorie = condition.categorie;
         break;
@@ -1173,9 +1262,12 @@ export class EvaluationService {
       case 'tauxClosing':
         base.argumentesThisMonth = ctx.argumentesThisMonth;
         base.closedThisMonth = ctx.closedThisMonth;
-        base.tauxClosing = ctx.argumentesThisMonth > 0
-          ? Math.round((ctx.closedThisMonth / ctx.argumentesThisMonth) * 10000) / 100
-          : 0;
+        base.tauxClosing =
+          ctx.argumentesThisMonth > 0
+            ? Math.round(
+                (ctx.closedThisMonth / ctx.argumentesThisMonth) * 10000,
+              ) / 100
+            : 0;
         break;
       case 'repassageConversion':
         base.repassageConversionsThisMonth = ctx.repassageConversionsThisMonth;
@@ -1184,12 +1276,18 @@ export class EvaluationService {
         base.portesParJour = ctx.portesParJour;
         break;
       case 'signaturesParJour': {
-        const maxDay = Math.max(0, ...Array.from(ctx.contratsByDay.values() as Iterable<number>));
+        const maxDay = Math.max(
+          0,
+          ...Array.from(ctx.contratsByDay.values() as Iterable<number>),
+        );
         base.maxSignaturesJour = maxDay;
         break;
       }
       case 'signaturesParSemaine': {
-        const maxWeek = Math.max(0, ...Array.from(ctx.contratsByWeek.values() as Iterable<number>));
+        const maxWeek = Math.max(
+          0,
+          ...Array.from(ctx.contratsByWeek.values() as Iterable<number>),
+        );
         base.maxSignaturesSemaine = maxWeek;
         break;
       }
@@ -1211,7 +1309,9 @@ export class EvaluationService {
     const dayNum = d.getUTCDay() || 7;
     d.setUTCDate(d.getUTCDate() + 4 - dayNum);
     const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
-    const weekNo = Math.ceil(((d.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
+    const weekNo = Math.ceil(
+      ((d.getTime() - yearStart.getTime()) / 86400000 + 1) / 7,
+    );
     return `${y}-W${String(weekNo).padStart(2, '0')}`;
   }
 }

@@ -41,7 +41,8 @@ export class WinleadPlusApiService {
       return items
         .filter(
           (u) =>
-            ['COMMERCIAL', 'MANAGER', 'ADMIN'].includes(u.role) && u.isActive === true,
+            ['COMMERCIAL', 'MANAGER', 'ADMIN'].includes(u.role) &&
+            u.isActive === true,
         )
         .map((u) => ({
           id: u.id,
@@ -65,7 +66,11 @@ export class WinleadPlusApiService {
 
   async getOffres(token: string): Promise<any[]> {
     try {
-      return await this.fetchPaginatedResource(token, '/offres', DEFAULT_PAGE_SIZE);
+      return await this.fetchPaginatedResource(
+        token,
+        '/offres',
+        DEFAULT_PAGE_SIZE,
+      );
     } catch (error: any) {
       this.logger.error('Erreur synchro offres WinLead+');
       this.handleApiError(error, 'offres');
@@ -83,22 +88,44 @@ export class WinleadPlusApiService {
       const root = process.env.WINLEADPLUS_API_URL?.trim().replace(/\/+$/, '');
       if (!key || !root) throw new Error('Integration configuration missing');
       const apiBase = root.endsWith('/api') ? root : `${root}/api`;
-      const { data } = await axios.get<IntegrationOffresResponse>(`${apiBase}/integration/offres`, {
-        headers: { 'x-api-key': key },
-        params: { canal: 'commercial', actives: true },
-        timeout: 15_000,
-        maxRedirects: 0,
-      });
-      if (!data || !Number.isSafeInteger(data.count) || data.count < 0 || !Array.isArray(data.items) || data.count !== data.items.length) {
+      const { data } = await axios.get<IntegrationOffresResponse>(
+        `${apiBase}/integration/offres`,
+        {
+          headers: { 'x-api-key': key },
+          params: { canal: 'commercial', actives: true },
+          timeout: 15_000,
+          maxRedirects: 0,
+        },
+      );
+      if (
+        !data ||
+        !Number.isSafeInteger(data.count) ||
+        data.count < 0 ||
+        !Array.isArray(data.items) ||
+        data.count !== data.items.length
+      ) {
         throw new Error('Invalid integration catalog envelope');
       }
       const ids = new Set<number>();
       for (const item of data.items) {
-        if (!item || !Number.isSafeInteger(item.id) || item.id <= 0 || ids.has(item.id) ||
-          typeof item.nom !== 'string' || !item.nom.trim() ||
-          typeof item.fournisseur !== 'string' || !item.fournisseur.trim() ||
-          item.isActive !== true || item.canal !== 'commercial' ||
-          !(item.prix_base === null || (typeof item.prix_base === 'number' && Number.isFinite(item.prix_base) && item.prix_base >= 0))) {
+        if (
+          !item ||
+          !Number.isSafeInteger(item.id) ||
+          item.id <= 0 ||
+          ids.has(item.id) ||
+          typeof item.nom !== 'string' ||
+          !item.nom.trim() ||
+          typeof item.fournisseur !== 'string' ||
+          !item.fournisseur.trim() ||
+          item.isActive !== true ||
+          item.canal !== 'commercial' ||
+          !(
+            item.prix_base === null ||
+            (typeof item.prix_base === 'number' &&
+              Number.isFinite(item.prix_base) &&
+              item.prix_base >= 0)
+          )
+        ) {
           throw new Error('Invalid integration offer');
         }
         ids.add(item.id);
@@ -106,7 +133,9 @@ export class WinleadPlusApiService {
       return data.items;
     } catch {
       // Never log Axios errors: they contain headers, URLs and upstream payloads.
-      throw new BadRequestException('Impossible de récupérer le catalogue intégration WinLead+');
+      throw new BadRequestException(
+        'Impossible de récupérer le catalogue intégration WinLead+',
+      );
     }
   }
 
@@ -116,7 +145,11 @@ export class WinleadPlusApiService {
 
   async getProspects(token: string): Promise<any[]> {
     try {
-      return this.fetchPaginatedResource(token, '/prospects', DEFAULT_PAGE_SIZE);
+      return this.fetchPaginatedResource(
+        token,
+        '/prospects',
+        DEFAULT_PAGE_SIZE,
+      );
     } catch (error: any) {
       this.logger.error(`Erreur synchro prospects WinLead+: ${error.message}`);
       this.handleApiError(error, 'prospects');
@@ -135,7 +168,9 @@ export class WinleadPlusApiService {
     let totalPages = 1;
 
     do {
-      const root = (process.env.WINLEADPLUS_API_URL || 'https://www.winleadplus.com').replace(/\/+$/, '');
+      const root = (
+        process.env.WINLEADPLUS_API_URL || 'https://www.winleadplus.com'
+      ).replace(/\/+$/, '');
       const apiBase = root.endsWith('/api') ? root : `${root}/api`;
       const response = await axios.get(`${apiBase}${resourcePath}`, {
         headers,
@@ -150,9 +185,10 @@ export class WinleadPlusApiService {
       collectedItems.push(...pageItems);
 
       const responseTotalPages = Number(response.data?.totalPages);
-      totalPages = Number.isFinite(responseTotalPages) && responseTotalPages > 0
-        ? responseTotalPages
-        : 1;
+      totalPages =
+        Number.isFinite(responseTotalPages) && responseTotalPages > 0
+          ? responseTotalPages
+          : 1;
 
       currentPage += 1;
     } while (currentPage <= totalPages);
@@ -186,9 +222,7 @@ export class WinleadPlusApiService {
 
   private handleApiError(error: any, resource: string): never {
     if (error.response?.status === 401) {
-      throw new BadRequestException(
-        'Token invalide ou expiré pour WinLead+',
-      );
+      throw new BadRequestException('Token invalide ou expiré pour WinLead+');
     }
     throw new BadRequestException(
       `Impossible de récupérer les ${resource} WinLead+`,

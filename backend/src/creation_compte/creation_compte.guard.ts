@@ -6,10 +6,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { GqlExecutionContext } from '@nestjs/graphql';
-import {
-  KeycloakAccessToken,
-  verifyKeycloakToken,
-} from '../auth/keycloak-jwt';
+import { KeycloakAccessToken, verifyKeycloakToken } from '../auth/keycloak-jwt';
 
 @Injectable()
 export class CreationCompteGuard implements CanActivate {
@@ -56,9 +53,8 @@ export class CreationCompteGuard implements CanActivate {
   ): Promise<KeycloakAccessToken> {
     try {
       return await verifyKeycloakToken(token);
-    } catch (error) {
+    } catch {
       throw new UnauthorizedException('Impossible de valider le token');
     }
   }
-
 }

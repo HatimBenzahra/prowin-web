@@ -26,9 +26,12 @@ export class ContratService {
   // SYNCHRO — Extraire et cacher les contrats validés depuis /api/prospects
   // ============================================================================
 
-  async syncContrats(
-    token: string,
-  ): Promise<{ created: number; updated: number; skipped: number; total: number }> {
+  async syncContrats(token: string): Promise<{
+    created: number;
+    updated: number;
+    skipped: number;
+    total: number;
+  }> {
     const prospects = await this.winleadPlusApi.getProspects(token);
 
     // Pré-charger les mappings pour résolution rapide
@@ -115,7 +118,9 @@ export class ContratService {
     }
 
     if (!token) {
-      throw new Error('Token requis pour charger les contrats signés ou rétractés');
+      throw new Error(
+        'Token requis pour charger les contrats signés ou rétractés',
+      );
     }
 
     return this.getLiveContractsForParticipant(
@@ -145,7 +150,9 @@ export class ContratService {
     }
 
     if (!token) {
-      throw new Error('Token requis pour charger les contrats signés ou rétractés');
+      throw new Error(
+        'Token requis pour charger les contrats signés ou rétractés',
+      );
     }
 
     return this.getLiveContractsForParticipant(
@@ -159,7 +166,12 @@ export class ContratService {
   /** Contrats validés d'un commercial par période */
   async getContratsByCommercialAndPeriod(
     commercialId: number,
-    periodField: 'periodDay' | 'periodWeek' | 'periodMonth' | 'periodQuarter' | 'periodYear',
+    periodField:
+      | 'periodDay'
+      | 'periodWeek'
+      | 'periodMonth'
+      | 'periodQuarter'
+      | 'periodYear',
     periodValue: string,
   ) {
     return this.prisma.contratValide.findMany({
@@ -189,8 +201,11 @@ export class ContratService {
       const commercialId = commercialMap.get(prospect.commercialId) ?? null;
       const managerId = managerMap.get(prospect.commercialId) ?? null;
 
-      if ((participantField === 'commercialId' && commercialId !== participantId)
-        || (participantField === 'managerId' && managerId !== participantId)) {
+      if (
+        (participantField === 'commercialId' &&
+          commercialId !== participantId) ||
+        (participantField === 'managerId' && managerId !== participantId)
+      ) {
         continue;
       }
 
@@ -215,10 +230,15 @@ export class ContratService {
             commercialWinleadPlusId: prospect.commercialId,
             commercialId,
             managerId,
-            offreExternalId: souscription.offreId ?? offerDetails.externalId ?? null,
+            offreExternalId:
+              souscription.offreId ?? offerDetails.externalId ?? null,
             offreId: offerDetails.id,
-            dateValidation: contrat.dateValidation ? new Date(contrat.dateValidation) : null,
-            dateSignature: contrat.dateSignature ? new Date(contrat.dateSignature) : null,
+            dateValidation: contrat.dateValidation
+              ? new Date(contrat.dateValidation)
+              : null,
+            dateSignature: contrat.dateSignature
+              ? new Date(contrat.dateSignature)
+              : null,
             statutContrat: contrat.statut ?? null,
             periodDay: periods.day,
             periodWeek: periods.week,
@@ -226,7 +246,10 @@ export class ContratService {
             periodQuarter: periods.quarter,
             periodYear: periods.year,
             metadata: {
-              prospectNom: [prospect.prenom, prospect.nom].filter(Boolean).join(' ').trim(),
+              prospectNom: [prospect.prenom, prospect.nom]
+                .filter(Boolean)
+                .join(' ')
+                .trim(),
               prospectStatut: prospect.statutProspect,
               contratType: contrat.type ?? null,
               signatureMode: contrat.signatureMode ?? null,
@@ -278,7 +301,9 @@ export class ContratService {
     const commercialId = commercialMap.get(prospect.commercialId) ?? null;
     const managerId = managerMap.get(prospect.commercialId) ?? null;
     const offreExternalId = souscription.offreId ?? null;
-    const offreId = offreExternalId ? (offreMap.get(offreExternalId) ?? null) : null;
+    const offreId = offreExternalId
+      ? (offreMap.get(offreExternalId) ?? null)
+      : null;
 
     const existing = await this.prisma.contratValide.findUnique({
       where: { externalContratId: contrat.id },
@@ -293,7 +318,9 @@ export class ContratService {
       offreExternalId,
       offreId,
       dateValidation,
-      dateSignature: contrat.dateSignature ? new Date(contrat.dateSignature) : null,
+      dateSignature: contrat.dateSignature
+        ? new Date(contrat.dateSignature)
+        : null,
       periodDay: periods.day,
       periodWeek: periods.week,
       periodMonth: periods.month,
@@ -442,13 +469,20 @@ export class ContratService {
       externalId,
       nom: local?.nom ?? souscription.offre?.nom ?? null,
       categorie: local?.categorie ?? souscription.offre?.categorie ?? null,
-      fournisseur: local?.fournisseur ?? souscription.offre?.fournisseur ?? null,
-      logoUrl: local?.logoUrl ?? souscription.offre?.logo_url ?? souscription.offre?.logoUrl ?? null,
+      fournisseur:
+        local?.fournisseur ?? souscription.offre?.fournisseur ?? null,
+      logoUrl:
+        local?.logoUrl ??
+        souscription.offre?.logo_url ??
+        souscription.offre?.logoUrl ??
+        null,
       points: local?.points ?? null,
     };
   }
 
-  private mapContractStatuses(contractStatuses: ContractRankingStatus[]): Set<string> {
+  private mapContractStatuses(
+    contractStatuses: ContractRankingStatus[],
+  ): Set<string> {
     return new Set(
       contractStatuses.map((status) => {
         switch (status) {
@@ -464,8 +498,12 @@ export class ContratService {
     );
   }
 
-  private requiresLiveContracts(contractStatuses: ContractRankingStatus[]): boolean {
-    return contractStatuses.some((status) => status !== ContractRankingStatus.VALIDE);
+  private requiresLiveContracts(
+    contractStatuses: ContractRankingStatus[],
+  ): boolean {
+    return contractStatuses.some(
+      (status) => status !== ContractRankingStatus.VALIDE,
+    );
   }
 
   private resolveContractReferenceDate(contrat: any): Date | null {
@@ -478,7 +516,11 @@ export class ContratService {
   }
 
   private resolveContractSortTime(contrat: any): number {
-    const date = contrat.dateValidation ?? contrat.dateSignature ?? contrat.createdAt ?? null;
+    const date =
+      contrat.dateValidation ??
+      contrat.dateSignature ??
+      contrat.createdAt ??
+      null;
     return date ? new Date(date).getTime() : 0;
   }
 
@@ -510,11 +552,15 @@ export class ContratService {
    * Retourne le numéro de semaine ISO 8601 (lundi = début de semaine).
    */
   private getISOWeek(date: Date): string {
-    const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+    const d = new Date(
+      Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()),
+    );
     const dayNum = d.getUTCDay() || 7;
     d.setUTCDate(d.getUTCDate() + 4 - dayNum);
     const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
-    const weekNo = Math.ceil(((d.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
+    const weekNo = Math.ceil(
+      ((d.getTime() - yearStart.getTime()) / 86400000 + 1) / 7,
+    );
     return String(weekNo).padStart(2, '0');
   }
 }

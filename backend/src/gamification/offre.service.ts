@@ -1,6 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
-import { UpdateOffrePointsInput, UpdateOffreBadgeProductKeyInput } from './gamification.dto';
+import {
+  UpdateOffrePointsInput,
+  UpdateOffreBadgeProductKeyInput,
+} from './gamification.dto';
 import { WinleadPlusApiService } from './winleadplus-api.service';
 
 @Injectable()
@@ -128,14 +131,19 @@ export class OffreService {
   // BADGE PRODUCT KEY — Mapping offre → catégorie de badge
   // ============================================================================
 
-  async updateOffreBadgeProductKey(offreId: number, badgeProductKey: string | null) {
+  async updateOffreBadgeProductKey(
+    offreId: number,
+    badgeProductKey: string | null,
+  ) {
     return this.prisma.offre.update({
       where: { id: offreId },
       data: { badgeProductKey },
     });
   }
 
-  async batchUpdateOffreBadgeProductKey(offres: UpdateOffreBadgeProductKeyInput[]) {
+  async batchUpdateOffreBadgeProductKey(
+    offres: UpdateOffreBadgeProductKeyInput[],
+  ) {
     let updated = 0;
     for (const entry of offres) {
       try {
@@ -154,10 +162,11 @@ export class OffreService {
   }
 
   private inferBadgeProductKey(item: any): string | null {
-    const source = `${item.nom ?? ''} ${item.categorie ?? ''} ${item.description ?? ''} ${item.fournisseur ?? ''}`
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .toLowerCase();
+    const source =
+      `${item.nom ?? ''} ${item.categorie ?? ''} ${item.description ?? ''} ${item.fournisseur ?? ''}`
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase();
 
     if (source.includes('fibre') || source.includes('fiber')) return 'FIBRE';
     if (
