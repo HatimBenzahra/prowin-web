@@ -57,7 +57,7 @@ const STATUS_FILTERS = [
   { value: 'argumente', label: 'Argumentés' },
   { value: 'refus', label: 'Refus' },
   { value: 'absent', label: 'Absents' },
-  { value: 'necessite_repassage', label: 'Repassages' },
+  { value: 'necessite_repassage', label: 'Repasses' },
   { value: 'non_visite', label: 'Non visités' },
 ]
 

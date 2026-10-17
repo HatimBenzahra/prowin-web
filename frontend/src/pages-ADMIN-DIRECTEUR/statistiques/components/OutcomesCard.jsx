@@ -15,9 +15,9 @@ import { formatNumber } from '../stats-format'
  * La largeur d'une barre est sa part du total des passages, cohérente avec le
  * pourcentage affiché à côté.
  *
- * `NECESSITE_REPASSAGE` est volontairement absent : le flow de prospection mobile
- * ne l'écrit jamais (il ne propose que six statuts, et le repassage y est porté par
- * `ABSENT`). L'afficher produisait une barre structurellement à zéro.
+ * `NECESSITE_REPASSAGE` (repasse – décisionnaire absent) n'y figure pas : les
+ * agrégats `Statistic` qui alimentent cette carte n'ont pas de compteur dédié à
+ * ce statut, seulement `nbPortesProspectes`.
  *
  * Les deux statuts rejouables sont regroupés en fin de liste et annotés : une porte
  * `ABSENT` ou `RENDEZ_VOUS_PRIS` n'est pas une issue, c'est un travail en attente.

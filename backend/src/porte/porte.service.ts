@@ -219,10 +219,17 @@ export class PorteService {
       data.nbRepassages = (currentPorte.nbRepassages || 0) + 1;
     }
 
-    // 3. Mettre à jour la porte
+    // 3. Mettre à jour la porte. Un nouveau passage (changement de statut ou
+    //    `derniereVisite` posée, cf. `porte.repassage.ts`) repart d'une date vierge :
+    //    la date d'un ancien RDV ne doit pas survivre sur une repasse, ni une date
+    //    de repasse effacée par le commercial.
+    const statutChanged = data.statut && data.statut !== oldStatut;
+    const nouveauPassage = statutChanged || Boolean(data.derniereVisite);
     const updatedPorte = await this.prisma.porte.update({
       where: { id },
-      data,
+      data: nouveauPassage
+        ? { ...data, rdvDate: data.rdvDate ?? null, rdvTime: data.rdvTime ?? null }
+        : data,
       include: {
         immeuble: true,
       },
@@ -237,7 +244,6 @@ export class PorteService {
     // Synchroniser les statistiques si le statut OU le nbContrats a changé.
     // Modifier nbContrats sur une porte CONTRAT_SIGNE doit aussi mettre à jour
     // les stats agrégées (contratsSignes = somme des nbContrats par jour).
-    const statutChanged = data.statut && data.statut !== oldStatut;
     const contratsChanged =
       data.nbContrats !== undefined &&
       data.nbContrats !== currentPorte.nbContrats;

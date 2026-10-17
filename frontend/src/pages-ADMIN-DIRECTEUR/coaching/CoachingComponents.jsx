@@ -171,7 +171,7 @@ export const PORTE_STATUT_META = {
   CONTRAT_SIGNE: { label: 'Contrat signé', dot: 'bg-green-500', pill: 'bg-green-500/10 text-green-600' },
   RENDEZ_VOUS_PRIS: { label: 'RDV pris', dot: 'bg-blue-500', pill: 'bg-blue-500/10 text-blue-600' },
   ARGUMENTE: { label: 'Argumenté', dot: 'bg-indigo-500', pill: 'bg-indigo-500/10 text-indigo-600' },
-  NECESSITE_REPASSAGE: { label: 'À repasser', dot: 'bg-amber-500', pill: 'bg-amber-500/10 text-amber-600' },
+  NECESSITE_REPASSAGE: { label: 'Repasse – décisionnaire absent', dot: 'bg-amber-500', pill: 'bg-amber-500/10 text-amber-600' },
   REFUS: { label: 'Refus', dot: 'bg-red-500', pill: 'bg-red-500/10 text-red-600' },
   ABSENT: { label: 'Absent', dot: 'bg-slate-400', pill: 'bg-slate-500/10 text-slate-600' },
   NON_VISITE: { label: 'Non visité', dot: 'bg-slate-300', pill: 'bg-slate-500/10 text-muted-foreground' },

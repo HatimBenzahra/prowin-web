@@ -121,7 +121,7 @@ export const STATUS_CONFIG: Record<StatutPorte, StatusMetadata> = {
 
   [StatutPorte.NECESSITE_REPASSAGE]: {
     value: StatutPorte.NECESSITE_REPASSAGE,
-    description: 'Nécessite un repassage ultérieur',
+    description: 'Repasse – décisionnaire absent (ni refus ni échec)',
     countAsProspected: true,
     incrementContratsSignes: false,
     incrementRendezVousPris: false,

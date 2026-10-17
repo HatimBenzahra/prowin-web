@@ -34,7 +34,7 @@ const ACTIVITY_STATUS_LABELS = {
   REFUS: 'Refus',
   ABSENT: 'Absent',
   ARGUMENTE: 'Argumenté',
-  NECESSITE_REPASSAGE: 'Repassage nécessaire',
+  NECESSITE_REPASSAGE: 'Repasse – décisionnaire absent',
   NON_VISITE: 'Non visité',
 }
 

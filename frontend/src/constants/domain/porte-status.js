@@ -113,8 +113,8 @@ export const STATUS_CONFIG = {
 
   [StatutPorte.NECESSITE_REPASSAGE]: {
     value: StatutPorte.NECESSITE_REPASSAGE,
-    label: 'Nécessite repassage',
-    description: 'Nécessite un repassage ultérieur',
+    label: 'Repasse – décisionnaire absent',
+    description: 'Décisionnaire absent, repasse à prévoir (ni refus ni échec)',
     themeColor: 'neutral',
     icon: RotateCcw,
     requiresRdvDateTime: false,

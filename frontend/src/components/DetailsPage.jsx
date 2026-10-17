@@ -680,7 +680,7 @@ function DoorsTableContent({
                                     { value: 'refus', label: 'Refus' },
                                     {
                                       value: 'necessite_repassage',
-                                      label: 'Repassages nécessaires',
+                                      label: 'Repasses',
                                     },
                                     { value: 'non_visite', label: 'Non visités' },
                                   ]} // Filtres par défaut pour les portes
