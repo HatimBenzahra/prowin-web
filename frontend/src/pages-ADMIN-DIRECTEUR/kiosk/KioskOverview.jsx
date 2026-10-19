@@ -4,6 +4,7 @@ import { useKioskHealth, useKioskDevices, useKioskLogs } from '@/hooks/metier/ap
 import { isBatteryKnown, clampBattery } from './batteryUtils'
 import OverviewTab from './components/OverviewTab'
 import KioskErrorState from './components/KioskErrorState'
+import KioskPanelLink from './components/KioskPanelLink'
 
 export default function KioskOverview() {
   const healthQuery = useKioskHealth()
@@ -65,6 +66,8 @@ export default function KioskOverview() {
           Pilotage global de la flotte et de la santé du serveur OTA
         </p>
       </div>
+
+      <KioskPanelLink />
 
       <OverviewTab
         health={healthQuery.data}

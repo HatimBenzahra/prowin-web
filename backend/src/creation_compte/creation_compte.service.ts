@@ -38,8 +38,10 @@ export class CreationCompteService {
       // 1. Generate username from nom.prenom.prowin
       const username = this.genererUsername(input.nom, input.prenom);
 
-      // 2. Generate email if not provided
-      const email = input.email || `${input.nom}.${input.prenom}@pro-win.app`;
+      // 2. Generate email if not provided (Keycloak rejette les accents)
+      const email = this.nettoyerEmail(
+        input.email || `${input.nom}.${input.prenom}@pro-win.app`,
+      );
 
       // 3. Generate random password
       const password = this.genererMotDePasseAleatoire();
@@ -131,21 +133,25 @@ export class CreationCompteService {
       .join('');
   }
 
-  private genererUsername(nom: string, prenom: string): string {
-    // Normaliser et nettoyer le nom et prénom
-    const cleanNom = nom
+  private sansAccents(valeur: string): string {
+    return valeur
+      .trim()
       .toLowerCase()
       .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '') // Enlever les accents
-      .replace(/[^a-z0-9]/g, ''); // Garder seulement lettres et chiffres
+      .replace(/[\u0300-\u036f]/g, ''); // Enlever les accents
+  }
 
-    const cleanPrenom = prenom
-      .toLowerCase()
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .replace(/[^a-z0-9]/g, '');
+  private genererUsername(nom: string, prenom: string): string {
+    // Garder seulement lettres et chiffres
+    const cleanNom = this.sansAccents(nom).replace(/[^a-z0-9]/g, '');
+    const cleanPrenom = this.sansAccents(prenom).replace(/[^a-z0-9]/g, '');
 
     return `${cleanNom}.${cleanPrenom}.prowin`;
+  }
+
+  private nettoyerEmail(email: string): string {
+    // Garder seulement les caractères ASCII valides dans un email
+    return this.sansAccents(email).replace(/[^a-z0-9._%+@-]/g, '');
   }
 
   // ============================================================================

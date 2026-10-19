@@ -9,6 +9,7 @@ import {
 import DevicesTab from './components/DevicesTab'
 import DeviceCommandDialog from './components/DeviceCommandDialog'
 import KioskErrorState from './components/KioskErrorState'
+import KioskPanelLink from './components/KioskPanelLink'
 
 export default function KioskDevicesPage() {
   const navigate = useNavigate()
@@ -79,6 +80,8 @@ export default function KioskDevicesPage() {
         <h1 className="text-3xl font-bold tracking-tight">Tablettes</h1>
         <p className="text-muted-foreground mt-1">Gestion du parc de tablettes kiosk</p>
       </div>
+
+      <KioskPanelLink />
 
       <DevicesTab
         devices={devicesQuery.data || []}
