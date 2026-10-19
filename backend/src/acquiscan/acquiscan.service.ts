@@ -1839,7 +1839,7 @@ export class AcquiscanService {
     try {
       const response = await axios.get<AcquiscanAutocompleteResponse>(
         `${this.getApiV1BaseUrl()}/search/autocomplete?${params.toString()}`,
-        { timeout: 2500 },
+        { headers: this.getApiKeyHeaders(), timeout: 2500 },
       );
       return this.extractAutocompleteItems(response.data)
         .map((item, index) => this.mapAddressSuggestion(item, index))
@@ -2391,19 +2391,31 @@ export class AcquiscanService {
     return this.token.value;
   }
 
+  private getApiKeyHeaders(): Record<string, string> {
+    const apiKey = process.env.ACQUISCAN_API_KEY;
+    return apiKey ? { 'X-API-Key': apiKey } : {};
+  }
+
+  // La clé API est refusée (403) sur /buildings/* : ces routes exigent une
+  // session Keycloak. Les autres (map/*, search/*) passent par la clé.
+  private async getAuthHeaders(path: string): Promise<Record<string, string>> {
+    if (process.env.ACQUISCAN_API_KEY && !path.startsWith('/buildings')) {
+      return this.getApiKeyHeaders();
+    }
+    return { Authorization: `Bearer ${await this.getAccessToken()}` };
+  }
+
   private async requestAcquiscan<T>(path: string, retried = false) {
-    const token = await this.getAccessToken();
-    const normalizedPath = path.startsWith('/api/v1/')
+    const rawPath = path.startsWith('/api/v1/')
       ? path.slice('/api/v1'.length)
       : path;
+    const normalizedPath = rawPath.startsWith('/') ? rawPath : `/${rawPath}`;
+    const headers = await this.getAuthHeaders(normalizedPath);
     try {
-      return await axios.get<T>(
-        `${this.getApiV1BaseUrl()}${normalizedPath.startsWith('/') ? normalizedPath : `/${normalizedPath}`}`,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-          timeout: 30000,
-        },
-      );
+      return await axios.get<T>(`${this.getApiV1BaseUrl()}${normalizedPath}`, {
+        headers,
+        timeout: 30000,
+      });
     } catch (error) {
       if (
         axios.isAxiosError(error) &&
