@@ -1,8 +1,19 @@
-import { Resolver, Query, Mutation, Args, Int } from '@nestjs/graphql';
+import {
+  Resolver,
+  Query,
+  Mutation,
+  Args,
+  Int,
+  ResolveField,
+  Parent,
+} from '@nestjs/graphql';
 import { UseGuards } from '@nestjs/common';
 import { ImmeubleService } from './immeuble.service';
+import { ImmeubleMembreService } from './immeuble-membre.service';
 import {
   Immeuble,
+  ImmeubleMembre,
+  Coequipier,
   BackfillImmeubleZonesResult,
   CreateImmeubleInput,
   CreateQuartierInput,
@@ -25,7 +36,10 @@ type AuthenticatedUser = {
 @Resolver(() => Immeuble)
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class ImmeubleResolver {
-  constructor(private readonly immeubleService: ImmeubleService) {}
+  constructor(
+    private readonly immeubleService: ImmeubleService,
+    private readonly immeubleMembreService: ImmeubleMembreService,
+  ) {}
 
   @Mutation(() => Immeuble)
   @Roles('admin', 'directeur', 'manager', 'commercial')
@@ -234,6 +248,41 @@ export class ImmeubleResolver {
       user.id,
       user.role,
     );
+  }
+
+  @ResolveField(() => [ImmeubleMembre])
+  membres(@Parent() immeuble: Immeuble): Promise<ImmeubleMembre[]> {
+    return this.immeubleMembreService.findMembres(immeuble.id);
+  }
+
+  @Query(() => [Coequipier], { name: 'mesCoequipiers' })
+  @Roles('manager', 'commercial')
+  mesCoequipiers(@CurrentUser() user: AuthenticatedUser) {
+    return this.immeubleMembreService.findCoequipiers(user.id, user.role);
+  }
+
+  @Mutation(() => Immeuble)
+  @Roles('manager', 'commercial')
+  partagerImmeuble(
+    @Args('immeubleId', { type: () => Int }) immeubleId: number,
+    @Args('commercialId', { type: () => Int }) commercialId: number,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.immeubleMembreService.partager(
+      immeubleId,
+      commercialId,
+      user.id,
+      user.role,
+    );
+  }
+
+  @Mutation(() => Boolean)
+  @Roles('manager', 'commercial')
+  quitterImmeuble(
+    @Args('immeubleId', { type: () => Int }) immeubleId: number,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.immeubleMembreService.quitter(immeubleId, user.id, user.role);
   }
 
   /**

@@ -1,6 +1,7 @@
 import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import { HeadObjectCommand } from '@aws-sdk/client-s3';
 import type { CoachingService } from '../coaching/coaching.service';
+import type { ImmeubleAccessService } from '../immeuble/immeuble-access.service';
 import type { PrismaService } from '../prisma.service';
 import { S3DiagnosticsService } from '../s3-diagnostics/s3-diagnostics.service';
 import type { SpeechAnalysisService } from '../speech-analysis/speech-analysis.service';
@@ -102,6 +103,7 @@ describe('RecordingService.confirmRecordingUpload', () => {
       {} as SpeechAnalysisService,
       new S3DiagnosticsService(),
       coaching as unknown as CoachingService,
+      {} as ImmeubleAccessService,
     );
     const confirm = (
       input: Partial<ConfirmRecordingUploadInput> = {},
@@ -300,5 +302,74 @@ describe('RecordingResolver.confirmRecordingUpload', () => {
       user,
       'abc.def',
     );
+  });
+});
+
+/**
+ * Listes de segments par commercial / manager : sur un immeuble partagé, chacun
+ * ne voit que ses segments ; le repli sur le créateur de l'immeuble ne vaut que
+ * pour les vieux segments sans auteur (Prisma mocké).
+ */
+describe('RecordingService.getSegmentsByCommercial / getSegmentsByManager', () => {
+  const COMMERCIAL_ID = 7;
+  const MANAGER_ID = 3;
+  const admin = { id: 0, role: 'admin' };
+  const sansAuteur = { commercialId: null, managerId: null };
+
+  const build = () => {
+    const prisma = {
+      commercial: {
+        findUnique: jest.fn(() =>
+          Promise.resolve({ id: COMMERCIAL_ID, directeurId: 1 }),
+        ),
+        findMany: jest.fn(() => Promise.resolve([{ id: COMMERCIAL_ID }])),
+      },
+      manager: {
+        findUnique: jest.fn(() =>
+          Promise.resolve({ id: MANAGER_ID, directeurId: 1 }),
+        ),
+      },
+      recordingSegment: {
+        findMany: jest.fn<Promise<unknown[]>, [{ where: unknown }]>(() =>
+          Promise.resolve([]),
+        ),
+      },
+    };
+    const service = new RecordingService(
+      prisma as unknown as PrismaService,
+      {} as SpeechAnalysisService,
+      new S3DiagnosticsService(),
+      {} as CoachingService,
+      {} as ImmeubleAccessService,
+    );
+    const where = () => prisma.recordingSegment.findMany.mock.calls[0][0].where;
+    return { service, where };
+  };
+
+  it('commercial : ses segments, plus les vieux segments sans auteur de ses immeubles', async () => {
+    const { service, where } = build();
+    await service.getSegmentsByCommercial(COMMERCIAL_ID, admin);
+    expect(where()).toEqual({
+      OR: [
+        { commercialId: COMMERCIAL_ID },
+        { ...sansAuteur, porte: { immeuble: { commercialId: COMMERCIAL_ID } } },
+      ],
+    });
+  });
+
+  it('manager : ses segments et ceux de ses commerciaux, repli créateur sans auteur', async () => {
+    const { service, where } = build();
+    await service.getSegmentsByManager(MANAGER_ID, admin);
+    expect(where()).toEqual({
+      OR: [
+        { managerId: MANAGER_ID },
+        { commercialId: { in: [COMMERCIAL_ID] } },
+        { ...sansAuteur, porte: { immeuble: { managerId: MANAGER_ID } } },
+        {
+          ...sansAuteur,
+          porte: { immeuble: { commercial: { managerId: MANAGER_ID } } },
+        },
+      ],
+    });
   });
 });

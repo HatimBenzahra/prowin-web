@@ -147,20 +147,36 @@ export class CommercialService {
   ) {
     await this.ensureAccess(id, userId, userRole);
 
-    return this.prisma.commercial.findUnique({
+    const commercial = await this.prisma.commercial.findUnique({
       where: { id },
       include: {
         manager: true,
         directeur: true,
-        immeubles: {
-          ...(excludeTestUsers ? { where: prodImmeubleWhere } : {}),
+        // Immeubles dont il est membre (créés par lui ou partagés avec lui).
+        immeublesMembre: {
+          ...(excludeTestUsers
+            ? { where: { immeuble: prodImmeubleWhere } }
+            : {}),
           include: {
-            portes: true,
+            immeuble: {
+              include: {
+                portes: true,
+              },
+            },
           },
         },
         statistics: true,
       },
     });
+    if (!commercial) {
+      return null;
+    }
+
+    const { immeublesMembre, ...rest } = commercial;
+    return {
+      ...rest,
+      immeubles: immeublesMembre.map((membre) => membre.immeuble),
+    };
   }
 
   async update(data: UpdateCommercialInput, userId: number, userRole: string) {

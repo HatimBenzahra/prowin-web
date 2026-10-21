@@ -190,6 +190,11 @@ export default function PorteDetailModal({ door, open, onOpenChange, address = '
             <Badge className={`self-center ${getStatusColor(statusUpper)}`}>
               {getStatusLabel(statusUpper)}
             </Badge>
+            {door.dernierActeurPrenom && (
+              <span className="self-center text-xs text-muted-foreground">
+                Fait par {door.dernierActeurPrenom}
+              </span>
+            )}
             {/* Actions coaching dans l'en-tête, comme dans le modal Coaching :
                 le corps est entièrement pris par les deux colonnes. */}
             <div className="ml-auto flex shrink-0 items-center gap-2">

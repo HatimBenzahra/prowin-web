@@ -53,6 +53,8 @@ model Manager {
   commercialBadges CommercialBadge[]
   recordings       Recording[]
   quartiers        Quartier[]
+  immeublesMembre  ImmeubleMembre[]
+  portesPassees    Porte[]
 }
 
 model Commercial {
@@ -81,6 +83,8 @@ model Commercial {
   contratsValides  ContratValide[]
   recordings       Recording[]
   quartiers        Quartier[]
+  immeublesMembre  ImmeubleMembre[]
+  portesPassees    Porte[]
 }
 
 enum CommercialNiveau {
@@ -133,12 +137,37 @@ model Immeuble {
   createdAt        DateTime    @default(now())
   updatedAt        DateTime    @updatedAt
 
-  commercial Commercial? @relation(fields: [commercialId], references: [id])
-  manager    Manager?    @relation(fields: [managerId], references: [id])
-  zone       Zone?       @relation(fields: [zoneId], references: [id])
-  quartier   Quartier?   @relation(fields: [quartierId], references: [id])
+  // commercialId / managerId = créateur de l'immeuble. L'accès et les listes
+  // passent par `membres` (immeuble partagé, tous les membres à égalité).
+  commercial Commercial?      @relation(fields: [commercialId], references: [id])
+  manager    Manager?         @relation(fields: [managerId], references: [id])
+  zone       Zone?            @relation(fields: [zoneId], references: [id])
+  quartier   Quartier?        @relation(fields: [quartierId], references: [id])
   statistics Statistic[]
   portes     Porte[]
+  membres    ImmeubleMembre[]
+}
+
+// Membre d'un immeuble partagé : un commercial OU un manager par ligne
+// (CHECK SQL ImmeubleMembre_un_acteur_check dans la migration).
+// Le créateur est membre dès la création ; n'importe quel membre peut en ajouter.
+model ImmeubleMembre {
+  id            Int       @id @default(autoincrement())
+  immeubleId    Int
+  commercialId  Int?
+  managerId     Int?
+  ajouteParId   Int? // Id de l'utilisateur qui a ajouté ce membre (null si backfill/admin)
+  ajouteParType UserType?
+  createdAt     DateTime  @default(now())
+
+  immeuble   Immeuble    @relation(fields: [immeubleId], references: [id], onDelete: Cascade)
+  commercial Commercial? @relation(fields: [commercialId], references: [id], onDelete: Cascade)
+  manager    Manager?    @relation(fields: [managerId], references: [id], onDelete: Cascade)
+
+  @@unique([immeubleId, commercialId])
+  @@unique([immeubleId, managerId])
+  @@index([commercialId])
+  @@index([managerId])
 }
 
 model Quartier {
@@ -256,29 +285,37 @@ model Statistic {
 }
 
 model Porte {
-  id              Int         @id @default(autoincrement())
-  numero          String // Ex: "101", "201A"
-  nomPersonnalise String? // Ex: "Porte à droite", "Appartement A"
-  etage           Int
-  immeubleId      Int
-  statut          StatutPorte @default(NON_VISITE)
-  nbRepassages    Int         @default(0)
-  nbContrats      Int         @default(1) // Nombre de contrats signés pour cette porte
-  rdvDate         DateTime?
-  rdvTime         String? // Ex: "14:30"
-  commentaire     String?
-  duree           Int? // Durée de la dernière prospection chronométrée, en secondes
-  derniereVisite  DateTime?
-  coachingFavori  Boolean     @default(false) // porte/enregistrement/coaching marqué favori
-  createdAt       DateTime    @default(now())
-  updatedAt       DateTime    @updatedAt
+  id                  Int         @id @default(autoincrement())
+  numero              String // Ex: "101", "201A"
+  nomPersonnalise     String? // Ex: "Porte à droite", "Appartement A"
+  etage               Int
+  immeubleId          Int
+  statut              StatutPorte @default(NON_VISITE)
+  nbRepassages        Int         @default(0)
+  nbContrats          Int         @default(1) // Nombre de contrats signés pour cette porte
+  rdvDate             DateTime?
+  rdvTime             String? // Ex: "14:30"
+  commentaire         String?
+  duree               Int? // Durée de la dernière prospection chronométrée, en secondes
+  derniereVisite      DateTime?
+  coachingFavori      Boolean     @default(false) // porte/enregistrement/coaching marqué favori
+  // Auteur du dernier passage (dénormalisé depuis StatusHistorique) : la porte
+  // compte dans les statistiques de cet acteur, pas du créateur de l'immeuble.
+  dernierCommercialId Int?
+  dernierManagerId    Int?
+  createdAt           DateTime    @default(now())
+  updatedAt           DateTime    @updatedAt
 
   immeuble          Immeuble           @relation(fields: [immeubleId], references: [id])
+  dernierCommercial Commercial?        @relation(fields: [dernierCommercialId], references: [id], onDelete: SetNull)
+  dernierManager    Manager?           @relation(fields: [dernierManagerId], references: [id], onDelete: SetNull)
   statusHistorique  StatusHistorique[]
   recordingSegments RecordingSegment[]
   coachingAnalyses  CoachingAnalysis[]
 
   @@unique([immeubleId, numero])
+  @@index([dernierCommercialId])
+  @@index([dernierManagerId])
 }
 
 enum StatutPorte {
@@ -970,6 +1007,7 @@ model DeviceToken {
 enum NotificationType {
   ZONE_ASSIGNED
   ZONE_UNASSIGNED
+  IMMEUBLE_PARTAGE
 }
 
 // Notification in-app persistée (centre de notifications). Destinataire

@@ -1,17 +1,24 @@
 import { ForbiddenException } from '@nestjs/common';
 import type { PrismaService } from '../prisma.service';
-import type { StatisticSyncService } from '../statistic/statistic-sync.service';
+import type {
+  StatisticSyncService,
+  StatsActeurs,
+} from '../statistic/statistic-sync.service';
+import type { ImmeubleAccessService } from '../immeuble/immeuble-access.service';
 import { StatutPorte, type UpdatePorteInput } from './porte.dto';
 import { PorteService } from './porte.service';
 
 /**
  * `PorteService.update` : c'est par là que passe chaque passage terrain. On fige
- * le compteur de repassages, la remise à zéro du RDV, le déclenchement de la
- * synchro des statistiques et l'écriture de l'historique (Prisma mocké).
+ * le compteur de repassages, la remise à zéro du RDV, l'attribution du passage à
+ * son auteur, le déclenchement de la synchro des statistiques et l'écriture de
+ * l'historique (Prisma mocké).
  */
 describe('PorteService.update', () => {
   const IMMEUBLE_ID = 40;
   const COMMERCIAL_ID = 7;
+  /** Coéquipier membre du même immeuble partagé. */
+  const COEQUIPIER_ID = 8;
   const MANAGER_ID = 3;
   const visite = new Date('2026-10-17T09:00:00.000Z');
 
@@ -23,6 +30,8 @@ describe('PorteService.update', () => {
     nbContrats: number;
     rdvDate: Date | null;
     rdvTime: string | null;
+    dernierCommercialId: number | null;
+    dernierManagerId: number | null;
   };
 
   const build = (porte: Partial<PorteEnBase> = {}) => {
@@ -34,42 +43,52 @@ describe('PorteService.update', () => {
       nbContrats: 1,
       rdvDate: null,
       rdvTime: null,
+      dernierCommercialId: null,
+      dernierManagerId: null,
       ...porte,
     };
     const immeuble = {
       id: IMMEUBLE_ID,
       commercialId: COMMERCIAL_ID,
-      managerId: MANAGER_ID,
-      commercial: { id: COMMERCIAL_ID, managerId: MANAGER_ID, directeurId: 1 },
-      manager: { id: MANAGER_ID, directeurId: 1 },
-      zone: null,
+      managerId: null,
     };
     const prisma = {
       porte: {
-        findUnique: jest.fn(() => Promise.resolve({ ...current, immeuble })),
         update: jest.fn((args: { data: Record<string, unknown> }) =>
           Promise.resolve({ ...current, ...args.data, immeuble }),
+        ),
+        delete: jest.fn(() => Promise.resolve(current)),
+        findMany: jest.fn<Promise<unknown[]>, [{ where: unknown }]>(() =>
+          Promise.resolve([]),
         ),
       },
       immeuble: {
         update: jest.fn(() => Promise.resolve(immeuble)),
-        findUnique: jest.fn(() =>
-          Promise.resolve({
-            commercialId: COMMERCIAL_ID,
-            managerId: MANAGER_ID,
-          }),
-        ),
+        findMany: jest.fn(() => Promise.resolve([{ id: IMMEUBLE_ID }])),
       },
       statusHistorique: { create: jest.fn(() => Promise.resolve({})) },
     };
     const sync = {
-      syncCommercialStats: jest.fn<Promise<void>, [number]>(() =>
+      syncActeursStats: jest.fn<Promise<void>, [StatsActeurs]>(() =>
         Promise.resolve(),
       ),
+      syncAuteursPortesSupprimees: jest.fn(() => Promise.resolve()),
+    };
+    // Contrôle d'accès testé à part (immeuble-access.service.spec.ts) : ici, un
+    // inconnu (id 999) est refusé, les membres et le manager sont acceptés.
+    const access = {
+      ensurePorteAccess: jest.fn((_porteId: number, userId: number) =>
+        userId === 999
+          ? Promise.reject(new ForbiddenException('Access denied'))
+          : Promise.resolve({ ...current, immeuble }),
+      ),
+      ensureImmeubleAccess: jest.fn(() => Promise.resolve(immeuble)),
+      accessWhere: jest.fn(() => ({})),
     };
     const service = new PorteService(
       prisma as unknown as PrismaService,
       sync as unknown as StatisticSyncService,
+      access as unknown as ImmeubleAccessService,
     );
     /** Données réellement envoyées à `prisma.porte.update`. */
     const sent = () => prisma.porte.update.mock.calls[0][0].data;
@@ -78,7 +97,7 @@ describe('PorteService.update', () => {
       userId = COMMERCIAL_ID,
       role = 'commercial',
     ) => service.update({ id: current.id, ...input }, userId, role);
-    return { prisma, sync, update, sent };
+    return { prisma, sync, service, update, sent };
   };
 
   describe('compteur de repassages', () => {
@@ -165,27 +184,123 @@ describe('PorteService.update', () => {
     });
   });
 
+  describe('auteur du dernier passage', () => {
+    it('est le commercial qui change le statut', async () => {
+      const { update, sent } = build();
+      await update({ statut: StatutPorte.REFUS });
+      expect(sent()).toMatchObject({
+        dernierCommercialId: COMMERCIAL_ID,
+        dernierManagerId: null,
+      });
+    });
+
+    it('est le manager qui change le statut', async () => {
+      const { update, sent } = build({ dernierCommercialId: COMMERCIAL_ID });
+      await update({ statut: StatutPorte.REFUS }, MANAGER_ID, 'manager');
+      expect(sent()).toMatchObject({
+        dernierCommercialId: null,
+        dernierManagerId: MANAGER_ID,
+      });
+    });
+
+    it('passe au coéquipier qui repasse la porte', async () => {
+      const { update, sent } = build({
+        statut: StatutPorte.ABSENT,
+        dernierCommercialId: COMMERCIAL_ID,
+      });
+      await update({ statut: StatutPorte.CONTRAT_SIGNE }, COEQUIPIER_ID);
+      expect(sent()).toMatchObject({ dernierCommercialId: COEQUIPIER_ID });
+    });
+
+    it('ne change pas sans changement de statut', async () => {
+      const { update, sent } = build({
+        statut: StatutPorte.CONTRAT_SIGNE,
+        dernierCommercialId: COMMERCIAL_ID,
+      });
+      await update(
+        { statut: StatutPorte.CONTRAT_SIGNE, nbContrats: 2 },
+        COEQUIPIER_ID,
+      );
+      expect(sent()).not.toHaveProperty('dernierCommercialId');
+    });
+
+    it('reste celui du dernier passage sur une correction du directeur', async () => {
+      const { update, sent, prisma } = build({
+        dernierCommercialId: COEQUIPIER_ID,
+      });
+      await update({ statut: StatutPorte.REFUS }, 1, 'directeur');
+      expect(sent()).toMatchObject({
+        dernierCommercialId: COEQUIPIER_ID,
+        dernierManagerId: null,
+      });
+      expect(prisma.statusHistorique.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          commercialId: COEQUIPIER_ID,
+          managerId: null,
+        }) as unknown,
+      });
+    });
+
+    it('revient au créateur sur une correction admin d’une porte jamais attribuée', async () => {
+      const { update, sent, prisma } = build();
+      await update({ statut: StatutPorte.REFUS }, 0, 'admin');
+      expect(sent()).toMatchObject({
+        dernierCommercialId: COMMERCIAL_ID,
+        dernierManagerId: null,
+      });
+      expect(prisma.statusHistorique.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          commercialId: COMMERCIAL_ID,
+          managerId: null,
+        }) as unknown,
+      });
+    });
+  });
+
   describe('synchronisation des statistiques', () => {
-    it('est déclenchée sur un changement de statut', async () => {
+    it('est déclenchée pour l’auteur sur un changement de statut', async () => {
       const { update, sync } = build();
       await update({ statut: StatutPorte.REFUS });
-      expect(sync.syncCommercialStats).toHaveBeenCalledTimes(1);
-      expect(sync.syncCommercialStats).toHaveBeenCalledWith(IMMEUBLE_ID);
+      expect(sync.syncActeursStats).toHaveBeenCalledTimes(1);
+      expect(sync.syncActeursStats).toHaveBeenCalledWith({
+        commercialIds: [COMMERCIAL_ID],
+        managerIds: [],
+      });
+    });
+
+    it('recalcule l’auteur précédent et le nouveau sur une repasse', async () => {
+      const { update, sync } = build({
+        statut: StatutPorte.ABSENT,
+        dernierCommercialId: COMMERCIAL_ID,
+      });
+      await update(
+        { statut: StatutPorte.RENDEZ_VOUS_PRIS },
+        MANAGER_ID,
+        'manager',
+      );
+      expect(sync.syncActeursStats).toHaveBeenCalledWith({
+        commercialIds: [COMMERCIAL_ID],
+        managerIds: [MANAGER_ID],
+      });
     });
 
     it('est déclenchée sur un changement de nbContrats sans changement de statut', async () => {
       const { update, sync } = build({
         statut: StatutPorte.CONTRAT_SIGNE,
         nbContrats: 1,
+        dernierCommercialId: COMMERCIAL_ID,
       });
       await update({ statut: StatutPorte.CONTRAT_SIGNE, nbContrats: 2 });
-      expect(sync.syncCommercialStats).toHaveBeenCalledWith(IMMEUBLE_ID);
+      expect(sync.syncActeursStats).toHaveBeenCalledWith({
+        commercialIds: [COMMERCIAL_ID],
+        managerIds: [],
+      });
     });
 
     it('n’est pas déclenchée sur une édition de commentaire seul', async () => {
       const { update, sync } = build({ statut: StatutPorte.REFUS });
       await update({ commentaire: 'gardien hostile' });
-      expect(sync.syncCommercialStats).not.toHaveBeenCalled();
+      expect(sync.syncActeursStats).not.toHaveBeenCalled();
     });
 
     it('n’est pas déclenchée quand statut et nbContrats sont inchangés', async () => {
@@ -194,7 +309,7 @@ describe('PorteService.update', () => {
         nbContrats: 2,
       });
       await update({ statut: StatutPorte.CONTRAT_SIGNE, nbContrats: 2 });
-      expect(sync.syncCommercialStats).not.toHaveBeenCalled();
+      expect(sync.syncActeursStats).not.toHaveBeenCalled();
     });
   });
 
@@ -216,18 +331,29 @@ describe('PorteService.update', () => {
           rdvTime: '18:00',
           duree: 90,
           commercialId: COMMERCIAL_ID,
-          managerId: MANAGER_ID,
+          managerId: null,
         },
       });
     });
 
-    it('attribue au manager connecté et au commercial de l’immeuble', async () => {
+    it('attribue au seul manager connecté, pas au créateur de l’immeuble', async () => {
       const { update, prisma } = build();
       await update({ statut: StatutPorte.REFUS }, MANAGER_ID, 'manager');
       expect(prisma.statusHistorique.create).toHaveBeenCalledWith({
         data: expect.objectContaining({
-          commercialId: COMMERCIAL_ID,
+          commercialId: null,
           managerId: MANAGER_ID,
+        }) as unknown,
+      });
+    });
+
+    it('attribue au coéquipier qui passe sur l’immeuble partagé', async () => {
+      const { update, prisma } = build();
+      await update({ statut: StatutPorte.REFUS }, COEQUIPIER_ID);
+      expect(prisma.statusHistorique.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          commercialId: COEQUIPIER_ID,
+          managerId: null,
         }) as unknown,
       });
     });
@@ -242,12 +368,54 @@ describe('PorteService.update', () => {
     });
   });
 
-  it('refuse un commercial qui ne possède pas l’immeuble, sans rien écrire', async () => {
+  describe('agenda personnel', () => {
+    it('ne montre à un commercial que les RDV dont il est l’auteur', async () => {
+      const { service, prisma } = build();
+      await service.findRdvToday(COMMERCIAL_ID, 'commercial');
+      expect(prisma.porte.findMany.mock.calls[0][0].where).toMatchObject({
+        immeubleId: { in: [IMMEUBLE_ID] },
+        dernierCommercialId: COMMERCIAL_ID,
+      });
+    });
+
+    it('garde le périmètre équipe d’un manager', async () => {
+      const { service, prisma } = build();
+      await service.findRdvToday(MANAGER_ID, 'manager');
+      expect(prisma.porte.findMany.mock.calls[0][0].where).not.toHaveProperty(
+        'dernierCommercialId',
+      );
+    });
+
+    it('filtre l’activité du jour par auteur sans immeuble, pas avec', async () => {
+      const { service, prisma } = build();
+      await service.findModifiedToday(undefined, COMMERCIAL_ID, 'commercial');
+      await service.findModifiedToday(IMMEUBLE_ID, COMMERCIAL_ID, 'commercial');
+      const [global, immeuble] = prisma.porte.findMany.mock.calls.map(
+        (call) => call[0].where,
+      );
+      expect(global).toMatchObject({ dernierCommercialId: COMMERCIAL_ID });
+      expect(immeuble).toMatchObject({ immeubleId: IMMEUBLE_ID });
+      expect(immeuble).not.toHaveProperty('dernierCommercialId');
+    });
+  });
+
+  it('recalcule les stats de l’auteur d’une porte supprimée', async () => {
+    const { service, sync, prisma } = build({
+      dernierCommercialId: COMMERCIAL_ID,
+    });
+    await service.remove(1, 1, 'directeur');
+    expect(prisma.porte.delete).toHaveBeenCalledWith({ where: { id: 1 } });
+    expect(sync.syncAuteursPortesSupprimees).toHaveBeenCalledWith([
+      expect.objectContaining({ dernierCommercialId: COMMERCIAL_ID }),
+    ]);
+  });
+
+  it('refuse un commercial non membre de l’immeuble, sans rien écrire', async () => {
     const { update, prisma, sync } = build();
     await expect(
       update({ statut: StatutPorte.REFUS }, 999, 'commercial'),
     ).rejects.toBeInstanceOf(ForbiddenException);
     expect(prisma.porte.update).not.toHaveBeenCalled();
-    expect(sync.syncCommercialStats).not.toHaveBeenCalled();
+    expect(sync.syncActeursStats).not.toHaveBeenCalled();
   });
 });

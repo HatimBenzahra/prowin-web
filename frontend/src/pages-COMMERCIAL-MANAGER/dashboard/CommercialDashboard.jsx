@@ -20,6 +20,7 @@ import { calculateRank, RANKS } from '@/utils/business/ranks'
 import { useCommercialTeamRanking } from '@/hooks/metier/use-api'
 import { usePortesRdvToday } from '@/hooks/metier/use-api'
 import { useNavigate } from 'react-router-dom'
+import { portesFaitesPar } from '@/utils/business/immeuble-membres'
 export default function CommercialDashboard() {
   // Récupérer les données du contexte du layout
   const context = useOutletContext()
@@ -32,18 +33,26 @@ export default function CommercialDashboard() {
     if (!commercial?.immeubles) return new Map()
     return new Map(commercial.immeubles.map(imm => [imm.id, imm]))
   }, [commercial?.immeubles])
+  const viewer = useMemo(
+    () =>
+      commercial?.id != null
+        ? { type: isManager ? 'MANAGER' : 'COMMERCIAL', id: commercial.id }
+        : null,
+    [commercial?.id, isManager]
+  )
   // Calculer le nombre total de portes prospectées
   const totalPortesProspectees = React.useMemo(() => {
     if (!commercial?.immeubles) return 0
 
     return commercial.immeubles.reduce((total, immeuble) => {
-      // Compter les portes de cet immeuble qui ne sont pas NON_VISITE
-      const portesProspectees =
-        immeuble.portes?.filter(porte => porte.statut !== 'NON_VISITE').length || 0
+      // Compter les portes que j'ai faites dans cet immeuble (partagé ou non), hors NON_VISITE
+      const portesProspectees = portesFaitesPar(immeuble.portes || [], viewer).filter(
+        porte => porte.statut !== 'NON_VISITE'
+      ).length
 
       return total + portesProspectees
     }, 0)
-  }, [commercial?.immeubles])
+  }, [commercial?.immeubles, viewer])
   const myStats = useMemo(
     () =>
       context?.myStats || {

@@ -143,3 +143,37 @@ export function filterByAddress(rows, term) {
   if (!needle) return rows || []
   return (rows || []).filter(row => (row.address || '').toLowerCase().includes(needle))
 }
+
+/**
+ * Libellé compact des membres d'un bâtiment : « Prénom », ou « Prénom +N » s'ils sont
+ * plusieurs. `fallback` sert quand la liste est absente ou vide.
+ * @param {Array<{prenom: string, nom: string}>} membres
+ * @param {string} fallback
+ * @returns {string}
+ */
+export function membresLabel(membres, fallback = 'N/A') {
+  if (!membres?.length) return fallback
+  const [premier, ...autres] = membres
+  return autres.length ? `${premier.prenom} +${autres.length}` : premier.prenom
+}
+
+/**
+ * Noms complets des membres, séparés par une virgule (infobulle, fiche détail).
+ * @param {Array<{prenom: string, nom: string}>} membres
+ * @returns {string}
+ */
+export function membresFullNames(membres) {
+  return (membres || []).map(m => `${m.prenom} ${m.nom}`).join(', ')
+}
+
+/**
+ * Le commercial est-il membre du bâtiment ? Se rabat sur le créateur
+ * (`commercialId`) quand `membres` est absent.
+ * @param {{membres?: Array, commercialId?: number|null}} immeuble
+ * @param {number} commercialId
+ * @returns {boolean}
+ */
+export function hasCommercialMembre(immeuble, commercialId) {
+  if (!immeuble?.membres?.length) return immeuble?.commercialId === commercialId
+  return immeuble.membres.some(m => m.type === 'COMMERCIAL' && m.id === commercialId)
+}

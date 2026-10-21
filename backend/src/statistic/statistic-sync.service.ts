@@ -5,6 +5,25 @@ import {
   calculateStatsForStatus,
 } from '../porte/porte-status.constants';
 
+/** Auteurs de passages dont les statistiques sont à recalculer. */
+export type StatsActeurs = { commercialIds: number[]; managerIds: number[] };
+
+/** Auteurs du dernier passage d'un ensemble de portes (sans doublon). */
+export function acteursDesPortes(
+  portes: {
+    dernierCommercialId: number | null;
+    dernierManagerId: number | null;
+  }[],
+): StatsActeurs {
+  const ids = (values: (number | null)[]) => [
+    ...new Set(values.filter((id): id is number => id !== null)),
+  ];
+  return {
+    commercialIds: ids(portes.map((porte) => porte.dernierCommercialId)),
+    managerIds: ids(portes.map((porte) => porte.dernierManagerId)),
+  };
+}
+
 /**
  * Service de synchronisation automatique des statistiques
  * Maintient la cohérence entre les actions sur les portes et les stats
@@ -16,56 +35,95 @@ export class StatisticSyncService {
   constructor(private prisma: PrismaService) {}
 
   /**
-   * Met à jour les statistiques d'un commercial après modification d'une porte
+   * Recalcule les statistiques des auteurs des portes d'un immeuble (une porte
+   * compte pour l'auteur de son dernier passage, pas pour le créateur).
    */
   async syncCommercialStats(immeubleId: number): Promise<void> {
     try {
-      // 1. Récupérer l'immeuble et son commercial/manager
-      const immeuble = await this.prisma.immeuble.findUnique({
-        where: { id: immeubleId },
-        include: {
-          commercial: true,
-          manager: true,
-        },
+      const portes = await this.prisma.porte.findMany({
+        where: { immeubleId },
+        select: { dernierCommercialId: true, dernierManagerId: true },
       });
+      const acteurs = acteursDesPortes(portes);
 
-      if (!immeuble?.commercial && !immeuble?.manager) {
+      if (
+        acteurs.commercialIds.length === 0 &&
+        acteurs.managerIds.length === 0
+      ) {
         this.logger.warn(
-          `Immeuble ${immeubleId} n'a ni commercial ni manager associé`,
+          `Immeuble ${immeubleId} n'a aucune porte attribuée à un commercial ou un manager`,
         );
         return;
       }
 
-      // 2. Synchroniser les stats du commercial si présent
-      if (immeuble.commercial) {
-        const commercialId = immeuble.commercial.id;
-        const realStats = await this.calculateRealStats(commercialId);
-        await this.upsertStatistic(commercialId, realStats);
-        this.logger.debug(
-          `Stats mises à jour pour commercial ${commercialId}:`,
-          realStats,
-        );
-
-        // 3. Si le commercial a un manager, synchroniser aussi les stats du manager
-        if (immeuble.commercial.managerId) {
-          await this.syncManagerStats(immeuble.commercial.managerId);
-        }
-        // 4. Si le commercial a un directeur (sans manager), synchroniser aussi les stats du directeur
-        else if (immeuble.commercial.directeurId) {
-          await this.syncDirecteurStats(immeuble.commercial.directeurId);
-        }
-      }
-
-      // 4. Synchroniser les stats du manager si l'immeuble lui appartient directement
-      if (immeuble.managerId) {
-        await this.syncManagerStats(immeuble.managerId);
-      }
+      await this.syncActeursStats(acteurs);
     } catch (error) {
       this.logger.error(
         `Erreur sync stats pour immeuble ${immeubleId}:`,
         error,
       );
       throw error;
+    }
+  }
+
+  /**
+   * Recalcule les stats des auteurs de portes supprimées : une porte supprimée
+   * ne compte plus pour personne. Best-effort : un échec est loggé sans faire
+   * échouer la suppression, déjà effectuée.
+   */
+  async syncAuteursPortesSupprimees(
+    portes: {
+      dernierCommercialId: number | null;
+      dernierManagerId: number | null;
+    }[],
+  ): Promise<void> {
+    try {
+      await this.syncActeursStats(acteursDesPortes(portes));
+    } catch (error) {
+      this.logger.error(
+        'Erreur sync stats après suppression de portes:',
+        error,
+      );
+    }
+  }
+
+  /**
+   * Met à jour les statistiques des commerciaux et managers donnés (auteurs de
+   * passages), puis celles de leur manager / directeur.
+   */
+  async syncActeursStats(acteurs: StatsActeurs): Promise<void> {
+    const managerIds = new Set(acteurs.managerIds);
+    const directeurIds = new Set<number>();
+
+    const commerciaux =
+      acteurs.commercialIds.length === 0
+        ? []
+        : await this.prisma.commercial.findMany({
+            where: { id: { in: [...new Set(acteurs.commercialIds)] } },
+            select: { id: true, managerId: true, directeurId: true },
+          });
+
+    for (const commercial of commerciaux) {
+      const realStats = await this.calculateRealStats(commercial.id);
+      await this.upsertStatistic(commercial.id, realStats);
+      this.logger.debug(
+        `Stats mises à jour pour commercial ${commercial.id}:`,
+        realStats,
+      );
+
+      // Le manager du commercial (à défaut son directeur) agrège ses stats.
+      if (commercial.managerId) {
+        managerIds.add(commercial.managerId);
+      } else if (commercial.directeurId) {
+        directeurIds.add(commercial.directeurId);
+      }
+    }
+
+    for (const managerId of managerIds) {
+      await this.syncManagerStats(managerId);
+    }
+    for (const directeurId of directeurIds) {
+      await this.syncDirecteurStats(directeurId);
     }
   }
 
@@ -125,16 +183,14 @@ export class StatisticSyncService {
   }
 
   /**
-   * Calcule les statistiques réelles d'un commercial basées sur ses portes
+   * Calcule les statistiques réelles d'un commercial : les portes dont il est
+   * l'auteur du dernier passage, quel que soit le créateur de l'immeuble.
    */
   private async calculateRealStats(commercialId: number) {
-    // Récupérer toutes les portes des immeubles du commercial
     const result = await this.prisma.porte.groupBy({
       by: ['statut'],
       where: {
-        immeuble: {
-          commercialId: commercialId,
-        },
+        dernierCommercialId: commercialId,
       },
       _count: {
         statut: true,
@@ -144,12 +200,12 @@ export class StatisticSyncService {
       },
     });
 
-    // Calculer aussi le nombre d'immeubles visités (au moins une porte non NON_VISITE)
+    // Immeubles visités : au moins une porte prospectée dont il est l'auteur
     const immeublesVisites = await this.prisma.immeuble.count({
       where: {
-        commercialId: commercialId,
         portes: {
           some: {
+            dernierCommercialId: commercialId,
             statut: {
               not: StatutPorte.NON_VISITE,
             },
@@ -195,16 +251,14 @@ export class StatisticSyncService {
   }
 
   /**
-   * Calcule les statistiques réelles d'un manager basées sur ses portes
+   * Calcule les statistiques réelles d'un manager : les portes dont il est
+   * l'auteur du dernier passage, quel que soit le créateur de l'immeuble.
    */
   private async calculateManagerRealStats(managerId: number) {
-    // Récupérer toutes les portes des immeubles du manager
     const result = await this.prisma.porte.groupBy({
       by: ['statut'],
       where: {
-        immeuble: {
-          managerId: managerId,
-        },
+        dernierManagerId: managerId,
       },
       _count: {
         statut: true,
@@ -214,12 +268,12 @@ export class StatisticSyncService {
       },
     });
 
-    // Calculer aussi le nombre d'immeubles visités (au moins une porte non NON_VISITE)
+    // Immeubles visités : au moins une porte prospectée dont il est l'auteur
     const immeublesVisites = await this.prisma.immeuble.count({
       where: {
-        managerId: managerId,
         portes: {
           some: {
+            dernierManagerId: managerId,
             statut: {
               not: StatutPorte.NON_VISITE,
             },

@@ -1,4 +1,12 @@
-import { Resolver, Query, Mutation, Args, Int } from '@nestjs/graphql';
+import {
+  Resolver,
+  Query,
+  Mutation,
+  Args,
+  Int,
+  ResolveField,
+  Parent,
+} from '@nestjs/graphql';
 import { UseGuards } from '@nestjs/common';
 import { PorteService } from './porte.service';
 import {
@@ -137,6 +145,11 @@ export class PorteResolver {
   @Roles('admin', 'directeur', 'manager', 'commercial')
   findRdvToday(@CurrentUser() user: any) {
     return this.porteService.findRdvToday(user.id, user.role);
+  }
+
+  @ResolveField(() => String, { nullable: true })
+  dernierActeurPrenom(@Parent() porte: Porte): Promise<string | null> {
+    return this.porteService.findDernierActeurPrenom(porte.id);
   }
 
   // ============= STATUS HISTORIQUE QUERIES =============

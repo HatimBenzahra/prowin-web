@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import { filterPortesByDate } from './useDateFilter'
 import { buildingDoorCount, effectiveTypeHabitat } from '@/constants/domain/habitat'
+import { portesFaitesPar } from '@/utils/business/immeuble-membres'
 
 function sortPortesByRecentCreation(portes) {
   return [...portes].sort((a, b) => {
@@ -26,9 +27,10 @@ function sortPortesByRecentCreation(portes) {
  * @param {Object} user - Utilisateur (manager ou commercial)
  * @param {string} appliedStartDate - Date de début appliquée
  * @param {string} appliedEndDate - Date de fin appliquée
+ * @param {{type: string, id: number}} [viewer] - Ne compte que les portes qu'il a faites
  * @returns {Object} Statistiques personnelles calculées
  */
-export function usePersonalStats(user, appliedStartDate, appliedEndDate) {
+export function usePersonalStats(user, appliedStartDate, appliedEndDate, viewer) {
   // Collecter toutes les portes de l'utilisateur
   const allPortes = useMemo(() => {
     if (!user?.immeubles) return []
@@ -40,10 +42,10 @@ export function usePersonalStats(user, appliedStartDate, appliedEndDate) {
     }, [])
   }, [user?.immeubles])
 
-  // Filtrer les portes par date
+  // Filtrer les portes par date et par auteur
   const filteredPortes = useMemo(() => {
-    return filterPortesByDate(allPortes, appliedStartDate, appliedEndDate)
-  }, [allPortes, appliedStartDate, appliedEndDate])
+    return portesFaitesPar(filterPortesByDate(allPortes, appliedStartDate, appliedEndDate), viewer)
+  }, [allPortes, appliedStartDate, appliedEndDate, viewer])
 
   // Calculer les totaux à partir des portes filtrées
   const personalStats = useMemo(() => {
@@ -113,9 +115,11 @@ export function scopeAndSortImmeubleRows(rows, hasDateFilter) {
  * @param {Array} immeubles - Tableau des immeubles
  * @param {string} appliedStartDate - Date de début appliquée
  * @param {string} appliedEndDate - Date de fin appliquée
+ * @param {{type: string, id: number}} [viewer] - Stats comptées sur ses portes uniquement
+ *   (la couverture reste calculée sur toutes les portes du bâtiment)
  * @returns {Array} Données des immeubles formatées pour le tableau
  */
-export function useImmeublesTableData(immeubles, appliedStartDate, appliedEndDate) {
+export function useImmeublesTableData(immeubles, appliedStartDate, appliedEndDate, viewer) {
   return useMemo(() => {
     if (!immeubles) return []
 
@@ -131,24 +135,31 @@ export function useImmeublesTableData(immeubles, appliedStartDate, appliedEndDat
         appliedEndDate
       )
       const totalDoors = buildingDoorCount(immeuble)
+      const portesCouverture = portesImmeuble
+      // Les compteurs ne portent que sur les portes faites par le viewer (immeuble partagé)
+      const portesImmeubleStats = portesFaitesPar(portesImmeuble, viewer)
 
       // Calculer les statistiques à partir des portes
-      const visitedAt = portesImmeuble.reduce((latest, porte) => {
+      const visitedAt = portesImmeubleStats.reduce((latest, porte) => {
         const visit = porte.derniereVisite || porte.updatedAt
         if (!visit) return latest
         return !latest || new Date(visit) > new Date(latest) ? visit : latest
       }, null)
       // Somme des nbContrats pour toutes les portes avec statut CONTRAT_SIGNE
-      const contratsSignes = portesImmeuble
+      const contratsSignes = portesImmeubleStats
         .filter(p => p.statut === 'CONTRAT_SIGNE')
         .reduce((sum, p) => sum + (p.nbContrats || 1), 0)
-      const rdvPris = portesImmeuble.filter(p => p.statut === 'RENDEZ_VOUS_PRIS').length
-      const refus = portesImmeuble.filter(p => p.statut === 'REFUS').length
-      const absent = portesImmeuble.filter(p => p.statut === 'ABSENT').length
-      const argumente = portesImmeuble.filter(p => p.statut === 'ARGUMENTE').length
-      const repassages = portesImmeuble.reduce((sum, p) => sum + (p.nbRepassages || 0), 0)
-      const portesProspectees = portesImmeuble.filter(p => p.statut !== 'NON_VISITE').length
-      const couverture = totalDoors > 0 ? Math.round((portesProspectees / totalDoors) * 100) : 0
+      const rdvPris = portesImmeubleStats.filter(p => p.statut === 'RENDEZ_VOUS_PRIS').length
+      const refus = portesImmeubleStats.filter(p => p.statut === 'REFUS').length
+      const absent = portesImmeubleStats.filter(p => p.statut === 'ABSENT').length
+      const argumente = portesImmeubleStats.filter(p => p.statut === 'ARGUMENTE').length
+      const repassages = portesImmeubleStats.reduce((sum, p) => sum + (p.nbRepassages || 0), 0)
+      const portesProspectees = portesImmeubleStats.filter(p => p.statut !== 'NON_VISITE').length
+      const portesProspecteesBatiment = portesCouverture.filter(
+        p => p.statut !== 'NON_VISITE'
+      ).length
+      const couverture =
+        totalDoors > 0 ? Math.round((portesProspecteesBatiment / totalDoors) * 100) : 0
 
       // Préparer les données des portes pour cette immeuble pour l'affichage imbriqué
       // Note: On réutilise la structure attendue par le tableau (status, rdvDate, etc)
@@ -205,12 +216,12 @@ export function useImmeublesTableData(immeubles, appliedStartDate, appliedEndDat
         // Champs internes de tri / filtrage, non affichés :
         // dernière activité réelle dans la période, et volume de portes concernées.
         lastActivityAt: visitedAt || immeuble.createdAt || null,
-        portesInRange: portesImmeuble.length,
+        portesInRange: portesImmeubleStats.length,
       }
     })
 
     return scopeAndSortImmeubleRows(rows, hasDateFilter)
-  }, [immeubles, appliedStartDate, appliedEndDate])
+  }, [immeubles, appliedStartDate, appliedEndDate, viewer])
 }
 
 /**
@@ -218,9 +229,10 @@ export function useImmeublesTableData(immeubles, appliedStartDate, appliedEndDat
  * @param {Array} immeubles - Tableau des immeubles
  * @param {string} appliedStartDate - Date de début appliquée
  * @param {string} appliedEndDate - Date de fin appliquée
+ * @param {{type: string, id: number}} [viewer] - Ne garde que les portes qu'il a faites
  * @returns {Array} Toutes les portes filtrées
  */
-export function useFilteredPortes(immeubles, appliedStartDate, appliedEndDate) {
+export function useFilteredPortes(immeubles, appliedStartDate, appliedEndDate, viewer) {
   return useMemo(() => {
     if (!immeubles) return []
 
@@ -234,7 +246,10 @@ export function useFilteredPortes(immeubles, appliedStartDate, appliedEndDate) {
 
     // Filtrer par date si nécessaire
     return sortPortesByRecentCreation(
-      filterPortesByDate(allPortesUnfiltered, appliedStartDate, appliedEndDate)
+      portesFaitesPar(
+        filterPortesByDate(allPortesUnfiltered, appliedStartDate, appliedEndDate),
+        viewer
+      )
     )
-  }, [immeubles, appliedStartDate, appliedEndDate])
+  }, [immeubles, appliedStartDate, appliedEndDate, viewer])
 }

@@ -110,6 +110,18 @@ export class ManagerService {
     return manager;
   }
 
+  /** Expose les immeubles dont chaque commercial est membre en `immeubles`. */
+  private withImmeublesMembre<
+    C extends { immeublesMembre: { immeuble: unknown }[] },
+  >(commercials: C[]) {
+    return commercials.map(({ immeublesMembre, ...commercial }) => ({
+      ...commercial,
+      immeubles: immeublesMembre.map(
+        (membre): C['immeublesMembre'][number]['immeuble'] => membre.immeuble,
+      ),
+    }));
+  }
+
   /**
    * Récupère les données personnelles du manager (pour son espace commercial personnel)
    * Retourne UNIQUEMENT ses propres immeubles et statistiques
@@ -122,15 +134,18 @@ export class ManagerService {
   ) {
     // Options d'include/where construites dynamiquement selon excludeTestUsers,
     // réutilisées par les branches admin et non-admin ci-dessous.
-    const commercialsImmeublesInclude = excludeTestUsers
-      ? { where: prodImmeubleWhere, include: { portes: true } }
-      : { include: { portes: true } };
+    // Immeubles des commerciaux par appartenance (créés par eux ou partagés).
+    const commercialsImmeublesInclude = {
+      ...(excludeTestUsers ? { where: { immeuble: prodImmeubleWhere } } : {}),
+      include: { immeuble: { include: { portes: true } } },
+    };
     const zonesImmeublesInclude = excludeTestUsers
       ? { where: prodImmeubleWhere }
       : true;
+    // Immeubles dont le manager est membre (créés par lui ou partagés avec lui).
     const managerImmeublesWhere = excludeTestUsers
-      ? { AND: [{ managerId: id }, prodImmeubleWhere] }
-      : { managerId: id };
+      ? { AND: [{ membres: { some: { managerId: id } } }, prodImmeubleWhere] }
+      : { membres: { some: { managerId: id } } };
 
     // Admin can access all
     if (userRole === 'admin') {
@@ -140,7 +155,7 @@ export class ManagerService {
           directeur: true,
           commercials: {
             include: {
-              immeubles: commercialsImmeublesInclude,
+              immeublesMembre: commercialsImmeublesInclude,
             },
           },
         },
@@ -150,7 +165,7 @@ export class ManagerService {
         return null;
       }
 
-      // Récupérer UNIQUEMENT les propres immeubles du manager
+      // Récupérer UNIQUEMENT les immeubles dont le manager est membre
       const immeubles = await this.prisma.immeuble.findMany({
         where: managerImmeublesWhere,
         include: {
@@ -173,6 +188,7 @@ export class ManagerService {
 
       return {
         ...manager,
+        commercials: this.withImmeublesMembre(manager.commercials),
         immeubles,
         statistics,
         zones,
@@ -185,7 +201,7 @@ export class ManagerService {
         directeur: true,
         commercials: {
           include: {
-            immeubles: commercialsImmeublesInclude,
+            immeublesMembre: commercialsImmeublesInclude,
           },
         },
       },
@@ -205,7 +221,7 @@ export class ManagerService {
       throw new ForbiddenException('Access denied');
     }
 
-    // Récupérer UNIQUEMENT les propres immeubles du manager
+    // Récupérer UNIQUEMENT les immeubles dont le manager est membre
     const immeubles = await this.prisma.immeuble.findMany({
       where: managerImmeublesWhere,
       include: {
@@ -228,6 +244,7 @@ export class ManagerService {
 
     return {
       ...manager,
+      commercials: this.withImmeublesMembre(manager.commercials),
       immeubles,
       statistics,
       zones,

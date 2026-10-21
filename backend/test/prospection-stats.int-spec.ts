@@ -3,6 +3,7 @@ import { PrismaService } from '../src/prisma.service';
 import { PorteService } from '../src/porte/porte.service';
 import { StatutPorte, type UpdatePorteInput } from '../src/porte/porte.dto';
 import { StatisticSyncService } from '../src/statistic/statistic-sync.service';
+import { ImmeubleAccessService } from '../src/immeuble/immeuble-access.service';
 
 /**
  * Prospection → statuts porte → statistiques, sur une VRAIE base Postgres.
@@ -31,6 +32,7 @@ describe('prospection → statistiques (base réelle)', () => {
       providers: [
         PorteService,
         StatisticSyncService,
+        ImmeubleAccessService,
         { provide: PrismaService, useValue: prisma },
       ],
     }).compile();
@@ -52,9 +54,10 @@ describe('prospection → statistiques (base réelle)', () => {
   };
 
   /**
-   * Directeur → manager → commercial, une zone en cours pour le commercial,
-   * un immeuble prospecté par le commercial (2 × 4 portes) et un immeuble
-   * prospecté par le manager lui-même (1 × 2 portes).
+   * Directeur → manager → commercial (+ un coéquipier du même manager), une zone
+   * en cours pour le commercial, un immeuble prospecté par le commercial
+   * (2 × 4 portes) et un immeuble prospecté par le manager lui-même (1 × 2
+   * portes). Chaque créateur est membre de son immeuble.
    */
   const seed = async () => {
     const directeur = await prisma.directeur.create({
@@ -67,6 +70,14 @@ describe('prospection → statistiques (base réelle)', () => {
       data: {
         nom: 'Colin',
         prenom: 'Chloé',
+        managerId: manager.id,
+        directeurId: directeur.id,
+      },
+    });
+    const coequipier = await prisma.commercial.create({
+      data: {
+        nom: 'Caron',
+        prenom: 'Camille',
         managerId: manager.id,
         directeurId: directeur.id,
       },
@@ -90,6 +101,7 @@ describe('prospection → statistiques (base réelle)', () => {
         nbPortesParEtage: 4,
         commercialId: commercial.id,
         zoneId: zone.id,
+        membres: { create: { commercialId: commercial.id } },
       },
     });
     const immeubleManager = await prisma.immeuble.create({
@@ -98,6 +110,7 @@ describe('prospection → statistiques (base réelle)', () => {
         nbEtages: 1,
         nbPortesParEtage: 2,
         managerId: manager.id,
+        membres: { create: { managerId: manager.id } },
       },
     });
     // Création des portes par le vrai service (rôle admin : pas d'ownership).
@@ -115,6 +128,8 @@ describe('prospection → statistiques (base réelle)', () => {
       directeur,
       manager,
       commercial,
+      coequipier,
+      immeubleId: immeuble.id,
       zone,
       portesCommercial: await ids(immeuble.id),
       portesManager: await ids(immeubleManager.id),
@@ -304,9 +319,105 @@ describe('prospection → statistiques (base réelle)', () => {
     });
   });
 
+  it('immeuble partagé : chaque porte compte pour l’auteur de son dernier passage', async () => {
+    const [p1, p2] = s.portesCommercial;
+    const coequipier = (id: number, input: Omit<UpdatePorteInput, 'id'>) =>
+      passage(id, input, s.coequipier.id);
+
+    // Non membre : refusé, rien n'est écrit.
+    await expect(coequipier(p1, { statut: StatutPorte.REFUS })).rejects.toThrow(
+      'Access denied',
+    );
+
+    await prisma.immeubleMembre.create({
+      data: { immeubleId: s.immeubleId, commercialId: s.coequipier.id },
+    });
+    await passage(p1, { statut: StatutPorte.ABSENT });
+    await coequipier(p2, { statut: StatutPorte.CONTRAT_SIGNE });
+    // Repasse du coéquipier sur la porte laissée absente par le commercial.
+    await coequipier(p1, { statut: StatutPorte.RENDEZ_VOUS_PRIS });
+
+    expect(await statsOf({ commercialId: s.commercial.id })).toEqual([
+      expect.objectContaining({
+        absents: 0,
+        rendezVousPris: 0,
+        contratsSignes: 0,
+        nbPortesProspectes: 0,
+        immeublesVisites: 0,
+      }),
+    ]);
+    expect(await statsOf({ commercialId: s.coequipier.id })).toEqual([
+      expect.objectContaining({
+        rendezVousPris: 1,
+        contratsSignes: 1,
+        nbPortesProspectes: 2,
+        immeublesVisites: 1,
+      }),
+    ]);
+
+    // L'historique garde le passage du commercial, chacun à son nom.
+    const historique = await prisma.statusHistorique.findMany({
+      where: { porteId: p1 },
+      orderBy: { id: 'asc' },
+      select: { commercialId: true, managerId: true },
+    });
+    expect(historique).toEqual([
+      { commercialId: s.commercial.id, managerId: null },
+      { commercialId: s.coequipier.id, managerId: null },
+    ]);
+  });
+
+  it('correction directeur et suppression de porte : les stats suivent l’auteur', async () => {
+    const [p1, p2] = s.portesCommercial;
+    await passage(p1, { statut: StatutPorte.ABSENT });
+    await passage(p2, { statut: StatutPorte.REFUS });
+
+    // Correction directeur : la porte reste au commercial, historique compris.
+    await portes.update(
+      { id: p1, statut: StatutPorte.CONTRAT_SIGNE },
+      s.directeur.id,
+      'directeur',
+    );
+    expect(
+      await prisma.porte.findUniqueOrThrow({ where: { id: p1 } }),
+    ).toMatchObject({ dernierCommercialId: s.commercial.id });
+    expect(
+      await prisma.statusHistorique.findFirst({
+        where: { porteId: p1 },
+        orderBy: { id: 'desc' },
+        select: { commercialId: true, managerId: true },
+      }),
+    ).toEqual({ commercialId: s.commercial.id, managerId: null });
+    expect(await statsOf({ commercialId: s.commercial.id })).toEqual([
+      expect.objectContaining({ contratsSignes: 1, refus: 1, absents: 0 }),
+    ]);
+
+    // Suppression : la porte ne compte plus pour personne.
+    await portes.remove(p2, s.directeur.id, 'directeur');
+    expect(await statsOf({ commercialId: s.commercial.id })).toEqual([
+      expect.objectContaining({ refus: 0, nbPortesProspectes: 1 }),
+    ]);
+  });
+
+  it('un membre est un commercial OU un manager (contrainte SQL)', async () => {
+    await expect(
+      prisma.immeubleMembre.create({
+        data: {
+          immeubleId: s.immeubleId,
+          commercialId: s.coequipier.id,
+          managerId: s.manager.id,
+        },
+      }),
+    ).rejects.toThrow();
+    await expect(
+      prisma.immeubleMembre.create({ data: { immeubleId: s.immeubleId } }),
+    ).rejects.toThrow();
+  });
+
   it('le recalcul complet retombe sur les mêmes chiffres que la synchro incrémentale', async () => {
     await scenario();
-    expect(await sync.recalculateAllStats()).toEqual({ updated: 3, errors: 0 });
+    // 2 commerciaux (dont le coéquipier, sans passage) + manager + directeur.
+    expect(await sync.recalculateAllStats()).toEqual({ updated: 4, errors: 0 });
 
     expect(await statsOf({ commercialId: s.commercial.id })).toEqual([
       expect.objectContaining(ATTENDU_COMMERCIAL),

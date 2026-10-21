@@ -19,6 +19,9 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
+// Enum enregistré en GraphQL par zone.dto (qui importe ce fichier : pas d'import
+// croisé ici, on prend l'objet Prisma, source unique).
+import { UserType } from '@prisma/client';
 import { Porte } from '../porte/porte.dto';
 
 export enum TypeHabitat {
@@ -45,6 +48,35 @@ registerEnumType(ImmeubleProgressFilter, {
   name: 'ImmeubleProgressFilter',
   description: 'Filtre de progression de prospection (calcule cote serveur)',
 });
+
+/** Membre d'un immeuble partagé (id = id du commercial ou du manager). */
+@ObjectType()
+export class ImmeubleMembre {
+  @Field(() => Int)
+  id: number;
+
+  @Field()
+  prenom: string;
+
+  @Field()
+  nom: string;
+
+  @Field(() => UserType)
+  type: UserType;
+}
+
+/** Commercial de la même équipe, à qui l'on peut partager un immeuble. */
+@ObjectType()
+export class Coequipier {
+  @Field(() => Int)
+  id: number;
+
+  @Field()
+  prenom: string;
+
+  @Field()
+  nom: string;
+}
 
 @ObjectType()
 export class Immeuble {
@@ -92,6 +124,9 @@ export class Immeuble {
 
   @Field(() => [Porte], { nullable: true })
   portes?: Porte[];
+
+  @Field(() => [ImmeubleMembre])
+  membres: ImmeubleMembre[];
 
   @Field()
   createdAt: Date;

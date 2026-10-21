@@ -41,6 +41,7 @@ export function buildFacadeFloors(immeuble, portes, segmentMap = new Map()) {
       audioDurationSec: segment?.durationSec ?? null,
       hasAudio: Boolean(segment),
       coachingFavori: porte.coachingFavori ?? false,
+      dernierActeurPrenom: porte.dernierActeurPrenom || null,
     }
   }
 

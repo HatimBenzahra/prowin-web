@@ -7,6 +7,8 @@ import {
   groupRowsByDate,
   dayGroupLabel,
   CARD_PAGE_SIZE,
+  membresLabel,
+  hasCommercialMembre,
 } from './immeubles-display'
 
 const rows = length =>
@@ -171,5 +173,23 @@ describe('filterByAddress', () => {
 
   it('rend tout quand le terme est vide', () => {
     expect(filterByAddress(rows(7), '   ')).toHaveLength(7)
+  })
+})
+
+describe('membres', () => {
+  const a = { id: 1, prenom: 'Léa', nom: 'Martin', type: 'COMMERCIAL' }
+  const b = { id: 2, prenom: 'Tom', nom: 'Durand', type: 'COMMERCIAL' }
+  const m = { id: 1, prenom: 'Sam', nom: 'Roy', type: 'MANAGER' }
+
+  it('formate le libellé compact', () => {
+    expect(membresLabel([a])).toBe('Léa')
+    expect(membresLabel([a, b, m])).toBe('Léa +2')
+    expect(membresLabel([], 'N/A')).toBe('N/A')
+  })
+
+  it('filtre par appartenance, avec repli sur le créateur', () => {
+    expect(hasCommercialMembre({ membres: [a, b] }, 2)).toBe(true)
+    expect(hasCommercialMembre({ membres: [m] }, 1)).toBe(false)
+    expect(hasCommercialMembre({ commercialId: 3 }, 3)).toBe(true)
   })
 })

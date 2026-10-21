@@ -94,7 +94,12 @@ export function useCommercialDetailsLogic() {
     }
   }, [id])
 
-  const { personalStats } = usePersonalStats(commercial, appliedStartDate, appliedEndDate)
+  // Immeubles partagés : seules les portes faites par ce commercial comptent.
+  const viewer = useMemo(
+    () => (commercial?.id != null ? { type: 'COMMERCIAL', id: commercial.id } : null),
+    [commercial?.id]
+  )
+  const { personalStats } = usePersonalStats(commercial, appliedStartDate, appliedEndDate, viewer)
 
   // Stats globales backend (source de vérité quand aucun filtre de date).
   const backendStats = useMemo(() => {
@@ -210,23 +215,36 @@ export function useCommercialDetailsLogic() {
   const buildingRows = useImmeublesTableData(
     commercial?.immeubles,
     appliedStartDate,
-    appliedEndDate
+    appliedEndDate,
+    viewer
   )
 
   // Portes filtrées + capacité déclarée (grille) = dénominateur de la couverture.
-  const allPortes = useFilteredPortes(commercial?.immeubles, appliedStartDate, appliedEndDate)
+  const allPortes = useFilteredPortes(
+    commercial?.immeubles,
+    appliedStartDate,
+    appliedEndDate,
+    viewer
+  )
   const totalDoorsGrid = (commercial?.immeubles || []).reduce(
     (sum, immeuble) => sum + buildingDoorCount(immeuble),
     0
   )
 
+  // La couverture compte toutes les portes des bâtiments, pas seulement les siennes.
+  const portesCouverture = useFilteredPortes(
+    commercial?.immeubles,
+    appliedStartDate,
+    appliedEndDate
+  )
+
   // Couverture globale (prospectées / capacité déclarée).
   const couverture = useMemo(() => {
-    const prospectees = (allPortes || []).filter(
+    const prospectees = (portesCouverture || []).filter(
       porte => String(porte.statut || '').toUpperCase() !== 'NON_VISITE'
     ).length
     return totalDoorsGrid > 0 ? Math.round((prospectees / totalDoorsGrid) * 100) : 0
-  }, [allPortes, totalDoorsGrid])
+  }, [portesCouverture, totalDoorsGrid])
 
   // 1 enregistrement par porte (le plus long) pour la modal façade.
   const porteSegmentMap = useMemo(() => {

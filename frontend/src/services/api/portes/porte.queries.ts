@@ -60,6 +60,9 @@ export const GET_PORTES_BY_IMMEUBLE = `
       commentaire
       derniereVisite
       coachingFavori
+      dernierCommercialId
+      dernierManagerId
+      dernierActeurPrenom
       createdAt
       updatedAt
     }

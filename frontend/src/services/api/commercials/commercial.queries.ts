@@ -104,6 +104,8 @@ export const GET_COMMERCIAL_FULL = `
           rdvTime
           derniereVisite
           coachingFavori
+          dernierCommercialId
+          dernierManagerId
         }
       }
       zones {

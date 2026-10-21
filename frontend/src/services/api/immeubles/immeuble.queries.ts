@@ -17,6 +17,12 @@ export const GET_IMMEUBLES = `
       digitalCode
       commercialId
       managerId
+      membres {
+        id
+        nom
+        prenom
+        type
+      }
       quartierId
       portes {
         id
@@ -43,6 +49,12 @@ export const GET_IMMEUBLE = `
       digitalCode
       commercialId
       managerId
+      membres {
+        id
+        nom
+        prenom
+        type
+      }
       quartierId
       zoneId
       createdAt

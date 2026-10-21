@@ -4,6 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
+import { ImmeubleAccessService } from '../immeuble/immeuble-access.service';
 import { calculateStatsForStatus } from '../porte/porte-status.constants';
 import {
   ContratsValidesAggregate,
@@ -45,7 +46,10 @@ interface AccessibleActivityOwners {
 
 @Injectable()
 export class StatisticService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private immeubleAccess: ImmeubleAccessService,
+  ) {}
 
   private productionUserWhere() {
     return {};
@@ -482,59 +486,6 @@ export class StatisticService {
     }
 
     return statistic;
-  }
-
-  private async ensureImmeubleAccess(
-    immeubleId: number,
-    userId: number,
-    userRole: string,
-  ) {
-    const immeuble = await this.prisma.immeuble.findUnique({
-      where: { id: immeubleId },
-      include: {
-        commercial: {
-          select: { id: true, managerId: true, directeurId: true },
-        },
-        manager: {
-          select: { id: true, directeurId: true },
-        },
-        zone: {
-          select: { id: true, managerId: true, directeurId: true },
-        },
-      },
-    });
-
-    if (!immeuble) {
-      throw new NotFoundException('Immeuble not found');
-    }
-
-    if (userRole === 'admin') {
-      return;
-    }
-
-    if (userRole === 'commercial' && immeuble.commercialId !== userId) {
-      throw new ForbiddenException('Access denied');
-    }
-
-    if (userRole === 'manager') {
-      const ownsImmeuble =
-        immeuble.managerId === userId ||
-        immeuble.commercial?.managerId === userId ||
-        immeuble.zone?.managerId === userId;
-      if (!ownsImmeuble) {
-        throw new ForbiddenException('Access denied');
-      }
-    }
-
-    if (userRole === 'directeur') {
-      const ownsImmeuble =
-        immeuble.manager?.directeurId === userId ||
-        immeuble.commercial?.directeurId === userId ||
-        immeuble.zone?.directeurId === userId;
-      if (!ownsImmeuble) {
-        throw new ForbiddenException('Access denied');
-      }
-    }
   }
 
   async create(data: CreateStatisticInput) {
@@ -1162,7 +1113,11 @@ export class StatisticService {
     userId: number,
     userRole: string,
   ) {
-    await this.ensureImmeubleAccess(immeubleId, userId, userRole);
+    await this.immeubleAccess.ensureImmeubleAccess(
+      immeubleId,
+      userId,
+      userRole,
+    );
   }
 
   async ensureCanSyncManagerStats(

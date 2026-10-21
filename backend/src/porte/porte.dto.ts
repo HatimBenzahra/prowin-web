@@ -69,6 +69,16 @@ export class Porte {
   @Field({ defaultValue: false })
   coachingFavori: boolean;
 
+  // Auteur du dernier passage : un commercial OU un manager (null si inconnu).
+  @Field(() => Int, { nullable: true })
+  dernierCommercialId?: number;
+
+  @Field(() => Int, { nullable: true })
+  dernierManagerId?: number;
+
+  @Field({ nullable: true })
+  dernierActeurPrenom?: string;
+
   @Field()
   createdAt: Date;
 

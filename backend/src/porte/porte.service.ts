@@ -2,11 +2,15 @@ import {
   BadRequestException,
   ForbiddenException,
   Injectable,
-  NotFoundException,
 } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma.service';
 import { CreatePorteInput, UpdatePorteInput, StatutPorte } from './porte.dto';
-import { StatisticSyncService } from '../statistic/statistic-sync.service';
+import {
+  StatisticSyncService,
+  acteursDesPortes,
+} from '../statistic/statistic-sync.service';
+import { ImmeubleAccessService } from '../immeuble/immeuble-access.service';
 import { getAllStatuses } from './porte-status.constants';
 import { shouldIncrementRepassages } from './porte.repassage';
 
@@ -15,137 +19,87 @@ export class PorteService {
   constructor(
     private prisma: PrismaService,
     private statisticSyncService: StatisticSyncService,
+    private immeubleAccess: ImmeubleAccessService,
   ) {}
 
-  private validateImmeubleOwnership(
-    immeuble: any,
+  /**
+   * Auteur d'un passage terrain : seuls un commercial ou un manager prospectent.
+   * Une correction directeur/admin ne change pas l'auteur du dernier passage.
+   */
+  private acteurPassage(
     userId: number,
     userRole: string,
-  ) {
-    if (userRole === 'admin') {
-      return;
-    }
-
-    if (userRole === 'commercial' && immeuble.commercialId !== userId) {
-      throw new ForbiddenException('Access denied');
-    }
-
-    if (userRole === 'manager') {
-      const ownsImmeuble =
-        immeuble.managerId === userId ||
-        immeuble.commercial?.managerId === userId ||
-        immeuble.zone?.managerId === userId;
-
-      if (!ownsImmeuble) {
-        throw new ForbiddenException('Access denied');
-      }
-    }
-
-    if (userRole === 'directeur') {
-      const ownsImmeuble =
-        immeuble.manager?.directeurId === userId ||
-        immeuble.commercial?.directeurId === userId ||
-        immeuble.zone?.directeurId === userId;
-
-      if (!ownsImmeuble) {
-        throw new ForbiddenException('Access denied');
-      }
-    }
-  }
-
-  private async ensureImmeubleAccess(
-    immeubleId: number,
-    userId: number,
-    userRole: string,
-  ) {
-    const immeuble = await this.prisma.immeuble.findUnique({
-      where: { id: immeubleId },
-      include: {
-        commercial: {
-          select: { id: true, managerId: true, directeurId: true },
-        },
-        manager: {
-          select: { id: true, directeurId: true },
-        },
-        zone: {
-          select: { id: true, managerId: true, directeurId: true },
-        },
-      },
-    });
-
-    if (!immeuble) {
-      throw new NotFoundException('Immeuble not found');
-    }
-
-    this.validateImmeubleOwnership(immeuble, userId, userRole);
-
-    return immeuble;
-  }
-
-  private async ensurePorteAccess(
-    porteId: number,
-    userId: number,
-    userRole: string,
-  ) {
-    const porte = await this.prisma.porte.findUnique({
-      where: { id: porteId },
-      include: {
-        immeuble: {
-          include: {
-            commercial: {
-              select: { id: true, managerId: true, directeurId: true },
-            },
-            manager: {
-              select: { id: true, directeurId: true },
-            },
-            zone: {
-              select: { id: true, managerId: true, directeurId: true },
-            },
-          },
-        },
-      },
-    });
-
-    if (!porte) {
-      throw new NotFoundException('Porte not found');
-    }
-
-    this.validateImmeubleOwnership(porte.immeuble, userId, userRole);
-
-    return porte;
-  }
-
-  private buildImmeubleAccessFilter(userId: number, userRole: string) {
+  ): {
+    dernierCommercialId: number | null;
+    dernierManagerId: number | null;
+  } | null {
     switch (userRole) {
-      case 'admin':
-        return {};
-
-      case 'directeur':
-        return {
-          OR: [
-            { commercial: { directeurId: userId } },
-            { manager: { directeurId: userId } },
-            { zone: { directeurId: userId } },
-          ],
-        };
-
-      case 'manager':
-        return {
-          OR: [
-            { managerId: userId },
-            { commercial: { managerId: userId } },
-            { zone: { managerId: userId } },
-          ],
-        };
-
       case 'commercial':
-        return {
-          commercialId: userId,
-        };
-
+        return { dernierCommercialId: userId, dernierManagerId: null };
+      case 'manager':
+        return { dernierCommercialId: null, dernierManagerId: userId };
       default:
-        return { id: -1 };
+        return null;
     }
+  }
+
+  /**
+   * Auteur retenu pour une correction directeur/admin : l'auteur du dernier
+   * passage reste inchangé ; à défaut (porte jamais attribuée), le créateur de
+   * l'immeuble, pour que la porte compte pour quelqu'un.
+   */
+  private auteurCorrection(porte: {
+    dernierCommercialId: number | null;
+    dernierManagerId: number | null;
+    immeuble: { commercialId: number | null; managerId: number | null };
+  }): {
+    dernierCommercialId: number | null;
+    dernierManagerId: number | null;
+  } | null {
+    if (porte.dernierCommercialId !== null || porte.dernierManagerId !== null) {
+      return {
+        dernierCommercialId: porte.dernierCommercialId,
+        dernierManagerId: porte.dernierManagerId,
+      };
+    }
+    if (porte.immeuble.commercialId !== null) {
+      return {
+        dernierCommercialId: porte.immeuble.commercialId,
+        dernierManagerId: null,
+      };
+    }
+    if (porte.immeuble.managerId !== null) {
+      return {
+        dernierCommercialId: null,
+        dernierManagerId: porte.immeuble.managerId,
+      };
+    }
+    return null;
+  }
+
+  /**
+   * Portes de l'agenda personnel : un commercial ne voit que celles dont il est
+   * l'auteur du dernier passage (pas celles d'un coéquipier sur un immeuble
+   * partagé). Les autres rôles gardent leur périmètre.
+   */
+  private acteurPorteWhere(
+    userId: number,
+    userRole: string,
+  ): Prisma.PorteWhereInput {
+    return userRole === 'commercial' ? { dernierCommercialId: userId } : {};
+  }
+
+  /** Une porte créée déjà prospectée compte pour son créateur. */
+  private withActeurCreation(
+    createPorteInput: CreatePorteInput,
+    userId: number,
+    userRole: string,
+  ) {
+    const prospectee =
+      createPorteInput.statut !== undefined &&
+      createPorteInput.statut !== StatutPorte.NON_VISITE;
+    const acteur = prospectee ? this.acteurPassage(userId, userRole) : null;
+    return { ...createPorteInput, ...acteur };
   }
 
   async create(
@@ -154,13 +108,13 @@ export class PorteService {
     userRole: string,
   ) {
     // Anti-IDOR : on ne peut créer une porte que sur un immeuble accessible.
-    await this.ensureImmeubleAccess(
+    await this.immeubleAccess.ensureImmeubleAccess(
       createPorteInput.immeubleId,
       userId,
       userRole,
     );
     return this.prisma.porte.create({
-      data: createPorteInput,
+      data: this.withActeurCreation(createPorteInput, userId, userRole),
     });
   }
 
@@ -168,7 +122,7 @@ export class PorteService {
     // Anti-IDOR : ne renvoyer que les portes des immeubles accessibles.
     return this.prisma.porte.findMany({
       where: {
-        immeuble: this.buildImmeubleAccessFilter(userId, userRole),
+        immeuble: this.immeubleAccess.accessWhere(userId, userRole),
       },
       include: {
         immeuble: true,
@@ -177,7 +131,24 @@ export class PorteService {
   }
 
   async findOne(id: number, userId: number, userRole: string) {
-    return this.ensurePorteAccess(id, userId, userRole);
+    return this.immeubleAccess.ensurePorteAccess(id, userId, userRole);
+  }
+
+  /**
+   * Prénom de l'auteur du dernier passage (champ `Porte.dernierActeurPrenom`).
+   * `findUnique` : Prisma regroupe ces appels en une requête sur une liste de portes.
+   */
+  async findDernierActeurPrenom(porteId: number): Promise<string | null> {
+    const porte = await this.prisma.porte.findUnique({
+      where: { id: porteId },
+      select: {
+        dernierCommercial: { select: { prenom: true } },
+        dernierManager: { select: { prenom: true } },
+      },
+    });
+    return (
+      porte?.dernierCommercial?.prenom ?? porte?.dernierManager?.prenom ?? null
+    );
   }
 
   async findByImmeuble(
@@ -188,7 +159,11 @@ export class PorteService {
     take?: number,
     etage?: number,
   ) {
-    await this.ensureImmeubleAccess(immeubleId, userId, userRole);
+    await this.immeubleAccess.ensureImmeubleAccess(
+      immeubleId,
+      userId,
+      userRole,
+    );
 
     const where: any = { immeubleId };
     if (etage) {
@@ -211,7 +186,11 @@ export class PorteService {
     const { id, ...data } = updatePorteInput;
 
     // 1. Récupérer l'état actuel pour détecter les changements
-    const currentPorte = await this.ensurePorteAccess(id, userId, userRole);
+    const currentPorte = await this.immeubleAccess.ensurePorteAccess(
+      id,
+      userId,
+      userRole,
+    );
 
     const oldStatut = currentPorte.statut;
 
@@ -233,15 +212,22 @@ export class PorteService {
     //    de repasse effacée par le commercial.
     const statutChanged = data.statut && data.statut !== oldStatut;
     const nouveauPassage = statutChanged || Boolean(data.derniereVisite);
+    // Un changement de statut = un passage attribué à son auteur réel (même règle
+    // que l'historique) : la porte compte désormais dans ses statistiques.
+    // Correction directeur/admin : l'auteur du dernier passage est conservé.
+    const acteur =
+      this.acteurPassage(userId, userRole) ??
+      this.auteurCorrection(currentPorte);
+    const passage = statutChanged && acteur ? { ...data, ...acteur } : data;
     const updatedPorte = await this.prisma.porte.update({
       where: { id },
       data: nouveauPassage
         ? {
-            ...data,
+            ...passage,
             rdvDate: data.rdvDate ?? null,
             rdvTime: data.rdvTime ?? null,
           }
-        : data,
+        : passage,
       include: {
         immeuble: true,
       },
@@ -261,8 +247,10 @@ export class PorteService {
       data.nbContrats !== currentPorte.nbContrats;
     if (statutChanged || contratsChanged) {
       try {
-        await this.statisticSyncService.syncCommercialStats(
-          updatedPorte.immeubleId,
+        // Auteur actuel ET précédent : une porte repassée par un autre membre
+        // sort des stats de l'un pour entrer dans celles de l'autre.
+        await this.statisticSyncService.syncActeursStats(
+          acteursDesPortes([currentPorte, updatedPorte]),
         );
       } catch (error) {
         // Log l'erreur mais ne fait pas échouer la mise à jour de la porte
@@ -273,12 +261,8 @@ export class PorteService {
     if (statutChanged && data.statut) {
       // Enregistrer dans l'historique si le statut a changé
       try {
-        // Déterminer si c'est un commercial ou un manager qui fait la modification
-        const immeuble = await this.prisma.immeuble.findUnique({
-          where: { id: updatedPorte.immeubleId },
-          select: { commercialId: true, managerId: true },
-        });
-
+        // Seul l'auteur du passage est enregistré : l'acteur terrain, ou pour
+        // une correction directeur/admin l'auteur conservé (cf. auteurCorrection).
         await this.prisma.statusHistorique.create({
           data: {
             porteId: id,
@@ -287,9 +271,8 @@ export class PorteService {
             rdvDate: data.rdvDate || null,
             rdvTime: data.rdvTime || null,
             duree: data.duree ?? null,
-            commercialId:
-              userRole === 'commercial' ? userId : immeuble?.commercialId,
-            managerId: userRole === 'manager' ? userId : immeuble?.managerId,
+            commercialId: acteur?.dernierCommercialId ?? null,
+            managerId: acteur?.dernierManagerId ?? null,
           },
         });
       } catch (error) {
@@ -302,11 +285,17 @@ export class PorteService {
   }
 
   async remove(id: number, userId: number, userRole: string) {
-    await this.ensurePorteAccess(id, userId, userRole);
+    const porte = await this.immeubleAccess.ensurePorteAccess(
+      id,
+      userId,
+      userRole,
+    );
 
-    return this.prisma.porte.delete({
+    const deleted = await this.prisma.porte.delete({
       where: { id },
     });
+    await this.statisticSyncService.syncAuteursPortesSupprimees([porte]);
+    return deleted;
   }
 
   async createPortesForImmeuble(
@@ -316,7 +305,11 @@ export class PorteService {
     userId: number,
     userRole: string,
   ) {
-    await this.ensureImmeubleAccess(immeubleId, userId, userRole);
+    await this.immeubleAccess.ensureImmeubleAccess(
+      immeubleId,
+      userId,
+      userRole,
+    );
 
     const portes: any[] = [];
 
@@ -344,7 +337,11 @@ export class PorteService {
     userRole: string,
   ) {
     // Anti-IDOR : vérifier l'accès à l'immeuble avant d'exposer ses statistiques.
-    await this.ensureImmeubleAccess(immeubleId, userId, userRole);
+    await this.immeubleAccess.ensureImmeubleAccess(
+      immeubleId,
+      userId,
+      userRole,
+    );
     const whereClause = { immeubleId };
 
     // Utiliser groupBy pour compter tous les statuts dynamiquement
@@ -439,13 +436,17 @@ export class PorteService {
     };
 
     if (immeubleId) {
-      await this.ensureImmeubleAccess(immeubleId, userId, userRole);
+      await this.immeubleAccess.ensureImmeubleAccess(
+        immeubleId,
+        userId,
+        userRole,
+      );
       whereClause.immeubleId = immeubleId;
     } else if (userRole === 'admin') {
       // Admin peut voir toutes les portes modifiées
     } else {
       const accessibleImmeubles = await this.prisma.immeuble.findMany({
-        where: this.buildImmeubleAccessFilter(userId, userRole),
+        where: this.immeubleAccess.accessWhere(userId, userRole),
         select: { id: true },
       });
 
@@ -456,6 +457,7 @@ export class PorteService {
       whereClause.immeubleId = {
         in: accessibleImmeubles.map((i) => i.id),
       };
+      Object.assign(whereClause, this.acteurPorteWhere(userId, userRole));
     }
 
     return this.prisma.porte.findMany({
@@ -470,7 +472,7 @@ export class PorteService {
   }
 
   async findRdvToday(userId: number, userRole: string) {
-    const filter = this.buildImmeubleAccessFilter(userId, userRole);
+    const filter = this.immeubleAccess.accessWhere(userId, userRole);
     let immeubleIds: number[] | undefined;
 
     if (userRole !== 'admin') {
@@ -497,6 +499,7 @@ export class PorteService {
           lt: new Date(new Date(todayStr).getTime() + 24 * 60 * 60 * 1000),
         },
         ...(immeubleIds && { immeubleId: { in: immeubleIds } }),
+        ...this.acteurPorteWhere(userId, userRole),
       },
       include: {
         immeuble: {
@@ -523,7 +526,7 @@ export class PorteService {
     userRole: string,
   ) {
     // Anti-IDOR : vérifier l'accès à la porte (via son immeuble).
-    await this.ensurePorteAccess(porteId, userId, userRole);
+    await this.immeubleAccess.ensurePorteAccess(porteId, userId, userRole);
     return this.prisma.statusHistorique.findMany({
       where: { porteId },
       include: {
@@ -556,33 +559,12 @@ export class PorteService {
     userId: number,
     userRole: string,
   ) {
-    const immeuble = await this.prisma.immeuble.findUnique({
-      where: { id: createPorteInput.immeubleId },
-      select: {
-        id: true,
-        nbPortesParEtage: true,
-        nbEtages: true,
-        commercialId: true,
-        managerId: true,
-        zoneId: true,
-        commercial: {
-          select: { id: true, managerId: true, directeurId: true },
-        },
-        manager: {
-          select: { id: true, directeurId: true },
-        },
-        zone: {
-          select: { id: true, managerId: true, directeurId: true },
-        },
-      },
-    });
-    if (!immeuble) {
-      throw new NotFoundException(
-        `Immeuble ${createPorteInput.immeubleId} introuvable`,
-      );
-    }
-    // Anti-IDOR : valider l'ownership de l'immeuble cible avant création.
-    this.validateImmeubleOwnership(immeuble, userId, userRole);
+    // Anti-IDOR : on ne peut créer une porte que sur un immeuble accessible.
+    const immeuble = await this.immeubleAccess.ensureImmeubleAccess(
+      createPorteInput.immeubleId,
+      userId,
+      userRole,
+    );
     if (
       createPorteInput.etage < 1 ||
       createPorteInput.etage > immeuble.nbEtages
@@ -602,7 +584,9 @@ export class PorteService {
         `L'étage ${createPorteInput.etage} a déjà atteint sa capacité (${immeuble.nbPortesParEtage} portes).`,
       );
     }
-    return this.prisma.porte.create({ data: createPorteInput });
+    return this.prisma.porte.create({
+      data: this.withActeurCreation(createPorteInput, userId, userRole),
+    });
   }
 
   async getStatusHistoriqueByImmeuble(
@@ -611,7 +595,11 @@ export class PorteService {
     userRole: string,
   ) {
     // Anti-IDOR : vérifier l'accès à l'immeuble.
-    await this.ensureImmeubleAccess(immeubleId, userId, userRole);
+    await this.immeubleAccess.ensureImmeubleAccess(
+      immeubleId,
+      userId,
+      userRole,
+    );
     return this.prisma.statusHistorique.findMany({
       where: {
         porte: {

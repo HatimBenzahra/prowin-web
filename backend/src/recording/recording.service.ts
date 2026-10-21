@@ -26,6 +26,7 @@ import { PrismaService } from '../prisma.service';
 import { SpeechAnalysisService } from '../speech-analysis/speech-analysis.service';
 import { S3DiagnosticsService } from '../s3-diagnostics/s3-diagnostics.service';
 import { CoachingService } from '../coaching/coaching.service';
+import { ImmeubleAccessService } from '../immeuble/immeuble-access.service';
 
 type RoomTarget = {
   type: 'COMMERCIAL' | 'MANAGER';
@@ -66,6 +67,7 @@ export class RecordingService {
     private speechAnalysis: SpeechAnalysisService,
     private s3Diagnostics: S3DiagnosticsService,
     private coaching: CoachingService,
+    private immeubleAccess: ImmeubleAccessService,
   ) {
     this.s3Diagnostics.instrument(this.s3, RecordingService.name);
   }
@@ -513,33 +515,11 @@ export class RecordingService {
       throw new ForbiddenException('Access denied to recording segments');
     }
 
-    if (currentUser.role === 'directeur') {
-      const porte = await this.prisma.porte.findUnique({
-        where: { id: porteId },
-        select: {
-          immeuble: {
-            select: {
-              manager: { select: { directeurId: true } },
-              commercial: { select: { directeurId: true } },
-            },
-          },
-        },
-      });
-
-      if (!porte) {
-        throw new NotFoundException('Porte not found');
-      }
-
-      const managerDirecteurId = porte.immeuble.manager?.directeurId;
-      const commercialDirecteurId = porte.immeuble.commercial?.directeurId;
-
-      if (
-        managerDirecteurId !== currentUser.id &&
-        commercialDirecteurId !== currentUser.id
-      ) {
-        throw new ForbiddenException('Access denied to recording segments');
-      }
-    }
+    await this.immeubleAccess.ensurePorteAccess(
+      porteId,
+      currentUser.id,
+      currentUser.role,
+    );
 
     const segments = await this.prisma.recordingSegment.findMany({
       where: { porteId },
@@ -586,7 +566,16 @@ export class RecordingService {
 
     const segments = await this.prisma.recordingSegment.findMany({
       where: {
-        OR: [{ commercialId }, { porte: { immeuble: { commercialId } } }],
+        OR: [
+          { commercialId },
+          // Repli sur le créateur de l'immeuble pour les vieux segments sans
+          // auteur uniquement : sur un immeuble partagé, chacun garde les siens.
+          {
+            commercialId: null,
+            managerId: null,
+            porte: { immeuble: { commercialId } },
+          },
+        ],
       },
       include: {
         porte: {
@@ -634,12 +623,20 @@ export class RecordingService {
       throw new ForbiddenException('Access denied to recording segments');
     }
 
+    // Segments du manager et de ses commerciaux, par auteur ; repli sur le
+    // créateur de l'immeuble pour les vieux segments sans auteur uniquement.
+    const equipe = await this.prisma.commercial.findMany({
+      where: { managerId },
+      select: { id: true },
+    });
+    const sansAuteur = { commercialId: null, managerId: null };
     const segments = await this.prisma.recordingSegment.findMany({
       where: {
         OR: [
           { managerId },
-          { porte: { immeuble: { managerId } } },
-          { porte: { immeuble: { commercial: { managerId } } } },
+          { commercialId: { in: equipe.map((commercial) => commercial.id) } },
+          { ...sansAuteur, porte: { immeuble: { managerId } } },
+          { ...sansAuteur, porte: { immeuble: { commercial: { managerId } } } },
         ],
       },
       include: {

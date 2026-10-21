@@ -83,6 +83,14 @@ export interface Zone extends BaseEntity {
  */
 export type TypeHabitat = 'IMMEUBLE' | 'MAISON' | 'PAVILLON'
 
+/** Membre d'un immeuble partagé : `id` = id du commercial ou du manager selon `type`. */
+export interface ImmeubleMembre {
+  id: number
+  nom: string
+  prenom: string
+  type: 'COMMERCIAL' | 'MANAGER' | 'DIRECTEUR'
+}
+
 export interface Immeuble extends BaseEntity {
   adresse: string
   typeHabitat?: TypeHabitat
@@ -97,6 +105,7 @@ export interface Immeuble extends BaseEntity {
   digitalCode?: string | null
   latitude?: number | null
   longitude?: number | null
+  membres?: ImmeubleMembre[]
   portes?: Porte[]
 }
 
@@ -324,6 +333,9 @@ export interface Porte extends BaseEntity {
   rdvTime?: string | null
   commentaire?: string | null
   derniereVisite?: string | null
+  dernierCommercialId?: number | null
+  dernierManagerId?: number | null
+  dernierActeurPrenom?: string | null
 }
 
 // =============================================================================

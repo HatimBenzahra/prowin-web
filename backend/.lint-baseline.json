@@ -226,7 +226,7 @@
   "src/porte/porte.service.ts": {
     "@typescript-eslint/no-unsafe-assignment": 2,
     "@typescript-eslint/no-unsafe-enum-comparison": 2,
-    "@typescript-eslint/no-unsafe-member-access": 10
+    "@typescript-eslint/no-unsafe-member-access": 3
   },
   "src/recording/recording.service.ts": {
     "@typescript-eslint/no-unnecessary-type-assertion": 2,

@@ -123,6 +123,11 @@ function DoorTile({ door, selected, onSelect }) {
       <div className="mt-2">
         <AudioSignal durationSec={door.audioDurationSec} hasAudio={door.hasAudio} />
       </div>
+      {door.dernierActeurPrenom && (
+        <p className="mt-1.5 truncate text-[11px] text-muted-foreground">
+          Fait par {door.dernierActeurPrenom}
+        </p>
+      )}
     </button>
   )
 }

@@ -22,6 +22,9 @@ import {
   sortCardRows,
   groupRowsByDate,
   CARD_SORT_OPTIONS,
+  membresLabel,
+  membresFullNames,
+  hasCommercialMembre,
 } from './immeubles-display'
 
 // Valeur de filtre/groupe pour les bâtiments sans quartier
@@ -140,7 +143,7 @@ export function useImmeublesLogic() {
     }
 
     if (filterCommercial !== 'all') {
-      result = result.filter(imm => imm.commercialId === parseInt(filterCommercial))
+      result = result.filter(imm => hasCommercialMembre(imm, parseInt(filterCommercial)))
     }
 
     if (filterQuartier !== 'all') {
@@ -230,10 +233,11 @@ export function useImmeublesLogic() {
         cell: row => <BuildingTypeBadge immeuble={row} className="text-[10px]" />,
       },
       {
-        header: 'Commercial',
-        accessor: 'commercial_name',
+        header: 'Commerciaux',
+        accessor: 'membres_label',
         sortable: true,
         className: 'hidden xl:table-cell text-[13px]',
+        cell: row => <span title={row.membres_title || undefined}>{row.membres_label}</span>,
       },
       {
         header: 'Quartier',
@@ -361,7 +365,7 @@ export function useImmeublesLogic() {
       },
       {
         key: 'commercial_name',
-        label: 'Commercial responsable',
+        label: 'Créé par / responsable',
         type: 'select',
         required: true,
         section: 'Gestion',
@@ -419,6 +423,8 @@ export function useImmeublesLogic() {
         rdvCount,
         nonVisiteCount,
         commercial_name: responsibleName,
+        membres_label: membresLabel(immeuble.membres, responsibleName),
+        membres_title: membresFullNames(immeuble.membres),
         quartier_name: quartierName,
       }
     })

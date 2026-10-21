@@ -123,7 +123,12 @@ export function useManagerDetailsLogic() {
   const { data: lastStatusActivities } = useTeamLastStatusActivities()
 
   // Utiliser le hook pour calculer les stats personnelles du manager
-  const { personalStats } = usePersonalStats(manager, appliedStartDate, appliedEndDate)
+  // Immeubles partagés : seules les portes faites par ce manager comptent.
+  const viewer = useMemo(
+    () => (manager?.id != null ? { type: 'MANAGER', id: manager.id } : null),
+    [manager?.id]
+  )
+  const { personalStats } = usePersonalStats(manager, appliedStartDate, appliedEndDate, viewer)
 
   // Filtrer les statistiques des commerciaux par date
   const filteredCommercialsStats = useMemo(() => {
@@ -439,7 +444,8 @@ export function useManagerDetailsLogic() {
   const allImmeublesTableData = useImmeublesTableData(
     manager?.immeubles,
     appliedStartDate,
-    appliedEndDate
+    appliedEndDate,
+    viewer
   )
 
   const immeublesTableData = useMemo(() => {
@@ -469,7 +475,7 @@ export function useManagerDetailsLogic() {
   }, [allImmeublesTableData, appliedImmeubleStartDate, appliedImmeubleEndDate, immeubleDateType])
 
   // Données des portes
-  const allPortes = useFilteredPortes(manager?.immeubles, appliedStartDate, appliedEndDate)
+  const allPortes = useFilteredPortes(manager?.immeubles, appliedStartDate, appliedEndDate, viewer)
   // Capacité déclarée (grille) = dénominateur de la couverture (Option A).
   const totalDoorsGrid = (manager?.immeubles || []).reduce(
     (sum, immeuble) => sum + buildingDoorCount(immeuble),

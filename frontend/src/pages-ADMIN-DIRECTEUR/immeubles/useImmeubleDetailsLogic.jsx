@@ -16,6 +16,7 @@ import {
 import { porteApi } from '@/services/api/portes/porte.service'
 import BuildingFacade from './components/BuildingFacade'
 import { buildFacadeFloors } from './facade-data'
+import { membresFullNames } from './immeubles-display'
 
 export function useImmeubleDetailsLogic() {
   const { id } = useParams()
@@ -110,6 +111,7 @@ export function useImmeubleDetailsLogic() {
       nbRepassages: porte.nbRepassages || 0,
       nbContrats: porte.nbContrats || 0,
       coachingFavori: porte.coachingFavori ?? false,
+      dernierActeurPrenom: porte.dernierActeurPrenom || null,
     })
 
     // Regrouper les portes par unité à partir des vraies données.
@@ -147,6 +149,7 @@ export function useImmeubleDetailsLogic() {
       floors: immeuble.nbEtages,
       apartments: totalDoors,
       commercial_name: commercialName,
+      membres_names: immeuble.membres?.length ? membresFullNames(immeuble.membres) : commercialName,
       has_elevator: immeuble.ascenseurPresent,
       digital_code: immeuble.digitalCode || 'Non défini',
       zone: zoneName,
@@ -174,7 +177,7 @@ export function useImmeubleDetailsLogic() {
     // L'adresse complète est déjà le titre de la page → on ne la répète pas ici.
     const info = [
       { label: 'Zone', value: immeubleData.zone, icon: 'mapPin' },
-      { label: 'Commercial responsable', value: immeubleData.commercial_name, icon: 'users' },
+      { label: 'Commerciaux', value: immeubleData.membres_names, icon: 'users' },
       { label: 'Type de bâtiment', value: habitatMeta.label, icon: 'building' },
     ]
 

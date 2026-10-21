@@ -44,7 +44,9 @@ export default function ImmeubleCard({ immeuble, canDelete, onDelete }) {
         </div>
 
         <p className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
-          <span className="truncate">{immeuble.commercial_name}</span>
+          <span className="truncate" title={immeuble.membres_title || undefined}>
+            {immeuble.membres_label}
+          </span>
           <span aria-hidden="true">·</span>
           <span className="flex items-center gap-1 whitespace-nowrap">
             <Layers className="h-3 w-3" />
