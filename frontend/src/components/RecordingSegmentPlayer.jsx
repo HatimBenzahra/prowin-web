@@ -5,6 +5,7 @@ import AudioPlayer from '@/components/AudioPlayer'
 import { useSegmentAudio } from '@/hooks/ecoutes/useSegmentAudio'
 import { getStatusColor, getStatusLabel } from '@/constants/domain/porte-status'
 import { formatDuration } from '@/pages-ADMIN-DIRECTEUR/ecoutes/EnregistrementComponents'
+import { formatDateHeureCourte } from '@/pages-ADMIN-DIRECTEUR/immeubles/facade-data'
 
 /**
  * Lecteur d'un segment d'enregistrement porte (durée, statut, lecteur audio à
@@ -23,6 +24,11 @@ export default function RecordingSegmentPlayer({ segment, autoLoad = false }) {
           <span className="font-medium tabular-nums text-foreground">
             {formatDuration(segment.durationSec) ?? 'Durée inconnue'}
           </span>
+          {segment.createdAt && (
+            <span className="tabular-nums text-muted-foreground">
+              · Enregistré le {formatDateHeureCourte(segment.createdAt)}
+            </span>
+          )}
         </div>
         <div className="flex flex-wrap items-center gap-1.5">
           {segment.statut && (

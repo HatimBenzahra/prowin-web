@@ -1,8 +1,13 @@
 import { useMemo, useState } from 'react'
 import { Button } from '@/components/ui/button'
-import { Mic } from 'lucide-react'
+import { Clock, Mic } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { getStatusLabel } from '@/constants/domain/porte-status'
+import {
+  buildChronologie,
+  formatDateHeureCourte,
+  formatHeureVisite,
+} from '@/pages-ADMIN-DIRECTEUR/immeubles/facade-data'
 import { getDurationTierKey, DURATION_FILTERS } from '@/constants/domain/recording-duration'
 import { formatDuration } from '@/pages-ADMIN-DIRECTEUR/ecoutes/EnregistrementComponents'
 import BuildingTypeBadge from '@/components/BuildingTypeBadge'
@@ -123,16 +128,71 @@ function DoorTile({ door, selected, onSelect }) {
       <div className="mt-2">
         <AudioSignal durationSec={door.audioDurationSec} hasAudio={door.hasAudio} />
       </div>
+      {door.lastVisit && (
+        <p className="mt-1.5 inline-flex items-center gap-1 text-[11px] tabular-nums text-muted-foreground">
+          <Clock className="h-3 w-3" />
+          {formatDateHeureCourte(door.lastVisit)}
+        </p>
+      )}
     </button>
   )
 }
+
+/**
+ * Une porte dans la chronologie : l'heure du dernier passage en tête de ligne,
+ * puis la porte, son étage, son statut et son audio.
+ */
+function ChronoRow({ door, selected, onSelect }) {
+  const tone = toneOf(door.status)
+  const heure = formatHeureVisite(door.lastVisit)
+
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      className={cn(
+        'grid w-full grid-cols-[56px_minmax(0,1fr)_auto] items-center gap-3 px-3.5 py-2.5 text-left transition-colors',
+        'hover:bg-muted/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
+        selected && 'bg-primary/5',
+        door.coachingFavori && 'favori-glow'
+      )}
+    >
+      <span className="text-[13px] font-semibold tabular-nums">{heure ?? '—'}</span>
+      <span className="min-w-0">
+        <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+          <span className="text-[13px] font-semibold">Porte {door.number}</span>
+          <span className="text-[12px] text-muted-foreground">{door.floorLabel}</span>
+          <span
+            className={cn('inline-flex items-center gap-1.5 text-[11px] font-semibold', tone.text)}
+          >
+            <span className={cn('h-1.5 w-1.5 rounded-full', tone.dot)} />
+            {getStatusLabel((door.status || '').toUpperCase())}
+          </span>
+        </span>
+      </span>
+      <AudioSignal durationSec={door.audioDurationSec} hasAudio={door.hasAudio} />
+    </button>
+  )
+}
+
+const VIEWS = [
+  { value: 'chrono', label: 'Chronologie' },
+  { value: 'floors', label: 'Par étage' },
+]
 
 /**
  * Représentation "façade" d'un bâtiment : étages empilés (haut → bas), portes =
  * tuiles épurées (une couleur de statut par tuile + signal audio). Clic sur une
  * porte → modale de détail centrée.
  */
-export default function BuildingFacade({ floors = [], address = '', planSubtitle = '', type }) {
+export default function BuildingFacade({
+  floors = [],
+  address = '',
+  planSubtitle = '',
+  type,
+  defaultView = 'floors',
+}) {
+  const [view, setView] = useState(defaultView)
   const [statusFilter, setStatusFilter] = useState('all')
   const [durationFilter, setDurationFilter] = useState('all')
   const [selectedId, setSelectedId] = useState(null)
@@ -150,6 +210,12 @@ export default function BuildingFacade({ floors = [], address = '', planSubtitle
   }, [floors, statusFilter, durationFilter])
 
   const allDoors = useMemo(() => floors.flatMap(fl => fl.doors), [floors])
+
+  // Mêmes filtres que le plan, mais rangé par heure de passage au lieu de l'étage.
+  const chronologie = useMemo(
+    () => buildChronologie(shownFloors.map(fl => ({ doors: fl.shownDoors }))),
+    [shownFloors]
+  )
 
   const statusCounts = useMemo(() => {
     const m = new Map()
@@ -220,6 +286,24 @@ export default function BuildingFacade({ floors = [], address = '', planSubtitle
       <div className="flex flex-wrap items-center gap-2">
         {type && <BuildingTypeBadge type={type} />}
         {planSubtitle && <span className="text-xs text-muted-foreground">{planSubtitle}</span>}
+        <div className="ml-auto inline-flex rounded-full border border-border/60 bg-muted/30 p-0.5">
+          {VIEWS.map(v => (
+            <button
+              key={v.value}
+              type="button"
+              onClick={() => setView(v.value)}
+              aria-pressed={view === v.value}
+              className={cn(
+                'rounded-full px-3 py-1 text-xs font-medium transition-colors',
+                view === v.value
+                  ? 'bg-background text-foreground shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground'
+              )}
+            >
+              {v.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {showStatusFilters &&
@@ -236,39 +320,70 @@ export default function BuildingFacade({ floors = [], address = '', planSubtitle
         )}
 
       {/* Bâtiment : un seul cadre, séparateurs fins entre étages */}
-      <div className="overflow-hidden rounded-xl border border-border/70 bg-card">
-        {shownFloors.length === 0 ? (
-          <p className="p-6 text-center text-sm text-muted-foreground">
-            Aucune donnée de structure pour ce bâtiment.
-          </p>
-        ) : (
-          shownFloors.map(fl => (
-            <div
-              key={fl.floor}
-              className="grid grid-cols-[56px_1fr] border-t border-border/60 first:border-t-0"
-            >
-              <div className="flex flex-col items-center justify-center gap-0.5 border-r border-border/60 px-2 py-3 text-center">
-                <span className="text-[12px] font-bold">{fl.label}</span>
-                <span className="text-[10px] text-muted-foreground">{fl.totalDoors} p.</span>
-              </div>
-              <div className="grid grid-cols-[repeat(auto-fill,minmax(158px,1fr))] gap-2.5 p-3.5">
-                {fl.shownDoors.length === 0 ? (
-                  <span className="py-2 text-xs text-muted-foreground">—</span>
-                ) : (
-                  fl.shownDoors.map(d => (
-                    <DoorTile
+      {view === 'chrono' ? (
+        <div className="overflow-hidden rounded-xl border border-border/70 bg-card">
+          {chronologie.length === 0 ? (
+            <p className="p-6 text-center text-sm text-muted-foreground">
+              Aucune porte pour ces filtres.
+            </p>
+          ) : (
+            chronologie.map(group => (
+              <section key={group.key} className="border-t border-border/60 first:border-t-0">
+                <h4 className="flex items-baseline justify-between gap-2 bg-muted/30 px-3.5 py-2 text-[12px] font-semibold">
+                  <span>{group.label}</span>
+                  <span className="text-[11px] font-normal tabular-nums text-muted-foreground">
+                    {group.doors.length} porte{group.doors.length > 1 ? 's' : ''}
+                  </span>
+                </h4>
+                <div className="divide-y divide-border/50">
+                  {group.doors.map(d => (
+                    <ChronoRow
                       key={d.porteId}
                       door={d}
                       selected={selectedId === d.porteId}
                       onSelect={() => setSelectedId(d.porteId)}
                     />
-                  ))
-                )}
+                  ))}
+                </div>
+              </section>
+            ))
+          )}
+        </div>
+      ) : (
+        <div className="overflow-hidden rounded-xl border border-border/70 bg-card">
+          {shownFloors.length === 0 ? (
+            <p className="p-6 text-center text-sm text-muted-foreground">
+              Aucune donnée de structure pour ce bâtiment.
+            </p>
+          ) : (
+            shownFloors.map(fl => (
+              <div
+                key={fl.floor}
+                className="grid grid-cols-[56px_1fr] border-t border-border/60 first:border-t-0"
+              >
+                <div className="flex flex-col items-center justify-center gap-0.5 border-r border-border/60 px-2 py-3 text-center">
+                  <span className="text-[12px] font-bold">{fl.label}</span>
+                  <span className="text-[10px] text-muted-foreground">{fl.totalDoors} p.</span>
+                </div>
+                <div className="grid grid-cols-[repeat(auto-fill,minmax(158px,1fr))] gap-2.5 p-3.5">
+                  {fl.shownDoors.length === 0 ? (
+                    <span className="py-2 text-xs text-muted-foreground">—</span>
+                  ) : (
+                    fl.shownDoors.map(d => (
+                      <DoorTile
+                        key={d.porteId}
+                        door={d}
+                        selected={selectedId === d.porteId}
+                        onSelect={() => setSelectedId(d.porteId)}
+                      />
+                    ))
+                  )}
+                </div>
               </div>
-            </div>
-          ))
-        )}
-      </div>
+            ))
+          )}
+        </div>
+      )}
 
       {/* Légende */}
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[11px] text-muted-foreground">

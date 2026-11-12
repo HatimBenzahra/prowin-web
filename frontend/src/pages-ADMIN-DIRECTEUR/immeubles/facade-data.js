@@ -33,7 +33,9 @@ export function buildFacadeFloors(immeuble, portes, segmentMap = new Map()) {
       status: (porte.statut || '').toLowerCase(),
       rdvDate: porte.rdvDate || null,
       rdvTime: porte.rdvTime || null,
-      lastVisit: porte.updatedAt || porte.derniereVisite || null,
+      // `derniereVisite` d'abord : c'est l'heure du passage. `updatedAt` bouge aussi
+      // sur une simple correction (commentaire, favori…) et n'est qu'un repli.
+      lastVisit: porte.derniereVisite || porte.updatedAt || null,
       comment: porte.commentaire || null,
       nbContrats: porte.nbContrats || 0,
       nbRepassages: porte.nbRepassages || 0,
@@ -73,4 +75,84 @@ export function buildFacadeFloors(immeuble, portes, segmentMap = new Map()) {
         : `${nbEtages} étage${nbEtages > 1 ? 's' : ''} · ${nbPortesParEtage} portes/étage`
 
   return { type, address, planTitle: meta.planTitle, planSubtitle, floors }
+}
+
+const toDate = value => {
+  if (!value) return null
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? null : date
+}
+
+/** « 14:32 » — heure locale du navigateur. */
+export function formatHeureVisite(value) {
+  const date = toDate(value)
+  return date ? date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : null
+}
+
+/** « Lundi 9 novembre 2026 ». */
+export function formatJourVisite(value) {
+  const date = toDate(value)
+  if (!date) return null
+  const label = date.toLocaleDateString('fr-FR', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  })
+  return label.charAt(0).toUpperCase() + label.slice(1)
+}
+
+/** « 09/11/2026 à 14:32 » — format court pour une tuile ou un lecteur audio. */
+export function formatDateHeureCourte(value) {
+  const date = toDate(value)
+  if (!date) return null
+  const jour = date.toLocaleDateString('fr-FR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  })
+  return `${jour} à ${formatHeureVisite(date)}`
+}
+
+const dayKeyOf = date =>
+  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+
+/**
+ * Les portes de la façade rangées par jour de dernier passage, le plus récent en
+ * tête, et dans chaque jour de la plus récente à la plus ancienne. Les portes sans
+ * date de passage (jamais visitées) ferment la liste dans un groupe à part.
+ *
+ * Une ligne par porte : c'est son **dernier** état, pas l'historique de ses passages.
+ *
+ * @param {Array<{doors: Array}>} floors - sortie de `buildFacadeFloors`
+ * @returns {Array<{key: string, label: string, doors: Array}>}
+ */
+export function buildChronologie(floors = []) {
+  const dated = []
+  const undated = []
+  for (const floor of floors) {
+    for (const door of floor.doors || []) {
+      const date = toDate(door.lastVisit)
+      if (date) dated.push({ door, date })
+      else undated.push(door)
+    }
+  }
+
+  dated.sort((a, b) => b.date.getTime() - a.date.getTime())
+
+  const groups = []
+  for (const { door, date } of dated) {
+    const key = dayKeyOf(date)
+    let group = groups[groups.length - 1]
+    if (!group || group.key !== key) {
+      group = { key, label: formatJourVisite(date), doors: [] }
+      groups.push(group)
+    }
+    group.doors.push(door)
+  }
+
+  if (undated.length > 0) {
+    groups.push({ key: 'sans-date', label: 'Sans date de passage', doors: undated })
+  }
+  return groups
 }

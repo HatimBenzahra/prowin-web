@@ -2,7 +2,8 @@ import { useMemo, useState, useEffect, useCallback } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { DoorOpen, Loader2, Mic, X, Star, Sparkles } from 'lucide-react'
+import { CalendarClock, DoorOpen, Loader2, Mic, X, Star, Sparkles } from 'lucide-react'
+import { formatHeureVisite, formatJourVisite } from '@/pages-ADMIN-DIRECTEUR/immeubles/facade-data'
 import { getStatusColor, getStatusLabel } from '@/constants/domain/porte-status'
 import { useRecordingSegmentsByPorte } from '@/hooks/metier/api/portes'
 import RecordingSegmentPlayer from '@/components/RecordingSegmentPlayer'
@@ -235,6 +236,17 @@ export default function PorteDetailModal({ door, open, onOpenChange, address = '
             {door.floorLabel}
             {address ? ` · ${address}` : ''}
             {door.nomPersonnalise ? ` · ${door.nomPersonnalise}` : ''}
+          </p>
+          <p className="mt-2 inline-flex items-center gap-2 text-sm font-medium text-foreground">
+            <CalendarClock className="h-4 w-4 text-primary" />
+            {door.lastVisit ? (
+              <span>
+                Dernier passage : {formatJourVisite(door.lastVisit)} à{' '}
+                <span className="tabular-nums">{formatHeureVisite(door.lastVisit)}</span>
+              </span>
+            ) : (
+              <span className="text-muted-foreground">Aucun passage daté</span>
+            )}
           </p>
         </DialogHeader>
 

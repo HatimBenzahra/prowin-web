@@ -38,6 +38,8 @@ export default function BuildingFacadeModal({ open, onOpenChange, facade }) {
             floors={facade.floors}
             address={facade.address}
             planSubtitle={facade.planSubtitle}
+            // Depuis la fiche commercial on lit sa journée : l'heure prime sur l'étage.
+            defaultView="chrono"
           />
         </div>
       </DialogContent>
